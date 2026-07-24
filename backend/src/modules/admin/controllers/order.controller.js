@@ -336,10 +336,24 @@ export const getNearbyRiders = asyncHandler(async (req, res) => {
 
     const pickupCoords = order.pickupLocation?.coordinates;
 
-    const allRiders = await DeliveryBoy.find({
+    let query = {
         applicationStatus: 'approved',
         isActive: true
-    }).select('name phone status currentLocation vehicleType vehicleNumber').lean();
+    };
+
+    if (pickupCoords && pickupCoords.length === 2 && pickupCoords[0] !== 0) {
+        query.currentLocation = {
+            $near: {
+                $geometry: { type: 'Point', coordinates: pickupCoords },
+                $maxDistance: 10000 // 10 km radius
+            }
+        };
+    }
+
+    const allRiders = await DeliveryBoy.find(query)
+        .select('name phone status currentLocation vehicleType vehicleNumber')
+        .limit(20) // Limit to top 20 nearest
+        .lean();
 
     const ridersWithDistance = allRiders.map(rider => {
         const riderCoords = rider.currentLocation?.coordinates;

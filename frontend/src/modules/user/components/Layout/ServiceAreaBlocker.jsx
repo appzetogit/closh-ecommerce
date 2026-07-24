@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { MapPin, Search, Navigation } from 'lucide-react';
 import { useUserLocation } from '../../context/LocationContext';
 import { useLocation } from 'react-router-dom';
+import { useAuthStore } from '../../../../shared/store/authStore';
 
 const ServiceAreaBlocker = ({ children }) => {
     const { activeAddress, serviceability } = useUserLocation();
     const location = useLocation();
+    const { isAuthenticated } = useAuthStore();
 
     // Pages that should NEVER be blocked, even if out of service area
     const unblockedPaths = [
@@ -30,7 +32,11 @@ const ServiceAreaBlocker = ({ children }) => {
     };
 
     // Case 1: No address selected at all
+    // If user is NOT logged in, let them browse freely without location requirement
     if (!activeAddress) {
+        if (!isAuthenticated) {
+            return children;
+        }
         return (
             <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center animate-fadeIn">
                 <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6 shadow-inner">
@@ -51,8 +57,8 @@ const ServiceAreaBlocker = ({ children }) => {
         );
     }
 
-    // Case 2: Address selected, but NOT serviceable
-    if (serviceability && serviceability.isServiceable === false) {
+    // Case 2: Address selected, but NOT serviceable (only block for logged-in users)
+    if (isAuthenticated && serviceability && serviceability.isServiceable === false) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center animate-fadeIn">
                 <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mb-6 shadow-inner relative overflow-hidden">

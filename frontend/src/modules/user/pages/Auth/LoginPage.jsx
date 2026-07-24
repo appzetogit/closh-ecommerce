@@ -324,11 +324,16 @@ const LoginPage = () => {
                         className="text-primary hover:text-primary-focus underline transition-colors duration-200"
                     >
                         Terms of Service
-                    </Link> & <Link
+                    </Link>, <Link
                         to="/privacy"
                         className="text-black font-semibold hover:underline cursor-pointer"
                     >
                         Privacy Policy
+                    </Link> & <Link
+                        to="/contact"
+                        className="text-primary hover:text-primary-focus underline transition-colors duration-200"
+                    >
+                        Support
                     </Link>
                 </p>
             </div>

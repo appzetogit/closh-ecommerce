@@ -449,7 +449,7 @@ const PaymentPage = () => {
                     toast.error('Payment gateway initialization failed. Your order might be recorded as COD. Please contact support.');
                     isNavigatingToSuccess.current = true;
                     clearCart();
-                    navigate(`/order-success/${response.id}?warning=payment_init_failed`);
+                    navigate(`/order-success/${response.id}?warning=payment_init_failed`, { replace: true });
                     return;
                 }
 
@@ -460,7 +460,7 @@ const PaymentPage = () => {
                         toast.success('Order already paid!');
                         isNavigatingToSuccess.current = true;
                         clearCart();
-                        navigate(`/order-success/${response.orderId}`);
+                        navigate(`/order-success/${response.orderId}`, { replace: true });
                         return;
                     }
                     const razorKey = response.razorpayKeyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_8sYbzHWidwe5Zw';
@@ -484,11 +484,11 @@ const PaymentPage = () => {
                                 toast.success('Payment successful!');
                                 isNavigatingToSuccess.current = true;
                                 clearCart();
-                                navigate(`/order-success/${response.id}`);
+                                navigate(`/order-success/${response.id}`, { replace: true });
                             } catch (error) {
                                 console.error("❌ [PAYMENT_ERROR] Verification Failed:", error);
                                 toast.error('Payment verification failed. Please contact support.');
-                                navigate(`/order-success/${response.id}?payment=failed`);
+                                navigate(`/order-success/${response.id}?payment=failed`, { replace: true });
                             }
                         },
                         prefill: {
@@ -517,7 +517,7 @@ const PaymentPage = () => {
                     toast.success('Order placed successfully!');
                     isNavigatingToSuccess.current = true;
                     clearCart();
-                    navigate(`/order-success/${response.id}`);
+                    navigate(`/order-success/${response.id}`, { replace: true });
                 }
             }
         } catch (error) {

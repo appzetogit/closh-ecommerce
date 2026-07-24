@@ -80,20 +80,7 @@ const OrderDetail = () => {
   
   const [urgentAlert, setUrgentAlert] = useState(null);
 
-  useEffect(() => {
-    const fetchRiders = async () => {
-      try {
-        const response = await getAllDeliveryBoys({
-          status: 'active',
-          applicationStatus: 'approved'
-        });
-        setDeliveryBoys(response?.data?.deliveryBoys || []);
-      } catch (err) {
-        console.error("Error fetching riders:", err);
-      }
-    };
-    fetchRiders();
-  }, []);
+
 
   const handleAssignRider = async () => {
     if (!selectedRiderId) {
@@ -149,16 +136,14 @@ const OrderDetail = () => {
         setOrder(normalizedOrder);
         setStatus(o.status);
 
-        // Fetch nearby riders if searching
-        if (o.status === 'searching') {
-            try {
-                const ridersRes = await getNearbyRiders(o._id || o.orderId);
-                if (ridersRes?.data?.riders) {
-                    setDeliveryBoys(ridersRes.data.riders);
-                }
-            } catch (err) {
-                console.error("Error fetching nearby riders:", err);
+        // Fetch nearby riders for manual assignment dropdown
+        try {
+            const ridersRes = await getNearbyRiders(o._id || o.orderId);
+            if (ridersRes?.data?.riders) {
+                setDeliveryBoys(ridersRes.data.riders);
             }
+        } catch (err) {
+            console.error("Error fetching nearby riders:", err);
         }
 
       } catch (error) {

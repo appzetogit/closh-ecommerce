@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { X, Phone, ArrowRight, ShieldCheck, Timer, ChevronLeft, User as UserIcon, Mail } from 'lucide-react';
 import { useAuthStore } from '../../../../shared/store/authStore';
 import { isValidEmail } from '../../../../shared/utils/helpers';
@@ -356,10 +356,10 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
 
                         <p className="text-[11px] font-medium text-[#878787] leading-relaxed mb-5">
                             By continuing, you acknowledge our<br />
-                            <span className="text-black font-semibold cursor-pointer hover:text-black transition-colors">Terms of Service</span> & <span className="text-black font-semibold cursor-pointer hover:text-black transition-colors">Privacy Policy</span>
+                            <Link to="/terms" onClick={onClose} className="text-black font-semibold cursor-pointer hover:text-black transition-colors">Terms of Service</Link> & <Link to="/privacy" onClick={onClose} className="text-black font-semibold cursor-pointer hover:text-black transition-colors">Privacy Policy</Link>
                         </p>
                         <p className="text-[12px] font-medium text-[#878787] bg-white inline-block px-4 py-2 rounded-full border border-gray-100 shadow-sm">
-                            Need help? <span className="text-black font-bold cursor-pointer hover:text-black transition-colors">Contact Support</span>
+                            Need help? <Link to="/contact" onClick={onClose} className="text-black font-bold cursor-pointer hover:text-black transition-colors">Contact Support</Link>
                         </p>
                     </div>
                 </div>
