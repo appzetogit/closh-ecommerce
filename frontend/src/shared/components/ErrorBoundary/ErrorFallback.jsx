@@ -10,7 +10,16 @@ const ErrorFallback = ({ error, errorInfo, onReset, fallback }) => {
   const isDevelopment = import.meta.env.DEV;
 
   const handleGoHome = () => {
-    window.location.href = '/';
+    const path = window.location.pathname;
+    if (path.startsWith('/admin')) {
+      window.location.href = '/admin/dashboard';
+    } else if (path.startsWith('/vendor')) {
+      window.location.href = '/vendor/dashboard';
+    } else if (path.startsWith('/delivery')) {
+      window.location.href = '/delivery/dashboard';
+    } else {
+      window.location.href = '/';
+    }
   };
 
   return (
