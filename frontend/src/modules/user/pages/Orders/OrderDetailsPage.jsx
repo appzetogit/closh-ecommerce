@@ -1760,12 +1760,12 @@ const OrderDetailsPage = () => {
                                                         value={userUpiId}
                                                         onChange={(e) => setUserUpiId(e.target.value)}
                                                         placeholder="example@upi"
-                                                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-black"
+                                                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-black"
                                                     />
                                                     <button
                                                         onClick={handleSubmitUpi}
                                                         disabled={isSubmittingUpi}
-                                                        className="px-4 py-2 bg-black text-white rounded-lg text-[10px] font-bold uppercase hover:bg-gray-800 disabled:bg-gray-300 transition-colors"
+                                                        className="shrink-0 px-4 py-2 bg-black text-white rounded-lg text-[10px] font-bold uppercase hover:bg-gray-800 disabled:bg-gray-300 transition-colors"
                                                     >
                                                         {isSubmittingUpi ? '...' : 'Submit'}
                                                     </button>
