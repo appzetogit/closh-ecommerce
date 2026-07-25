@@ -312,17 +312,17 @@ const Header = ({ variant = 'default', showCategoryBar = true }) => {
         }));
     }, [isSubcategoryMode, storeCategories, activeCategory, activeSubCategory]);
 
-    // Auto-open location modal if not set and on home page
+    // Auto-open location modal if not set and on home page (only for logged-in users)
     useEffect(() => {
         const hasPrompted = sessionStorage.getItem('location-prompted');
-        if (!activeAddress && (location.pathname === '/' || location.pathname === '/home') && !hasPrompted) {
+        if (user && !activeAddress && (location.pathname === '/' || location.pathname === '/home') && !hasPrompted) {
             const timer = setTimeout(() => {
                 setIsLocationModalOpen(true);
                 sessionStorage.setItem('location-prompted', 'true');
             }, 800); // reduced delay for faster interaction
             return () => clearTimeout(timer);
         }
-    }, [activeAddress, location.pathname]);
+    }, [activeAddress, location.pathname, user]);
 
     // Show categories on Home and Shop pages
     const showCategories = showCategoryBar && (location.pathname === '/' || location.pathname === '/home' || location.pathname === '/shop' || location.pathname === '/categories');
