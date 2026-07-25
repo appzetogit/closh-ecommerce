@@ -1001,7 +1001,7 @@ router.get('/geocode', asyncHandler(async (req, res) => {
 router.get('/orders/track/:id', asyncHandler(async (req, res) => {
     const { default: Order } = await import('../models/Order.model.js');
     const order = await Order.findOne({ orderId: req.params.id })
-        .select('orderId status trackingNumber estimatedDelivery deliveredAt createdAt updatedAt cancelledAt deliveryBoyId')
+        .select('orderId status trackingNumber estimatedDelivery deliveredAt createdAt updatedAt cancelledAt deliveryBoyId riderAcceptedAt isMultiVendor vendorPickups vendorItems orderType paymentMethod')
         .populate('deliveryBoyId', 'currentLocation name phone');
 
     if (!order) throw new ApiError(404, 'Order not found.');
