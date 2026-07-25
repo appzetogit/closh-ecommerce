@@ -32,7 +32,14 @@ const DeliveryNotifications = () => {
 
   const handleNotificationClick = (notification) => {
     const data = notification?.data || {};
+    const returnId = String(data?.returnId || "").trim();
     const orderId = String(data?.orderId || "").trim();
+    const isReturn = notification?.type === 'return' || String(data?.type || '').includes('return') || Boolean(returnId);
+
+    if (isReturn && (returnId || orderId)) {
+      navigate(`/delivery/returns/${returnId || orderId}`);
+      return;
+    }
     if (orderId) {
       navigate(`/delivery/orders/${orderId}`);
       return;

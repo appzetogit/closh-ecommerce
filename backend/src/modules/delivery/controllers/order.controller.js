@@ -653,6 +653,50 @@ export const getProfileSummary = asyncHandler(async (req, res) => {
     );
 });
 
+// Helper to safely find a ReturnRequest whether given an ObjectId (_id), returnId (RET-...), or orderId string (ORD-...)
+const findReturnRequestByIdOrString = async (id, deliveryBoyId = null, includeUnassignedApproved = false) => {
+    const conditions = [];
+    if (mongoose.isValidObjectId(id)) {
+        conditions.push({ _id: id });
+        conditions.push({ orderId: id });
+    }
+    if (typeof id === 'string') {
+        conditions.push({ returnId: id });
+    }
+
+    if (!mongoose.isValidObjectId(id) && typeof id === 'string') {
+        const order = await Order.findOne({ orderId: id }).select('_id');
+        if (order) {
+            conditions.push({ orderId: order._id });
+        }
+    }
+
+    const filter = conditions.length > 1 ? { $or: conditions } : (conditions[0] || {});
+
+    if (deliveryBoyId && includeUnassignedApproved) {
+        return ReturnRequest.findOne({
+            $and: [
+                filter,
+                {
+                    $or: [
+                        { deliveryBoyId: deliveryBoyId },
+                        { deliveryBoyId: { $exists: false }, status: 'approved' }
+                    ]
+                }
+            ]
+        });
+    } else if (deliveryBoyId) {
+        return ReturnRequest.findOne({
+            $and: [
+                filter,
+                { deliveryBoyId: deliveryBoyId }
+            ]
+        });
+    }
+
+    return ReturnRequest.findOne(filter);
+};
+
 // GET /api/delivery/orders/:id
 export const getOrderDetail = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -686,15 +730,13 @@ export const getOrderDetail = asyncHandler(async (req, res) => {
 
     if (!order) {
         // Try searching in ReturnRequest
-        const returnReq = await ReturnRequest.findOne({
-            $or: idFilter,
-            $or: [
-                { deliveryBoyId: deliveryBoyId },
-                { deliveryBoyId: { $exists: false }, status: 'approved' }
-            ]
-        }).populate('userId', 'name phone').populate('vendorId', 'storeName shopAddress shopLocation phone').populate('orderId', 'orderId total shippingAddress');
+        const returnReq = await findReturnRequestByIdOrString(id, deliveryBoyId, true);
 
         if (!returnReq) throw new ApiError(404, 'Task not found.');
+
+        await returnReq.populate('userId', 'name phone');
+        await returnReq.populate('vendorId', 'storeName shopAddress shopLocation phone');
+        await returnReq.populate('orderId', 'orderId total shippingAddress');
 
         // Normalize ReturnRequest to Order-like structure for the detail page
         return res.status(200).json(new ApiResponse(200, {
@@ -2323,15 +2365,16 @@ export const handleBatchSelect = asyncHandler(async (req, res) => {
 // GET /api/delivery/returns/:id
 export const getReturnDetail = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const returnReq = await ReturnRequest.findById(id)
-        .populate('userId', 'name email phone')
-        .populate('orderId', 'orderId total items paymentMethod shippingAddress dropoffLocation')
-        .populate('vendorId', 'storeName email phone shopAddress shopLocation address')
-        .populate('vendorDropoffs.vendorId', 'storeName email phone shopAddress shopLocation address');
+    const returnReq = await findReturnRequestByIdOrString(id);
 
     if (!returnReq) {
         throw new ApiError(404, 'Return request not found.');
     }
+
+    await returnReq.populate('userId', 'name email phone');
+    await returnReq.populate('orderId', 'orderId total items paymentMethod shippingAddress dropoffLocation');
+    await returnReq.populate('vendorId', 'storeName email phone shopAddress shopLocation address');
+    await returnReq.populate('vendorDropoffs.vendorId', 'storeName email phone shopAddress shopLocation address');
 
     return res.status(200).json(new ApiResponse(200, returnReq, 'Return request detail fetched.'));
 });
@@ -2396,9 +2439,14 @@ export const acceptReturnAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Mission in progress: You must complete your current task before accepting another.');
     }
 
+    const targetReq = await findReturnRequestByIdOrString(id);
+    if (!targetReq) {
+        throw new ApiError(404, 'Return request not found.');
+    }
+
     const returnReq = await ReturnRequest.findOneAndUpdate(
         {
-            _id: id,
+            _id: targetReq._id,
             status: 'approved',
             deliveryBoyId: { $exists: false }
         },
@@ -2442,12 +2490,10 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const deliveryBoyId = req.user.id;
 
-    const returnReq = await ReturnRequest.findOne({
-        _id: id,
-        deliveryBoyId
-    }).populate('userId').populate('orderId');
-
+    const returnReq = await findReturnRequestByIdOrString(id, deliveryBoyId, false);
     if (!returnReq) throw new ApiError(404, 'Return request not found.');
+    await returnReq.populate('userId');
+    await returnReq.populate('orderId');
 
     if (status === 'picked_up') {
         const normalizedOtp = String(otp || '').trim();
@@ -2602,7 +2648,7 @@ export const pickupReturnFromCustomer = asyncHandler(async (req, res) => {
 
     if (!pickupPhoto) throw new ApiError(400, 'Pickup photo is required.');
 
-    const returnReq = await ReturnRequest.findOne({ _id: id, deliveryBoyId });
+    const returnReq = await findReturnRequestByIdOrString(id, deliveryBoyId, false);
     if (!returnReq) throw new ApiError(404, 'Return request not found or not assigned to you.');
 
     if (returnReq.status !== 'processing' && returnReq.status !== 'pending') {
@@ -2673,7 +2719,7 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
 
     if (!deliveryPhoto) throw new ApiError(400, 'Dropoff photo is required.');
 
-    const returnReq = await ReturnRequest.findOne({ _id: id, deliveryBoyId });
+    const returnReq = await findReturnRequestByIdOrString(id, deliveryBoyId, false);
     if (!returnReq) throw new ApiError(404, 'Return request not found or not assigned to you.');
 
     if (returnReq.status !== 'processing') {
@@ -2765,7 +2811,7 @@ export const resendReturnVendorOtp = asyncHandler(async (req, res) => {
     const { vendorId } = req.body;
     const deliveryBoyId = req.user.id;
 
-    const returnReq = await ReturnRequest.findOne({ _id: id, deliveryBoyId });
+    const returnReq = await findReturnRequestByIdOrString(id, deliveryBoyId, false);
     if (!returnReq) throw new ApiError(404, 'Return request not found or not assigned to you.');
 
     if (returnReq.status !== 'processing') {
