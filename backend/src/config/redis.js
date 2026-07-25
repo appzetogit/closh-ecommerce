@@ -45,7 +45,7 @@ const connectRedis = async () => {
         const onReady = async () => {
             console.log('✅ Redis Connected for Queues');
             try {
-                await redisConnection.config('SET', 'maxmemory-policy', 'allkeys-lru');
+                await redisConnection.config('SET', 'maxmemory-policy', 'noeviction');
             } catch (err) {
                 console.warn('⚠️ Could not set maxmemory-policy programmatically. You may see BullMQ warnings.');
             }

@@ -26,14 +26,14 @@ const createStore = (prefix) => {
             sendCommand: async (...args) => {
                 // If Redis is not ready, we skip the command to prevent hanging/crashing
                 if (redisClient.status !== 'ready') {
-                    // Return a fake value that won't crash rate-limit-redis
-                    // 0 for INCR/GET, or empty array for others
                     return 0; 
                 }
 
                 try {
-                    const [command, ...params] = args;
-                    return await redisClient.call(command, params);
+                    // rate-limit-redis passes args as individual arguments:
+                    // e.g. sendCommand("EVALSHA", sha, numKeys, key, ...)
+                    // ioredis.call() expects: call(command, arg1, arg2, ...)
+                    return await redisClient.call(...args);
                 } catch (err) {
                     console.warn(`⚠️ Redis command failed in ${prefix}:`, err.message);
                     return 0;
