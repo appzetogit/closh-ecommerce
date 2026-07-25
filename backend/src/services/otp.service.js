@@ -8,7 +8,7 @@ import { sendEmail } from './email.service.js';
  */
 const generateOtp = (phone) => {
     const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
-    const testNumbers = ['7894561230', '1234567890', '7879363299'];
+    const testNumbers = ['7894561230', '1234567890', '7879363299', '9669002380'];
     
     // Use static OTP for test numbers, otherwise generate a real random OTP
     const otp = testNumbers.includes(normalizedPhone) 
