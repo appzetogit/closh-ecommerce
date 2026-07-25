@@ -925,11 +925,14 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
             order.deliveryFlow.phase = finalPhase;
         }
 
-        // Sync vendorItems statuses — per-vendor check for rejected items
+        // Sync vendorItems statuses — per-vendor check for accepted/rejected items
         if (order.vendorItems && order.vendorItems.length > 0) {
             const rejectedItemsList = (order.deliveryFlow?.rejectedItems || []);
+            const acceptedItemsList = (order.deliveryFlow?.tryAndBuyItems || []).filter(i => i.decision === 'accepted');
+            
             order.vendorItems.forEach(group => {
                 const vendorGroupId = String(group.vendorId._id || group.vendorId);
+                
                 // Check if THIS specific vendor has any rejected items
                 const thisVendorHasRejectedItems = hasRejectedItems && rejectedItemsList.some(ri => {
                     const riVendorId = ri.vendorId ? String(ri.vendorId._id || ri.vendorId) : null;
@@ -938,11 +941,21 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
                     return group.items.some(item => String(item.productId) === String(ri.productId));
                 });
 
-                if (thisVendorHasRejectedItems) {
-                    group.status = 'returning_unselected_items';
-                } else {
+                // Check if THIS specific vendor has any accepted items
+                const thisVendorHasAcceptedItems = acceptedItemsList.some(ai => {
+                    const aiVendorId = ai.vendorId ? String(ai.vendorId._id || ai.vendorId) : null;
+                    if (aiVendorId) return aiVendorId === vendorGroupId;
+                    // Fallback: check if the accepted item's product belongs to this vendor group
+                    return group.items.some(item => String(item.productId) === String(ai.productId));
+                });
+
+                // If vendor has at least one accepted item, mark as delivered.
+                // It will only be marked returning_unselected_items if ALL items are rejected.
+                if (thisVendorHasAcceptedItems || !thisVendorHasRejectedItems) {
                     group.status = 'delivered';
                     group.deliveredAt = new Date();
+                } else {
+                    group.status = 'returning_unselected_items';
                 }
             });
         }

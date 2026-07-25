@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useBrandStore } from '../../../../shared/store/brandStore';
 import HeroSection from '../../components/HeroSection/HeroSection';
 import CategoryBanners from '../../components/CategoryBanners/CategoryBanners';
 import ProductGrid from '../../components/ProductGrid/ProductGrid';
@@ -39,6 +40,13 @@ const ScrollReveal = ({ children, className = "" }) => {
 };
 
 const HomePage = () => {
+    const initializeBrands = useBrandStore(state => state.initialize);
+
+    useEffect(() => {
+        // Prefetch Discovery (Brands) data so it's ready when the modal opens
+        initializeBrands();
+    }, [initializeBrands]);
+
     return (
         <div className="overflow-x-hidden pt-0 space-y-0">
             {/* Hero Section - Shifted for Visibility */}
