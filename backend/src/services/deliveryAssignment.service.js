@@ -123,20 +123,18 @@ export const triggerDeliveryAssignment = async (order) => {
                 }
                 
                 if (vendorCoordsList.length > 0) {
-                    const distances = [];
-                    for (const vCoord of vendorCoordsList) {
-                        try {
-                            const res = await getDistanceMatrix(vCoord, dropoffCoords);
-                            if (res && res.distance !== undefined) {
-                                distances.push(res.distance);
-                            } else {
-                                distances.push(calculateDistance(vCoord, dropoffCoords));
-                            }
-                        } catch(e) {
-                            distances.push(calculateDistance(vCoord, dropoffCoords));
+                    const lastVendorCoord = vendorCoordsList[vendorCoordsList.length - 1];
+                    try {
+                        const res = await getDistanceMatrix(lastVendorCoord, dropoffCoords);
+                        if (res && res.distance !== undefined) {
+                            nearestDistanceToCustomer = res.distance;
+                        } else {
+                            nearestDistanceToCustomer = calculateDistance(lastVendorCoord, dropoffCoords);
                         }
+                    } catch (e) {
+                        nearestDistanceToCustomer = calculateDistance(lastVendorCoord, dropoffCoords);
                     }
-                    nearestDistanceToCustomer = Math.min(...distances);
+
                     estimatedDistance = `${nearestDistanceToCustomer} km`;
                     estimatedTime = `${Math.round(nearestDistanceToCustomer * 3)} mins`;
                 }

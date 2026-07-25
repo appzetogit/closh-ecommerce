@@ -870,7 +870,19 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
         // Calculate delivery earnings using dynamic fee config (applied at completion)
         const { getDistanceMatrix } = await import('../../../services/googleMaps.service.js');
         const feeConfig = await getDeliveryFeeConfig();
-        const pickup = order.pickupLocation?.coordinates || [0, 0];
+        // For multi-vendor: calculate path distance between all vendors for the routing fee
+        let vendorRoutingDistance = 0;
+        let finalPickup = order.pickupLocation?.coordinates || [0, 0];
+        if (order.isMultiVendor && order.vendorPickups?.length > 0) {
+            const sortedPickups = [...order.vendorPickups].sort((a, b) => a.sequence - b.sequence);
+            const vendorCoords = sortedPickups.map(p => p.shopLocation?.coordinates).filter(c => c && c.length === 2);
+            if (vendorCoords.length > 0) {
+                vendorRoutingDistance = calculatePathDistance(vendorCoords);
+                finalPickup = vendorCoords[vendorCoords.length - 1]; // Use last vendor as starting point for delivery
+            }
+        }
+
+        const pickup = finalPickup;
         const dropoff = order.dropoffLocation?.coordinates || [0, 0];
 
         let distanceKm = order.deliveryDistance || 0;
@@ -883,13 +895,6 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
             distanceKm = calculateDistance(pickup, dropoff);
         }
 
-        // For multi-vendor: calculate path distance between all vendors for the routing fee
-        let vendorRoutingDistance = 0;
-        if (order.isMultiVendor && order.vendorPickups?.length > 1) {
-            const sortedPickups = [...order.vendorPickups].sort((a, b) => a.sequence - b.sequence);
-            const vendorCoords = sortedPickups.map(p => p.shopLocation?.coordinates).filter(c => c && c.length === 2);
-            vendorRoutingDistance = calculatePathDistance(vendorCoords);
-        }
 
         const numVendorStops = order.vendorItems?.length || 1;
         const stopFee = getVendorPickupFee(vendorRoutingDistance, feeConfig);

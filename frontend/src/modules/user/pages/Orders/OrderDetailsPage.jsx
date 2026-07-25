@@ -665,7 +665,7 @@ const OrderDetailsPage = () => {
                 toast.error('Please select at least one item to return');
                 return;
             }
-            const missingReason = selectedItems.find(si => !perItemReasons[si.productId]);
+            const missingReason = selectedItems.find(si => !perItemReasons[si.itemId]);
             if (missingReason) {
                 toast.error('Please select a reason for each selected item');
                 return;
@@ -677,7 +677,7 @@ const OrderDetailsPage = () => {
                 const allItemsToReturn = selectedItems.map(si => ({
                     productId: si.productId,
                     quantity: si.quantity,
-                    reason: perItemReasons[si.productId] || '',
+                    reason: perItemReasons[si.itemId] || '',
                 }));
 
                 await useOrderStore.getState().requestReturn(orderId, {
@@ -1894,7 +1894,8 @@ const OrderDetailsPage = () => {
                                 <div className="space-y-3">
                                     {/* Product selection with per-item reason */}
                                     {order.items.map((item, idx) => {
-                                        const itemId = String(item.productId || item._id || item.id || idx);
+                                        const rawProductId = typeof item.productId === 'object' ? (item.productId?._id || item.productId?.id) : item.productId;
+                                        const itemId = String(item._id || item.id || rawProductId || idx);
                                         const isSelected = !!selectedReturnItems[itemId];
                                         const itemReason = perItemReasons[itemId] || '';
                                         return (
@@ -1909,7 +1910,7 @@ const OrderDetailsPage = () => {
                                                         onChange={(e) => {
                                                             setSelectedReturnItems(prev => ({
                                                                 ...prev,
-                                                                [itemId]: e.target.checked ? { productId: itemId, quantity: item.quantity } : undefined
+                                                                [itemId]: e.target.checked ? { productId: rawProductId, quantity: item.quantity, itemId: itemId } : undefined
                                                             }));
                                                             if (!e.target.checked) {
                                                                 setPerItemReasons(prev => {
@@ -1994,7 +1995,7 @@ const OrderDetailsPage = () => {
                                 <button
                                     onClick={handleReturnSubmit}
                                     disabled={isMultiVendorOrder
-                                        ? (Object.values(selectedReturnItems).filter(Boolean).length === 0 || Object.values(selectedReturnItems).filter(Boolean).some(si => !perItemReasons[si.productId]) || isSubmitting)
+                                        ? (Object.values(selectedReturnItems).filter(Boolean).length === 0 || Object.values(selectedReturnItems).filter(Boolean).some(si => !perItemReasons[si.itemId]) || isSubmitting)
                                         : (!returnReason || isSubmitting)
                                     }
                                     className={`flex-1 py-3 rounded-xl font-bold text-[11px] uppercase  transition-all shadow-lg ${
