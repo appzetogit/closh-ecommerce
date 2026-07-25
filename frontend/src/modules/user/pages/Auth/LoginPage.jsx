@@ -151,9 +151,9 @@ const LoginPage = () => {
         <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4 sm:px-6 lg:px-8 relative">
             <button
                 onClick={() => navigate(-1)}
-                className="fixed top-8 right-8 p-3 bg-white border border-gray-100 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all z-50 text-gray-400 hover:text-black"
+                className="fixed top-8 right-8 px-6 py-2 bg-white border border-gray-100 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all z-50 text-gray-500 font-bold hover:text-black"
             >
-                <X size={24} strokeWidth={3} />
+                Skip
             </button>
 
             <div className="max-w-md w-full bg-white p-10 rounded-[40px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-100 animate-fadeInUp relative overflow-hidden">
