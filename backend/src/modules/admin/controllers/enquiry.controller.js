@@ -153,27 +153,101 @@ export const handleEnquiry = async (req, res) => {
             await order.save();
             
             if (order.deliveryBoyId) {
-                // Correctly emit to the delivery boy's specific room
-                emitEvent(`delivery_${order.deliveryBoyId.toString()}`, 'order_status_updated', { 
+                const DeliveryBoy = (await import('../../../models/DeliveryBoy.model.js')).default;
+                const DeliveryBatch = (await import('../../../models/DeliveryBatch.model.js')).default;
+                const { createNotification } = await import('../../../services/notification.service.js');
+                const deliveryBoyIdStr = order.deliveryBoyId.toString();
+
+                if (needsReturn) {
+                    // --- RETURN FLOW: Rider must return items to vendor ---
+                    // Notify rider with actionable return message
+                    emitEvent(`delivery_${deliveryBoyIdStr}`, 'order_status_updated', { 
+                        id: order._id, 
+                        orderId: order.orderId, 
+                        status: order.status 
+                    });
+
+                    await createNotification({
+                        recipientId: deliveryBoyIdStr,
+                        recipientType: 'delivery',
+                        title: '📦 Return Items to Vendor',
+                        message: `Cancellation approved for order #${order.orderId}. Please return all items to the vendor shop(s).`,
+                        type: 'order',
+                        data: { orderId: String(order._id), status: order.status, action: 'return_to_vendor' }
+                    }).catch(err => console.error('[Enquiry] Return notification failed:', err));
+
+                } else {
+                    // --- CANCEL FLOW: Rider is freed, no return needed ---
+                    // 1. Free the delivery boy
+                    await DeliveryBoy.findByIdAndUpdate(order.deliveryBoyId, { status: 'available' });
+
+                    // 2. Cleanup any active DeliveryBatch
+                    await DeliveryBatch.deleteMany({
+                        deliveryBoyId: order.deliveryBoyId,
+                        status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
+                    });
+
+                    // 3. Notify rider
+                    emitEvent(`delivery_${deliveryBoyIdStr}`, 'order_status_updated', { 
+                        id: order._id, 
+                        orderId: order.orderId, 
+                        status: order.status 
+                    });
+                    // Also send order_cancelled event so frontend can react immediately
+                    emitEvent(`delivery_${deliveryBoyIdStr}`, 'order_cancelled', { 
+                        id: order._id, 
+                        orderId: order.orderId 
+                    });
+
+                    await createNotification({
+                        recipientId: deliveryBoyIdStr,
+                        recipientType: 'delivery',
+                        title: '✅ Cancellation Approved',
+                        message: `Your cancellation request for order #${order.orderId} has been approved. You are now free for new orders.`,
+                        type: 'order',
+                        data: { orderId: String(order._id), status: 'cancelled' }
+                    }).catch(err => console.error('[Enquiry] Cancel notification failed:', err));
+                }
+
+                // 4. Notify user/customer about the cancellation
+                if (order.userId) {
+                    emitEvent(`user_${order.userId.toString()}`, 'order_status_updated', { 
+                        id: order._id, 
+                        orderId: order.orderId, 
+                        status: order.status 
+                    });
+
+                    await createNotification({
+                        recipientId: order.userId.toString(),
+                        recipientType: 'user',
+                        title: 'Order Cancelled',
+                        message: `Your order #${order.orderId} has been cancelled.${order.paymentStatus === 'refunded' ? ' A refund has been initiated.' : ''}`,
+                        type: 'order',
+                        data: { orderId: String(order._id), status: order.status }
+                    }).catch(err => console.error('[Enquiry] User notification failed:', err));
+                }
+            }
+        } else if (status === 'rejected' && enquiry.orderId) {
+            // Notify the delivery boy that their cancellation was rejected — continue delivery
+            const order = await Order.findById(enquiry.orderId._id || enquiry.orderId);
+            if (order && order.deliveryBoyId) {
+                const deliveryBoyIdStr = order.deliveryBoyId.toString();
+                const { createNotification } = await import('../../../services/notification.service.js');
+
+                emitEvent(`delivery_${deliveryBoyIdStr}`, 'enquiry_rejected', { 
                     id: order._id, 
                     orderId: order.orderId, 
                     status: order.status 
                 });
 
-                // Send push notification to the delivery boy
-                try {
-                    const { createNotification } = await import('../../../services/notification.service.js');
-                    await createNotification({
-                        recipientId: order.deliveryBoyId.toString(),
-                        recipientType: 'delivery',
-                        title: 'Enquiry Updated',
-                        message: `Your cancellation enquiry for order #${order.orderId} has been ${status}.`,
-                        type: 'order',
-                        data: { orderId: String(order._id), status }
-                    });
-                } catch (notifyErr) {
-                    console.error('[Enquiry] Error notifying delivery boy:', notifyErr);
-                }
+                await createNotification({
+                    recipientId: deliveryBoyIdStr,
+                    recipientType: 'delivery',
+                    title: '❌ Cancellation Rejected',
+                    message: `Your cancellation request for order #${order.orderId} was rejected by admin.${adminRemarks ? ` Reason: ${adminRemarks}` : ''} Please continue the delivery.`,
+                    type: 'order',
+                    data: { orderId: String(order._id), status: 'rejected' }
+                }).catch(err => console.error('[Enquiry] Rejection notification failed:', err));
             }
         }
 
