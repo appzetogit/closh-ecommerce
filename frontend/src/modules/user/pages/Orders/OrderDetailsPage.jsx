@@ -654,11 +654,12 @@ const OrderDetailsPage = () => {
     const isTryAndBuy = order?.orderType === 'try_and_buy';
     const isCheckAndBuy = order?.orderType === 'check_and_buy';
     const isMultiVendorOrder = (order?.vendorItems?.length || 0) > 1;
+    const showItemLevelReturn = isMultiVendorOrder || (isCheckAndBuy && (order?.items?.length || 0) > 1);
 
 
 
     const handleReturnSubmit = async () => {
-        if (isMultiVendorOrder) {
+        if (showItemLevelReturn) {
             // Multi-vendor: validate per-item selections
             const selectedItems = Object.values(selectedReturnItems).filter(Boolean);
             if (selectedItems.length === 0) {
@@ -1883,14 +1884,14 @@ const OrderDetailsPage = () => {
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1">
                             <p className="text-sm font-bold text-gray-500">
-                                {isMultiVendorOrder
+                                {showItemLevelReturn
                                     ? <>Select items to return from order <span className="text-black">#{order.id}</span>. Choose a reason for each item.</>
                                     : <>Please select a reason for returning the items in order <span className="text-black">#{order.id}</span>.</>
                                 }
                             </p>
 
                             {/* Per-product selection for multi-vendor orders */}
-                            {isMultiVendorOrder ? (
+                            {showItemLevelReturn ? (
                                 <div className="space-y-3">
                                     {/* Product selection with per-item reason */}
                                     {order.items.map((item, idx) => {
@@ -1994,13 +1995,13 @@ const OrderDetailsPage = () => {
                                 </button>
                                 <button
                                     onClick={handleReturnSubmit}
-                                    disabled={isMultiVendorOrder
+                                    disabled={showItemLevelReturn
                                         ? (Object.values(selectedReturnItems).filter(Boolean).length === 0 || Object.values(selectedReturnItems).filter(Boolean).some(si => !perItemReasons[si.itemId]) || isSubmitting)
                                         : (!returnReason || isSubmitting)
                                     }
                                     className={`flex-1 py-3 rounded-xl font-bold text-[11px] uppercase  transition-all shadow-lg ${
-                                        (isMultiVendorOrder
-                                            ? (Object.values(selectedReturnItems).filter(Boolean).length === 0 || Object.values(selectedReturnItems).filter(Boolean).some(si => !perItemReasons[si.productId]) || isSubmitting)
+                                        (showItemLevelReturn
+                                            ? (Object.values(selectedReturnItems).filter(Boolean).length === 0 || Object.values(selectedReturnItems).filter(Boolean).some(si => !perItemReasons[si.itemId]) || isSubmitting)
                                             : (!returnReason || isSubmitting)
                                         ) ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800 shadow-gray-200'
                                     }`}

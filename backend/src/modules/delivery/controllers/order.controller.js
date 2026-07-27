@@ -680,7 +680,7 @@ const findReturnRequestByIdOrString = async (id, deliveryBoyId = null, includeUn
                 {
                     $or: [
                         { deliveryBoyId: deliveryBoyId },
-                        { deliveryBoyId: { $exists: false }, status: 'approved' }
+                        { deliveryBoyId: null, status: 'approved' }
                     ]
                 }
             ]
@@ -715,8 +715,8 @@ export const getOrderDetail = asyncHandler(async (req, res) => {
                 $or: [
                     { deliveryBoyId: deliveryBoyId },
                     {
-                        deliveryBoyId: { $exists: false },
-                        status: 'ready_for_pickup'
+                        deliveryBoyId: null,
+                        status: { $in: ['ready_for_pickup', 'all_vendors_ready', 'searching'] }
                     }
                 ]
             }
