@@ -295,8 +295,8 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             assignedAt: order.assignedAt
         });
 
-        // 7. Schedule 60-Second Timeout for Acceptance
-        QueueService.scheduleRiderAutoAssignTimeout(order._id, chosenRider._id, 60 * 1000);
+        // 7. Schedule 120-Second Timeout for Acceptance (must match frontend timer of 120s)
+        QueueService.scheduleRiderAutoAssignTimeout(order._id, chosenRider._id, 120 * 1000);
 
         return true;
     } catch (error) {

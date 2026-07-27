@@ -308,7 +308,7 @@ if (isRedisAvailable) {
 
         // Check if the order is STILL assigned to this rider BUT they haven't explicitly accepted it.
         if (order.status === 'assigned' && String(order.deliveryBoyId) === String(deliveryBoyId) && !order.riderAcceptedAt) {
-            console.log(`[Worker] ⏰ Rider ${deliveryBoyId} failed to accept order ${order.orderId} within 60s. Auto-rejecting.`);
+            console.log(`[Worker] ⏰ Rider ${deliveryBoyId} failed to accept order ${order.orderId} within 120s. Auto-rejecting.`);
 
             // 1. Mark this rider as rejected
             if (!order.rejectedDeliveryBoys.includes(deliveryBoyId)) {
@@ -338,7 +338,7 @@ if (isRedisAvailable) {
             emitEvent(`delivery_${deliveryBoyId}`, 'order_missed', { 
                 orderId: order.orderId,
                 id: order._id,
-                message: 'Order was removed because it was not accepted within 60 seconds.'
+                message: 'Order was removed because it was not accepted within 120 seconds.'
             });
 
             // 6. Trigger auto assignment for the next nearest rider

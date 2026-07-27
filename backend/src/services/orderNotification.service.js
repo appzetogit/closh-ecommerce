@@ -195,9 +195,15 @@ export const OrderNotificationService = {
                     sound: r.sound || 'default'
                 }));
 
-            // Auto-trigger assignment search
+            // Auto-trigger assignment search ONLY if no delivery boy is assigned yet.
+            // Re-check from DB because autoAssignDeliveryBoy may have already assigned someone by now.
             if ((status === 'ready_for_pickup' || status === 'searching') && !order.deliveryBoyId) {
-                triggerDeliveryAssignment(order).catch(err => console.error(`[AutoAssign] Error: ${err.message}`));
+                const freshOrder = await Order.findById(orderId).select('deliveryBoyId status').lean();
+                if (!freshOrder?.deliveryBoyId) {
+                    triggerDeliveryAssignment(order).catch(err => console.error(`[AutoAssign] Error: ${err.message}`));
+                } else {
+                    console.log(`[OrderNotification] Skipping broadcast: Order ${order.orderId} already assigned to rider ${freshOrder.deliveryBoyId}`);
+                }
             }
 
             await Promise.allSettled(tasks);

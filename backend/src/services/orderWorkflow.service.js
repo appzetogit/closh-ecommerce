@@ -107,8 +107,10 @@ export const OrderWorkflowService = {
         await QueueService.scheduleAdminEscalation(order._id);
         await QueueService.scheduleUserNoPartnerNotification(order._id);
 
+        // IMPORTANT: Run autoAssign FIRST so the order gets a deliveryBoyId before the
+        // notification service checks whether to broadcast to all nearby riders.
+        await autoAssignDeliveryBoy(order._id).catch(err => console.error('[OrderWorkflow] Auto assignment failed:', err));
         await OrderNotificationService.notifyOrderUpdate(order._id, 'searching', { excludeRecipientId: vendorId });
-        autoAssignDeliveryBoy(order._id).catch(err => console.error('[OrderWorkflow] Auto assignment failed:', err));
         
         return order;
     },
@@ -145,8 +147,10 @@ export const OrderWorkflowService = {
         await QueueService.scheduleAdminEscalation(order._id);
         await QueueService.scheduleUserNoPartnerNotification(order._id);
         
+        // IMPORTANT: Run autoAssign FIRST so the order gets a deliveryBoyId before the
+        // notification service checks whether to broadcast to all nearby riders.
+        await autoAssignDeliveryBoy(order._id).catch(err => console.error('[OrderWorkflow] Auto assignment failed:', err));
         await OrderNotificationService.notifyOrderUpdate(order._id, 'searching', { excludeRecipientId: vendorId });
-        autoAssignDeliveryBoy(order._id).catch(err => console.error('[OrderWorkflow] Auto assignment failed:', err));
 
         return order;
     },
