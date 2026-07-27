@@ -135,7 +135,8 @@ const DeliveryOrderDetail = () => {
     (order.deliveryBoyId === deliveryBoy?._id)
   );
 
-  const isAvailableTask = order && !order.deliveryBoyId && (order.rawStatus === 'ready_for_pickup' || order.status === 'pending' || order.rawStatus === 'approved');
+  const availableStatuses = ['ready_for_pickup', 'pending', 'approved', 'searching', 'all_vendors_ready'];
+  const isAvailableTask = order && !order.deliveryBoyId && (availableStatuses.includes(order.rawStatus) || availableStatuses.includes(order.status));
 
   const isOrderFinished = ['delivered', 'returned', 'returned_to_vendor', 'cancelled', 'canceled', 'return_requested', 'return_approved', 'awaiting_return'].includes(order?.status?.toLowerCase());
 

@@ -84,14 +84,10 @@ const ReturnRequestDetail = () => {
       }
     }
 
-    const success = await updateReturnStatus(id, statusData);
-    if (success) {
-      // Refresh local data
-      const data = await fetchReturnRequestById(id);
-      if (data) {
-        setReturnRequest(data);
-        setStatus(data.status);
-      }
+    const updatedReq = await updateReturnStatus(id, statusData);
+    if (updatedReq) {
+      setReturnRequest(updatedReq);
+      setStatus(updatedReq.status);
       setIsEditing(false);
     }
   };
@@ -102,13 +98,10 @@ const ReturnRequestDetail = () => {
       return;
     }
     setIsAssigning(true);
-    const success = await assignReturnDeliveryBoy(id, selectedRider);
+    const updatedReq = await assignReturnDeliveryBoy(id, selectedRider);
     setIsAssigning(false);
-    if (success) {
-      const data = await fetchReturnRequestById(id);
-      if (data) {
-        setReturnRequest(data);
-      }
+    if (updatedReq) {
+      setReturnRequest(updatedReq);
     }
   };
 

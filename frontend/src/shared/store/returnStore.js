@@ -101,7 +101,7 @@ export const useReturnStore = create((set, get) => ({
                 isLoading: false
             }));
             toast.success('Return status updated successfully');
-            return true;
+            return updatedReq;
         } catch (error) {
             set({ isLoading: false });
             toast.error(error.message || 'Failed to update return status');
@@ -121,7 +121,7 @@ export const useReturnStore = create((set, get) => ({
                 isLoading: false
             }));
             toast.success('Delivery boy assigned successfully');
-            return true;
+            return updatedReq;
         } catch (error) {
             set({ isLoading: false });
             toast.error(error.message || 'Failed to assign delivery boy');
