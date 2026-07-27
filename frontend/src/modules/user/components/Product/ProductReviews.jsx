@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ThumbsUp, MessageSquare, AlertCircle } from 'lucide-react';
+import { Star, ThumbsUp, MessageSquare, AlertCircle, ChevronDown, Check } from 'lucide-react';
 import { useReviewsStore } from '../../../../shared/store/reviewsStore';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -14,7 +14,16 @@ const ProductReviews = ({ productId, initialRating, initialReviewCount }) => {
     const { getAllOrders } = useOrderStore();
     const [reviews, setReviews] = useState([]);
     const [sortBy, setSortBy] = useState('newest');
+    const [isSortOpen, setIsSortOpen] = useState(false);
     const [stats, setStats] = useState({ average: initialRating || 0, count: initialReviewCount || 0, distribution: { 5:0, 4:0, 3:0, 2:0, 1:0 }});
+
+    const sortOptions = [
+        { value: 'newest', label: 'Newest First' },
+        { value: 'highest-rating', label: 'Highest Rated' },
+        { value: 'lowest-rating', label: 'Lowest Rated' },
+        { value: 'most-helpful', label: 'Most Helpful' },
+    ];
+    const selectedSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Newest First';
 
     useEffect(() => {
         const loadReviews = async () => {
@@ -158,16 +167,41 @@ const ProductReviews = ({ productId, initialRating, initialReviewCount }) => {
                         <h3 className="text-sm font-bold uppercase tracking-widest text-gray-900">
                             {reviews.length > 0 ? `${reviews.length} Reviews` : 'No Reviews Yet'}
                         </h3>
-                        <select 
-                            value={sortBy} 
-                            onChange={handleSortChange}
-                            className="bg-gray-50 border border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-700 py-2 px-3 rounded-lg outline-none cursor-pointer hover:bg-gray-100 transition-colors"
-                        >
-                            <option value="newest">Newest First</option>
-                            <option value="highest-rating">Highest Rated</option>
-                            <option value="lowest-rating">Lowest Rated</option>
-                            <option value="most-helpful">Most Helpful</option>
-                        </select>
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsSortOpen(!isSortOpen)}
+                                onBlur={() => setTimeout(() => setIsSortOpen(false), 200)}
+                                className="flex items-center gap-2 bg-gray-50 border border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-700 py-2.5 px-4 rounded-xl outline-none cursor-pointer hover:bg-gray-100 transition-colors shadow-sm"
+                            >
+                                {selectedSortLabel}
+                                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-300 ${isSortOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isSortOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {sortOptions.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            onClick={() => {
+                                                setSortBy(option.value);
+                                                if (productId) {
+                                                    setReviews(sortReviews(productId, option.value));
+                                                }
+                                                setIsSortOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 flex items-center justify-between text-xs font-bold uppercase tracking-wider transition-colors hover:bg-gray-50"
+                                        >
+                                            <span className={sortBy === option.value ? 'text-black' : 'text-gray-500'}>
+                                                {option.label}
+                                            </span>
+                                            {sortBy === option.value && (
+                                                <Check size={14} className="text-black" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {reviews.length === 0 ? (
