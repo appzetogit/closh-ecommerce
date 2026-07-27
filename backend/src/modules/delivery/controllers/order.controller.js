@@ -1089,15 +1089,24 @@ export const cancelOrder = asyncHandler(async (req, res) => {
         orderId: order.orderId
     });
 
-    const { createNotification } = await import('../../user/controllers/notification.controller.js');
-    await createNotification({
-        recipientId: 'admin', // or specific admin ID if available, but usually admin notifications use just recipientType: 'admin'
-        recipientType: 'admin',
-        title: 'New Cancellation Enquiry',
-        message: `Delivery boy requested cancellation for order #${order.orderId}`,
-        type: 'order',
-        data: { enquiryId: String(enquiry._id), orderId: String(order._id) }
-    }).catch(err => console.error('[Enquiry Notification] Failed to notify admin:', err));
+    try {
+        const { createNotification } = await import('../../../services/notification.service.js');
+        const Admin = (await import('../../../models/Admin.model.js')).default;
+        const admins = await Admin.find({ isActive: true }).select('_id');
+        
+        await Promise.all(admins.map(admin => 
+            createNotification({
+                recipientId: admin._id,
+                recipientType: 'admin',
+                title: 'New Cancellation Enquiry',
+                message: `Delivery boy requested cancellation for order #${order.orderId}`,
+                type: 'order',
+                data: { enquiryId: String(enquiry._id), orderId: String(order._id) }
+            }).catch(err => console.error('[Enquiry Notification] Failed to notify admin:', err))
+        ));
+    } catch (notifyErr) {
+        console.error('[Enquiry] Error notifying admins:', notifyErr);
+    }
 
     // We return the ORIGINAL order to the frontend, because the frontend expects an Order object to update its state, not an Enquiry.
     // The order's status remains unchanged until admin approves the enquiry.

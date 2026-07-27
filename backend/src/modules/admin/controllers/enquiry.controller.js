@@ -153,11 +153,27 @@ export const handleEnquiry = async (req, res) => {
             await order.save();
             
             if (order.deliveryBoyId) {
-                emitEvent('order_status_updated', { 
+                // Correctly emit to the delivery boy's specific room
+                emitEvent(`delivery_${order.deliveryBoyId.toString()}`, 'order_status_updated', { 
                     id: order._id, 
                     orderId: order.orderId, 
                     status: order.status 
-                }, order.deliveryBoyId.toString());
+                });
+
+                // Send push notification to the delivery boy
+                try {
+                    const { createNotification } = await import('../../../services/notification.service.js');
+                    await createNotification({
+                        recipientId: order.deliveryBoyId.toString(),
+                        recipientType: 'delivery',
+                        title: 'Enquiry Updated',
+                        message: `Your cancellation enquiry for order #${order.orderId} has been ${status}.`,
+                        type: 'order',
+                        data: { orderId: String(order._id), status }
+                    });
+                } catch (notifyErr) {
+                    console.error('[Enquiry] Error notifying delivery boy:', notifyErr);
+                }
             }
         }
 
