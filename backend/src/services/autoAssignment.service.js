@@ -307,7 +307,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             vendorName,
             vendorAddress,
             total: order.total,
-            deliveryFee: deliveryFee,
+            deliveryEarnings: deliveryFee,
             distance: estimatedDistance,
             estimatedTime: estimatedTime,
             paymentMethod: order.paymentMethod,
