@@ -58,8 +58,16 @@ const getLegalData = (settings) => {
         title: 'Return & Exchange Policy',
         content: `
             <div class="space-y-4">
-                <p class="text-gray-600 leading-relaxed font-medium">Exchanges are accepted within 7 days of purchase. Items must be unworn, unwashed, and have original tags attached.</p>
-                <p class="text-gray-600 leading-relaxed font-medium">Please contact our support team to initiate a return or exchange request.</p>
+                <p class="text-gray-600 leading-relaxed font-medium">We offer two convenient delivery options to ensure your complete satisfaction. Please review them carefully to choose the one that best suits your needs:</p>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 class="font-bold text-gray-900 mb-1">1. Try and Buy</h4>
+                    <p class="text-gray-600 leading-relaxed text-sm">With our "Try and Buy" option, you can try on the items at the time of delivery. If the fit, style, or quality does not meet your expectations, you can return them immediately to the delivery executive without any hassle.</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 class="font-bold text-gray-900 mb-1">2. Check and Buy</h4>
+                    <p class="text-gray-600 leading-relaxed text-sm">Under the "Check and Buy" policy, you are permitted to open the package and inspect the items for any defects or damage before accepting the delivery. This ensures you only receive products in perfect condition.</p>
+                </div>
+                <p class="text-gray-600 leading-relaxed font-medium">For any further questions regarding returns or exchanges, please reach out to our customer support team.</p>
             </div>
         `
     },
@@ -67,8 +75,8 @@ const getLegalData = (settings) => {
         title: 'Shipping Policy',
         content: `
             <div class="space-y-4">
-                <p class="text-gray-600 leading-relaxed font-medium">Orders are processed within 1-2 business days. Delivery times vary based on location.</p>
-                <p class="text-gray-600 leading-relaxed font-medium">We offer standard and express shipping options. You will receive a tracking number once your order has shipped.</p>
+                <p class="text-gray-600 leading-relaxed font-medium">At Clouse, we prioritize speed. Orders are processed immediately, and we offer lightning-fast delivery within 60 minutes for eligible locations.</p>
+                <p class="text-gray-600 leading-relaxed font-medium">You will receive real-time tracking updates as soon as your order is dispatched with our delivery executive.</p>
             </div>
         `
     },

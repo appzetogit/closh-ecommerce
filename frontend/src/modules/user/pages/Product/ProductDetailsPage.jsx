@@ -655,8 +655,8 @@ const ProductDetailsPage = () => {
                             <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:p-3.5 bg-gray-50 rounded-xl md:rounded-[20px] border border-gray-100 uppercase tracking-tight">
                                 <Truck className="text-black shrink-0" size={16} md:size={20} />
                                 <div>
-                                    <h4 className="text-[9px] md:text-[11px] font-bold text-gray-900">Free Delivery</h4>
-                                    <p className="text-[8px] font-bold text-gray-400">Above ₹{product.vendorId?.freeShippingThreshold || '999'}</p>
+                                    <h4 className="text-[9px] md:text-[11px] font-bold text-gray-900">Fast Delivery</h4>
+                                    <p className="text-[8px] font-bold text-gray-400">Within 60 min</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:p-3.5 bg-gray-50 rounded-xl md:rounded-[20px] border border-gray-100 uppercase tracking-tight">
