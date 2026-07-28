@@ -5,7 +5,8 @@ import DeliveryBatch from '../models/DeliveryBatch.model.js';
 import ServiceArea from '../models/ServiceArea.model.js';
 import { createNotification } from './notification.service.js';
 import { emitEvent, isDeliveryBoyConnected } from './socket.service.js';
-import { calculateDistance } from '../utils/geo.js';
+import { calculateDistance, getDeliveryEarning, getVendorPickupFee } from '../utils/geo.js';
+import { getDeliveryFeeConfig } from '../utils/deliveryFeeConfig.js';
 import { OrderNotificationService } from './orderNotification.service.js';
 import { QueueService } from './queue.service.js';
 
@@ -237,6 +238,64 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             message: `Smart assignment: Rider ${chosenRider.name} has been assigned to your order.`
         });
 
+        // Prepare Payload details (Vendor Name, Address, Distance, Time, Fee)
+        const firstVendor = order.vendorItems?.[0] || {};
+        const vData = firstVendor.vendorId || {};
+        const vendorName = vData.storeName || firstVendor.vendorName || 'Vendor';
+        const vendorAddress = vData.shopAddress || (vData.address?.street ? `${vData.address.street}, ${vData.address.city}` : 'Vendor Address');
+
+        let estimatedDistance = order.deliveryDistance ? `${order.deliveryDistance} km` : '0 km';
+        let estimatedTime = 'N/A';
+        let deliveryFee = order.deliveryEarnings || 25;
+
+        try {
+            const feeConfig = await getDeliveryFeeConfig();
+            const dropoffCoords = order.dropoffLocation?.coordinates;
+            const pickupCoords = order.pickupLocation?.coordinates;
+
+            if (dropoffCoords?.length === 2 && (dropoffCoords[0] !== 0 || dropoffCoords[1] !== 0)) {
+                const { getDistanceMatrix, getRouteDistance } = await import('./googleMaps.service.js');
+                
+                let nearestDistanceToCustomer = 0;
+                let vendorCoordsList = [];
+                
+                if (order.isMultiVendor && order.vendorPickups?.length > 0) {
+                    const sortedPickups = [...order.vendorPickups].sort((a, b) => a.sequence - b.sequence);
+                    vendorCoordsList = sortedPickups.map(p => p.shopLocation?.coordinates).filter(c => c && c.length === 2);
+                } else if (pickupCoords?.length === 2) {
+                    vendorCoordsList = [pickupCoords];
+                }
+                
+                if (vendorCoordsList.length > 0) {
+                    const lastVendorCoord = vendorCoordsList[vendorCoordsList.length - 1];
+                    try {
+                        const res = await getDistanceMatrix(lastVendorCoord, dropoffCoords);
+                        if (res && res.distance !== undefined) {
+                            nearestDistanceToCustomer = res.distance;
+                        } else {
+                            nearestDistanceToCustomer = calculateDistance(lastVendorCoord, dropoffCoords);
+                        }
+                    } catch (e) {
+                        nearestDistanceToCustomer = calculateDistance(lastVendorCoord, dropoffCoords);
+                    }
+
+                    estimatedDistance = `${nearestDistanceToCustomer} km`;
+                    estimatedTime = `${Math.round(nearestDistanceToCustomer * 3)} mins`;
+                }
+                
+                let vendorRoutingDistance = 0;
+                if (vendorCoordsList.length > 1) {
+                    vendorRoutingDistance = await getRouteDistance(vendorCoordsList, calculateDistance);
+                }
+                
+                if (nearestDistanceToCustomer > 0 || vendorRoutingDistance > 0) {
+                    deliveryFee = getDeliveryEarning(nearestDistanceToCustomer, feeConfig) + getVendorPickupFee(vendorRoutingDistance, feeConfig);
+                }
+            }
+        } catch (err) {
+            console.error('❌ [AutoAssignmentTriggerDistance Error]', err.message);
+        }
+
         // Send socket alerts to rider
         const socketPayload = {
             orderId: order.orderId,
@@ -245,12 +304,16 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             pickupLocation: order.pickupLocation,
             customer: order.shippingAddress?.name || order.guestInfo?.name || 'Customer',
             address: order.shippingAddress?.address || 'Address unavailable',
+            vendorName,
+            vendorAddress,
             total: order.total,
+            deliveryFee: deliveryFee,
+            distance: estimatedDistance,
+            estimatedTime: estimatedTime,
             paymentMethod: order.paymentMethod,
             orderType: order.orderType,
             isMultiVendor: order.isMultiVendor,
             vendorPickups: order.vendorPickups,
-            deliveryEarnings: order.deliveryEarnings || 0,
             type: 'auto_assigned_alert'
         };
 
