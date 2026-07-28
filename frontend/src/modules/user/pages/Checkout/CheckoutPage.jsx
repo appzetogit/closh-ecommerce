@@ -353,7 +353,7 @@ const CheckoutPage = () => {
                                             <span className="text-[10px] sm:text-[11px] text-gray-400 line-through font-bold">₹{(Number(item.originalPrice) * item.quantity).toFixed(2)}</span>
                                         )}
                                         <span className="text-[10px] sm:text-[11px] font-bold text-[#F97316] uppercase tracking-tight">
-                                            {item.discount || (item.originalPrice > item.price ? `${Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% Off` : '')}
+                                            {item.discount ? (String(item.discount).includes('%') ? item.discount : `${item.discount}% Off`) : (item.originalPrice > item.price ? `${Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% Off` : '')}
                                         </span>
                                     </div>
                                 </div>

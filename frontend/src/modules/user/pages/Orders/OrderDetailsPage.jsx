@@ -676,7 +676,7 @@ const OrderDetailsPage = () => {
             try {
                 // Submit one return request with all items
                 const allItemsToReturn = selectedItems.map(si => ({
-                    productId: si.productId,
+                    productId: String(si.productId?._id || si.productId?.id || si.productId || si._id || si.id),
                     quantity: si.quantity,
                     reason: perItemReasons[si.itemId] || '',
                 }));
@@ -707,7 +707,7 @@ const OrderDetailsPage = () => {
             setIsSubmitting(true);
             try {
                 const allItemsToReturn = order.items.map(item => ({
-                    productId: item.productId || item._id || item.id,
+                    productId: String(item.productId?._id || item.productId?.id || item.productId || item._id || item.id),
                     quantity: item.quantity || 1,
                     reason: returnReason,
                 }));
