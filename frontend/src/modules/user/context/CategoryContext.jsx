@@ -33,7 +33,18 @@ export const CategoryProvider = ({ children }) => {
             ([key]) => key.toLowerCase() === name.toLowerCase() ||
                 name.toLowerCase().includes(key.toLowerCase())
         );
-        return entry ? entry[1] : categoryGradients['Default'];
+        
+        if (entry) return entry[1];
+
+        // Generate a deterministic soft pastel gradient for unmapped categories
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const hue1 = Math.abs(hash) % 360;
+        const hue2 = (hue1 + 40) % 360; // Slightly shifted hue for a smooth gradient
+        
+        return `linear-gradient(135deg, hsl(${hue1}, 80%, 85%) 0%, hsl(${hue2}, 80%, 95%) 100%)`;
     }, []);
 
     const value = useMemo(() => ({
