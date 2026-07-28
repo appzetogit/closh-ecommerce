@@ -128,19 +128,8 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         let connectedRiders = deliveryBoys.filter(boy => isDeliveryBoyConnected(boy._id.toString()));
         deliveryBoys = connectedRiders.length > 0 ? connectedRiders.slice(0, 5) : deliveryBoys.slice(0, 5);
 
-        // Fallback: If no boys are found nearby, scan globally for any active available partner
-        if (deliveryBoys.length === 0) {
-            console.log(`[AutoAssignment] No available delivery partners within 10km. Searching globally...`);
-            let globalBoys = await DeliveryBoy.find({
-                status: 'available',
-                isAvailable: true,
-                applicationStatus: 'approved',
-                _id: { $nin: excludeObjectIds }
-            }).limit(15).lean();
-
-            let globalConnected = globalBoys.filter(boy => isDeliveryBoyConnected(boy._id.toString()));
-            deliveryBoys = globalConnected.length > 0 ? globalConnected.slice(0, 5) : globalBoys.slice(0, 5);
-        }
+        // STRICT REQUIREMENT: Do not scan globally outside the service area.
+        // If no boys are found in the boundaries or 10km radius, do not fall back.
 
         if (deliveryBoys.length === 0) {
             console.warn(`[AutoAssignment] ❌ No available delivery partners found in the system for order ${order.orderId}. Waiting for manual intervention.`);

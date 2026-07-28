@@ -1,7 +1,7 @@
 import { createNotification } from './notification.service.js';
 import { emitEvent } from './socket.service.js';
 import Order from '../models/Order.model.js';
-import { triggerDeliveryAssignment } from './deliveryAssignment.service.js';
+import { autoAssignDeliveryBoy } from './autoAssignment.service.js';
 
 /**
  * Unified service to notify all parties involved in an order (Customer, Vendors, Rider)
@@ -200,7 +200,7 @@ export const OrderNotificationService = {
             if ((status === 'ready_for_pickup' || status === 'searching') && !order.deliveryBoyId) {
                 const freshOrder = await Order.findById(orderId).select('deliveryBoyId status').lean();
                 if (!freshOrder?.deliveryBoyId) {
-                    triggerDeliveryAssignment(order).catch(err => console.error(`[AutoAssign] Error: ${err.message}`));
+                    autoAssignDeliveryBoy(order._id).catch(err => console.error(`[AutoAssign] Error: ${err.message}`));
                 } else {
                     console.log(`[OrderNotification] Skipping broadcast: Order ${order.orderId} already assigned to rider ${freshOrder.deliveryBoyId}`);
                 }
