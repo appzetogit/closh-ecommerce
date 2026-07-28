@@ -16,7 +16,7 @@ const ProductGrid = () => {
         } else if (activeCategory === 'For You') {
             fetchPublicProducts({ limit: 12, sort: 'newest' });
         } else {
-            fetchPublicProducts({ category: activeCategory, limit: 24 });
+            fetchPublicProducts({ division: activeCategory, limit: 300 });
         }
     }, [activeCategory, fetchPublicProducts]);
 

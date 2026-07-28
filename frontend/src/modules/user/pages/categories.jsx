@@ -60,9 +60,12 @@ const MobileCategories = () => {
         setSelectedSubId(null);
       } else if (!selectedRootId && !targetId) {
         setSelectedRootId(rootCategories[0].normId);
+        if (activeCategory !== rootCategories[0].name) {
+          setActiveCategory(rootCategories[0].name);
+        }
       }
     }
-  }, [rootCategories, paramCategoryId, activeCategory, selectedRootId]);
+  }, [rootCategories, paramCategoryId, activeCategory, selectedRootId, setActiveCategory]);
 
   // 4. Subcategories (Level 1) - Linked to selected Root
   const subcategories = useMemo(() => {

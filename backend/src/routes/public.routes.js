@@ -99,7 +99,7 @@ const resolveVariantPrice = (product, selectedVariant) => {
 
 // GET /api/products — list with filters
 const listProducts = asyncHandler(async (req, res) => {
-    const {
+    let {
         page = 1,
         limit = 12,
         category,
