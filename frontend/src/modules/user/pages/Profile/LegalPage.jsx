@@ -13,9 +13,9 @@ const getLegalData = (settings) => {
     const storeName = general.storeName || "CLOSH";
 
     return {
-    'about': {
-        title: 'About Us',
-        content: `
+        'about': {
+            title: 'About Us',
+            content: `
             <div class="space-y-4">
                 <p class="text-gray-600 leading-relaxed font-medium">Welcome to ${storeName}, your number one source for all things fashion. We're dedicated to giving you the very best of clothing, with a focus on dependability, customer service and uniqueness.</p>
                 <p class="text-gray-600 leading-relaxed font-medium">Founded in 2024, ${storeName} has come a long way from its beginnings. When we first started out, our passion for fashion-forward clothing drove us to do intense research so that ${storeName} can offer you the world's most stylish and premium apparel.</p>
@@ -25,38 +25,38 @@ const getLegalData = (settings) => {
                 </div>
             </div>
         `
-    },
-    'terms': {
-        title: 'Terms and Conditions',
-        content: `
+        },
+        'terms': {
+            title: 'Terms and Conditions',
+            content: `
             <div class="space-y-4">
                 <p class="text-gray-600 leading-relaxed font-medium">By accessing this website, you are agreeing to be bound by these website Terms and Conditions of Use, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws.</p>
                 <h3 class="font-bold text-black uppercase  text-lg mt-6">Use License</h3>
                 <p class="text-gray-600 leading-relaxed font-medium">Permission is granted to temporarily download one copy of the materials (information or software) on ${storeName}'s website for personal, non-commercial transitory viewing only.</p>
             </div>
         `
-    },
-    'privacy': {
-        title: 'Privacy Policy',
-        content: `
+        },
+        'privacy': {
+            title: 'Privacy Policy',
+            content: `
             <div class="space-y-4">
                 <p class="text-gray-600 leading-relaxed font-medium">Your privacy is important to us. It is ${storeName}'s policy to respect your privacy regarding any information we may collect from you across our website, and other sites we own and operate.</p>
                 <p class="text-gray-600 leading-relaxed font-medium">We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent.</p>
             </div>
         `
-    },
-    'refund': {
-        title: 'Refund Policy',
-        content: `
+        },
+        'refund': {
+            title: 'Refund Policy',
+            content: `
             <div class="space-y-4">
                 <p class="text-gray-600 leading-relaxed font-medium">We want you to be totally satisfied with your purchase! If you're not happy, we're not happy.</p>
                 <p class="text-gray-600 leading-relaxed font-medium">You have 15 calendar days to return an item from the date you received it. To be eligible for a return, your item must be unused and in the same condition that you received it.</p>
             </div>
         `
-    },
-    'return': {
-        title: 'Return & Exchange Policy',
-        content: `
+        },
+        'return': {
+            title: 'Return & Exchange Policy',
+            content: `
             <div class="space-y-4">
                 <p class="text-gray-600 leading-relaxed font-medium">We offer two convenient delivery options to ensure your complete satisfaction. Please review them carefully to choose the one that best suits your needs:</p>
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -70,19 +70,19 @@ const getLegalData = (settings) => {
                 <p class="text-gray-600 leading-relaxed font-medium">For any further questions regarding returns or exchanges, please reach out to our customer support team.</p>
             </div>
         `
-    },
-    'shipping': {
-        title: 'Shipping Policy',
-        content: `
+        },
+        'shipping': {
+            title: 'Shipping Policy',
+            content: `
             <div class="space-y-4">
-                <p class="text-gray-600 leading-relaxed font-medium">At Clouse, we prioritize speed. Orders are processed immediately, and we offer lightning-fast delivery within 60 minutes for eligible locations.</p>
+                <p class="text-gray-600 leading-relaxed font-medium">At Closh, we prioritize speed. Orders are processed immediately, and we offer lightning-fast delivery within 60 minutes for eligible locations.</p>
                 <p class="text-gray-600 leading-relaxed font-medium">You will receive real-time tracking updates as soon as your order is dispatched with our delivery executive.</p>
             </div>
         `
-    },
-    'contact': {
-        title: 'Contact Us',
-        content: `
+        },
+        'contact': {
+            title: 'Contact Us',
+            content: `
             <div class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a href="mailto:${supportEmail}" class="p-6 bg-white rounded-[24px] border border-gray-100 hover:border-black transition-all group no-underline block shadow-sm hover:shadow-xl">
@@ -113,7 +113,7 @@ const getLegalData = (settings) => {
                 </div>
             </div>
         `
-    }
+        }
     };
 };
 
@@ -123,7 +123,7 @@ const LegalPage = ({ fixedPageId }) => {
     const { settings, initializePublic } = useSettingsStore();
     const [pageContent, setPageContent] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    
+
     const general = settings?.general || {};
     const supportEmail = general.customerSupportEmail || "support@closh.in";
     const supportPhone = general.customerSupportPhone || "+91 (800) 111-2222";
@@ -142,10 +142,10 @@ const LegalPage = ({ fixedPageId }) => {
         const fetchContent = async () => {
             // Keep existing pageContent visible while fetching updates if possible
             const legalData = getLegalData(settings);
-            
+
             try {
                 await initializePublic();
-                
+
                 const key = keyMap[effectivePageId];
                 if (key) {
                     // Try direct key first (from direct Settings update)
@@ -210,7 +210,7 @@ const LegalPage = ({ fixedPageId }) => {
                     className="legal-rich-text text-gray-700 leading-relaxed font-medium mb-12"
                     dangerouslySetInnerHTML={{ __html: pageContent.content }}
                 />
-                
+
                 {/* Need Help Block */}
                 <div className="mt-12 p-8 bg-blue-50/50 rounded-[24px] border border-blue-100 flex flex-col items-center text-center">
                     <h3 className="text-xl font-black text-gray-900 mb-3">Need Help?</h3>
