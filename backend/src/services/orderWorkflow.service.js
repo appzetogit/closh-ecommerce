@@ -48,28 +48,15 @@ async function notifyEligibleRiders(order) {
 
     if (!order.pickupLocation || !order.pickupLocation.coordinates || 
         (order.pickupLocation.coordinates[0] === 0 && order.pickupLocation.coordinates[1] === 0)) {
-        emitEvent('delivery_partners', 'order_ready_for_pickup', payload);
+        // NOTE: Global broadcast removed. Auto-assignment handles specific rider notification.
+        console.log(`ℹ️ [OrderWorkflow] Skipping broadcast for order ${order.orderId} (no valid pickup coords). Auto-assignment handles notification.`);
         return;
     }
 
-    const pickupCoords = order.pickupLocation.coordinates;
-    
-    const eligibleRiders = await DeliveryBoy.find({
-        status: 'available',
-        currentLocation: {
-            $geoWithin: {
-                $centerSphere: [pickupCoords, 8 / 6378.1]
-            }
-        }
-    }).select('_id');
-
-    if (eligibleRiders.length === 0) {
-        emitEvent('delivery_partners', 'order_ready_for_pickup', payload);
-    } else {
-        eligibleRiders.forEach(rider => {
-            emitEvent(`delivery_${rider._id}`, 'order_ready_for_pickup', payload);
-        });
-    }
+    // NOTE: Broadcast to eligible riders removed. Auto-assignment (autoAssignment.service.js)
+    // handles finding and notifying the specific assigned rider. Broadcasting here was
+    // disturbing all nearby/all delivery boys who are not assigned to this order.
+    console.log(`ℹ️ [OrderWorkflow] Skipping rider broadcast for order ${order.orderId}. Auto-assignment will notify the assigned rider directly.`);
 }
 
 export const OrderWorkflowService = {

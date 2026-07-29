@@ -64,33 +64,10 @@ export const DeliveryNearbyService = {
             return 0; // No riders found
         }
 
-        // 3. Multi-channel broadcast (Socket + Push)
-        const riderIds = riders.map(r => r._id);
-        
-        // Emitting individually for precision
-        riders.forEach(rider => {
-            emitEvent(`delivery_${rider._id}`, 'new_available_job', {
-                orderId: order.orderId,
-                total: order.total,
-                pickupName: order.shippingAddress.name || 'Vendor', 
-                distance: radiusKm, // approx
-                deliveryEarnings: order.deliveryEarnings || 0
-            });
-        });
-
-        // Bulk notifications for background
-        await Promise.all(riders.map(rider => 
-            createNotification({
-                recipientId: rider._id,
-                recipientType: 'delivery',
-                title: 'New Available Order Nearby',
-                message: `An order #${order.orderId} is ready for pickup in your area!`,
-                type: 'order',
-                data: { orderId: order.orderId, sound: 'new_order' }
-            })
-        ));
-
-        console.log(`[Nearby] Notified ${riders.length} riders in ${radiusKm}km radius for order ${order.orderId}`);
+        // NOTE: Broadcast to all nearby riders removed. Auto-assignment (autoAssignment.service.js)
+        // handles finding and notifying the specific assigned rider. Broadcasting here was
+        // disturbing up to 20 riders who are not assigned to this order.
+        console.log(`ℹ️ [Nearby] Found ${riders.length} riders in ${radiusKm}km radius for order ${order.orderId}. Skipping broadcast (auto-assignment handles specific rider).`);
         return riders.length;
     }
 };

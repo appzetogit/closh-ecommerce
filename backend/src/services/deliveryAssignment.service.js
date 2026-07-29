@@ -170,28 +170,11 @@ export const triggerDeliveryAssignment = async (order) => {
             type: 'new_assignment_broadcast'
         };
 
-        if (nearbyBoys.length > 0) {
-            console.log(`📡 [SOCKET] Sending targeted broadcast to ${nearbyBoys.length} nearby partners.`);
-            nearbyBoys.forEach(boy => {
-                emitEvent(`delivery_${boy._id}`, 'order_ready_for_pickup', socketPayload);
-                
-                createNotification({
-                    recipientId: boy._id,
-                    recipientType: 'delivery',
-                    title: 'New Order Nearby',
-                    message: `A new order #${order.orderId} is available for pickup near you.`,
-                    type: 'order',
-                    data: { 
-                        orderId: order.orderId, 
-                        type: 'new_assignment_broadcast',
-                        click_action: `/delivery/dashboard?viewOrder=${order.orderId}`
-                    }
-                }).catch(() => {});
-            });
-        } else {
-            console.log(`⚠️ [SOCKET] No nearby partners. Broadcasting to global room 'delivery_partners'.`);
-            emitEvent('delivery_partners', 'order_ready_for_pickup', socketPayload);
-        }
+        // NOTE: Broadcast removed. Auto-assignment (autoAssignment.service.js) handles
+        // specific rider notification. Broadcasting here was sending duplicate notifications
+        // to ALL nearby/all delivery boys, disturbing riders not assigned to this order.
+        console.log(`ℹ️ [SOCKET] Skipping broadcast. Auto-assignment will notify the assigned rider directly.`);
+        console.log(`ℹ️ [SOCKET] Found ${nearbyBoys.length} nearby partners (for reference only).`);
         
     } catch (err) {
         console.error('❌ [Assignment Trigger Error]', err.message);

@@ -173,35 +173,12 @@ export const notifyNearbyDeliveryBoys = async (order) => {
         type: 'new_assignment_broadcast'
     };
 
-    if (nearbyBoys.length > 0) {
-        console.log(`[Assignment] Sending to ${nearbyBoys.length} specific rooms:`, nearbyBoys.map(b => b._id.toString()));
-        // Targeted notification to nearby boys
-        nearbyBoys.forEach(boy => {
-            const boyIdStr = boy._id.toString();
-            console.log(`📡 [SOCKET EMIT] Room: delivery_${boyIdStr}, Event: order_ready_for_pickup`);
-            emitEvent(`delivery_${boyIdStr}`, 'order_ready_for_pickup', socketPayload);
-            
-            createNotification({
-                recipientId: boyIdStr,
-                recipientType: 'delivery',
-                title: 'New Order Available',
-                message: `A new order #${order.orderId} is ready for pickup near you.`,
-                type: 'order',
-                data: {
-                    orderId: order.orderId,
-                    type: 'new_assignment_broadcast'
-                }
-            }).catch(() => {});
-        });
-        console.log(`--- ✅ [DELIVERY NOTIFICATION FINISHED] ---\n`);
-        return nearbyBoys.length;
-    } else {
-        // Fallback: Broadcast to ALL available delivery partners room
-        console.log(`⚠️ [Assignment] No nearby boys (8km). Broadcasting globally to 'delivery_partners' room.`);
-        emitEvent('delivery_partners', 'order_ready_for_pickup', socketPayload);
-        console.log(`--- ✅ [DELIVERY NOTIFICATION FINISHED] ---\n`);
-        return 0;
-    }
+    // NOTE: Broadcast to all nearby/global riders removed. Auto-assignment (autoAssignment.service.js)
+    // handles finding and notifying the specific assigned rider. Broadcasting here was
+    // disturbing ALL nearby delivery boys who are not assigned to this order.
+    console.log(`ℹ️ [Assignment] Found ${nearbyBoys.length} nearby partners. Skipping broadcast — auto-assignment will notify the assigned rider directly.`);
+    console.log(`--- ✅ [DELIVERY NOTIFICATION FINISHED] ---\n`);
+    return nearbyBoys.length;
 };
 
 /**
@@ -297,17 +274,14 @@ export const notifyNearbyDeliveryBoysForReturn = async (returnRequest) => {
         type: 'return'
     };
 
+    // NOTE: Return broadcast to all nearby/global riders removed. 
+    // Auto-assignment handles finding and notifying the specific assigned rider.
+    // Broadcasting here was disturbing ALL nearby delivery boys.
     if (nearbyBoys.length > 0) {
-        nearbyBoys.forEach(boy => {
-            emitEvent(`delivery_${boy._id}`, 'return_ready_for_pickup', returnPayload);
-        });
         await Promise.allSettled(notificationPromises);
-        return nearbyBoys.length;
-    } else {
-        console.log(`⚠️ [Return Assignment] No nearby boys (8km). Broadcasting return globally to 'delivery_partners' room.`);
-        emitEvent('delivery_partners', 'return_ready_for_pickup', returnPayload);
-        return 0;
     }
+    console.log(`ℹ️ [Return Assignment] Found ${nearbyBoys.length} nearby partners. Skipping broadcast — auto-assignment will notify the assigned rider directly.`);
+    return nearbyBoys.length;
 };
 
 /**
