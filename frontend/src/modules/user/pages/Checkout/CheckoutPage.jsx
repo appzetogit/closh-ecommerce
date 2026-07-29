@@ -365,43 +365,7 @@ const CheckoutPage = () => {
                     <div className="bg-white rounded-[24px] p-4 space-y-3 border border-gray-50 shadow-sm transition-all hover:shadow-md">
                         <div className="flex items-center justify-between">
                             <h3 className="text-[11px] font-bold uppercase  text-gray-400">Choose Service</h3>
-                            <button
-                                onClick={() => setShowServiceInfo(!showServiceInfo)}
-                                className={`text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 ${showServiceInfo ? 'text-[#9F1239]' : 'text-[#9F1239] hover:opacity-80'}`}
-                            >
-                                {showServiceInfo ? <><X size={12} /> Hide Details</> : 'Know More'}
-                            </button>
                         </div>
-
-                        {showServiceInfo && (
-                            <div className="bg-gray-50/80 rounded-2xl p-4 border border-gray-100 animate-fadeInUp">
-                                <div className="space-y-4">
-                                    <div className="flex gap-3">
-                                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0 border border-black/5">
-                                            <span className="text-[#9F1239] font-black text-[9px]">TB</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-[11px] font-bold text-gray-900 uppercase  mb-1">Try & Buy Service</h4>
-                                            <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-                                                Try the product at home before making the payment. If you like the product, pay the delivery partner. If you don't, you can return it on the spot without any additional formalities.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="h-px bg-gray-200/50" />
-                                    <div className="flex gap-3">
-                                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0 border border-black/5">
-                                            <span className="text-emerald-600 font-black text-[9px]">CB</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-[11px] font-bold text-gray-900 uppercase  mb-1">Check & Buy Service</h4>
-                                            <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-                                                Check the product before making the payment. Make the payment only after verifying the product in the presence of the delivery partner. If you discover an issue after delivery, you can submit a return request within 24 hours.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                         {/* Service type options — always show both options */}
                         <div className="grid grid-cols-2 gap-3">
                             {/* Try & Buy — always visible */}
@@ -452,7 +416,7 @@ const CheckoutPage = () => {
                                 <div className="text-left">
                                     <p className="text-[10px] font-black text-indigo-800 uppercase tracking-wide">Doorstep Return Policy</p>
                                     <p className="text-[9px] font-bold text-indigo-700 leading-relaxed mt-0.5">
-                                        Try the product at home before making the payment. If you like the product, pay the delivery partner. If you don't, you can return it on the spot without any additional formalities.
+                                        Try the outfit at the time of delivery. Keep what you like and return the rest immediately.
                                     </p>
                                 </div>
                             </div>
@@ -462,7 +426,7 @@ const CheckoutPage = () => {
                                 <div className="text-left">
                                     <p className="text-[10px] font-black text-emerald-800 uppercase tracking-wide">Check &amp; Buy Policy</p>
                                     <p className="text-[9px] font-bold text-emerald-700 leading-relaxed mt-0.5">
-                                        Check the product before making the payment. Make the payment only after verifying the product in the presence of the delivery partner. If you discover an issue after delivery, you can submit a return request within 24 hours.
+                                        Check the product at delivery without trying it on. Eligible products can be returned or exchanged within 24 hours.
                                     </p>
                                 </div>
                             </div>

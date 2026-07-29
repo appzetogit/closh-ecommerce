@@ -138,6 +138,7 @@ const listProducts = asyncHandler(async (req, res) => {
 
     const filter = { 
         isActive: true, 
+        isVisible: true,
         approvalStatus: 'approved', 
         price: { $gt: 0 },
         vendorId: { $in: approvedVendorIds }
@@ -398,6 +399,7 @@ router.get('/products', listProducts);
 router.get('/flash-sale', asyncHandler(async (req, res) => {
     const products = await Product.find({ 
         isActive: true, 
+        isVisible: true,
         flashSale: true,
         approvalStatus: 'approved',
         price: { $gt: 0 }
@@ -427,6 +429,7 @@ router.get('/new-arrivals', asyncHandler(async (req, res) => {
 
     const filter = { 
         isActive: true, 
+        isVisible: true,
         isNewArrival: true,
         approvalStatus: 'approved',
         price: { $gt: 0 }
@@ -530,6 +533,7 @@ router.get('/new-arrivals', asyncHandler(async (req, res) => {
 router.get('/popular', asyncHandler(async (req, res) => {
     const products = await Product.find({ 
         isActive: true,
+        isVisible: true,
         approvalStatus: 'approved',
         price: { $gt: 0 }
     })
@@ -546,6 +550,7 @@ router.get('/similar/:id', asyncHandler(async (req, res) => {
     if (!product) throw new ApiError(404, 'Product not found.');
     const similar = await Product.find({ 
         isActive: true, 
+        isVisible: true,
         approvalStatus: 'approved',
         price: { $gt: 0 },
         _id: { $ne: product._id }, 
@@ -665,6 +670,7 @@ router.get('/vendors/:id/products', asyncHandler(async (req, res) => {
 
     const filter = { 
         isActive: true, 
+        isVisible: true,
         approvalStatus: 'approved',
         price: { $gt: 0 },
         vendorId: req.params.id 
