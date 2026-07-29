@@ -195,6 +195,38 @@ const PaymentPage = () => {
         }
     }, [addresses, currentAddress]);
 
+    // Check time restriction on mount/settings load to show popup immediately
+    useEffect(() => {
+        if (settings?.orders?.timeManagement?.enabled) {
+            const { startTime = '09:00', endTime = '21:00', message } = settings.orders.timeManagement;
+            const now = new Date();
+            const currentHours = now.getHours();
+            const currentMinutes = now.getMinutes();
+            
+            const [startH, startM] = startTime.split(':').map(Number);
+            const [endH, endM] = endTime.split(':').map(Number);
+            
+            const currentTotal = currentHours * 60 + currentMinutes;
+            const startTotal = startH * 60 + startM;
+            const endTotal = endH * 60 + endM;
+            
+            let isAllowed = false;
+            if (startTotal <= endTotal) {
+                isAllowed = currentTotal >= startTotal && currentTotal <= endTotal;
+            } else {
+                isAllowed = currentTotal >= startTotal || currentTotal <= endTotal;
+            }
+            
+            if (!isAllowed) {
+                const customMsg = message || `We are currently not accepting orders. Please try again between ${startTime} and ${endTime}.`;
+                setTimeRestrictedError({
+                    message: customMsg,
+                    startTime
+                });
+            }
+        }
+    }, [settings?.orders?.timeManagement]);
+
     useEffect(() => {
         if (activeAddress) {
             setCurrentAddress(activeAddress);
