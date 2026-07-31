@@ -542,7 +542,8 @@ export const placeOrder = asyncHandler(async (req, res) => {
         0).toFixed(2)
     );
     const platformFee = Number(dynamicPlatformFee || 0);
-    const total = parseFloat((subtotal - couponDiscount + shipping + tax + platformFee).toFixed(2));
+    // Tax is inclusive in subtotal, so we don't add it to the final total
+    const total = parseFloat((subtotal - couponDiscount + shipping + platformFee).toFixed(2));
 
     console.log(`💰 [TOTALS] Subtotal: ₹${subtotal}, Shipping: ₹${shipping}, Discount: ₹${couponDiscount}, Tax: ₹${tax}, Platform Fee: ₹${platformFee}, Grand Total: ₹${total}`);
 
