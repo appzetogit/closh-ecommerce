@@ -527,10 +527,7 @@ const MobileOrderDetail = () => {
                     <span>Shipping</span>
                     <span>{formatPrice(order.shipping)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Tax</span>
-                    <span>{formatPrice(order.tax)}</span>
-                  </div>
+                  {/* Tax is inclusive in the MRP and displayed in the invoice, hidden from summary to avoid confusion */}
                   <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t border-gray-200">
                     <span>Total</span>
                     <span className="text-black">{formatPrice(order.total)}</span>

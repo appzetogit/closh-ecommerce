@@ -57,11 +57,11 @@ const OrderSummary = ({ itemsByVendor, total, discount, shipping, tax, platformF
             <span>- {formatPrice(Math.abs(discount))}</span>
           </div>
         )}
-
         <div className="flex justify-between text-gray-600">
-          <span>Tax</span>
-          <span>{formatPrice(tax)}</span>
+          <span>Shipping</span>
+          <span>{shipping === 0 ? "FREE" : formatPrice(shipping)}</span>
         </div>
+        {/* Tax is inclusive, hidden from summary */}
         <div className="flex justify-between text-gray-600">
           <span>Platform Fee</span>
           <span>{formatPrice(platformFee)}</span>

@@ -932,12 +932,7 @@ const OrderDetailsPage = () => {
                                     <span>Shipping</span>
                                     <span>{order.shipping > 0 ? `₹${order.shipping}` : 'FREE'}</span>
                                 </div>
-                                {order.tax > 0 && (
-                                    <div className="flex justify-between text-[10px] font-bold text-gray-500">
-                                        <span>Tax</span>
-                                        <span>₹{order.tax}</span>
-                                    </div>
-                                )}
+                                {/* Tax is inclusive in the MRP and displayed in the invoice, hidden from summary to avoid confusion */}
                                 {order.platformFee > 0 && (
                                     <div className="flex justify-between text-[10px] font-bold text-gray-500">
                                         <span>Platform Fee</span>
