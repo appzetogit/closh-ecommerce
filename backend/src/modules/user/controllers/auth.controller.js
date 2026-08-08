@@ -22,7 +22,11 @@ import {
 
 const extractCloudinaryPublicId = (url = '') => {
     const raw = String(url || '').trim();
-    if (!raw || !raw.includes('/upload/')) return null;
+    if (!raw) return null;
+    // Locally-stored uploads (see upload.service.js) — no Cloudinary /upload/v.../ segment.
+    const localMatch = raw.match(/\/uploads\/(.+)\.[a-zA-Z0-9]+$/);
+    if (localMatch) return localMatch[1];
+    if (!raw.includes('/upload/')) return null;
     try {
         const afterUpload = raw.split('/upload/')[1] || '';
         const withoutTransform = afterUpload.includes('/') ? afterUpload.substring(afterUpload.indexOf('/') + 1) : afterUpload;

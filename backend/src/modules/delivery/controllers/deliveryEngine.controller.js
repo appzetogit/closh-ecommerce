@@ -7,6 +7,7 @@ import Delivery from '../../../models/Delivery.model.js';
 import DeliveryBatch from '../../../models/DeliveryBatch.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { createNotification } from '../../../services/notification.service.js';
+import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
 
 // Internal helper for state checking
 const checkState = (current, expected) => {
@@ -21,6 +22,8 @@ export const assignBatch = asyncHandler(async (req, res) => {
 
     const orders = await Order.find({ _id: { $in: orderIds }, status: 'ready_for_pickup' });
     if (orders.length === 0) throw new ApiError(400, "Orders not found or already assigned");
+
+    await assertRiderIsFree(deliveryBoyId);
 
     const customerId = orders[0].userId;
     // verify all have same customer
@@ -71,7 +74,8 @@ export const assignBatch = asyncHandler(async (req, res) => {
     });
 
     await batch.save();
-    
+    await markRiderBusy(deliveryBoyId);
+
     // Link deliveries to batchId
     await Delivery.updateMany(
         { _id: { $in: savedDeliveries.map(d => d._id) } }, 
@@ -273,7 +277,12 @@ export const completeBatchDelivery = asyncHandler(async (req, res) => {
      const batch = await DeliveryBatch.findOne({ batchId, deliveryBoyId: req.user.id });
      if (!batch) throw new ApiError(404, "Batch not found");
      
-     // checkState(batch.status, 'payment_pending');
+     // Frontend currently completes straight from 'try_and_buy' (it never calls
+     // processBatchPayment), so allow either state here — but still block completing
+     // from earlier phases (assigned/picked_up/out_for_delivery/arrived).
+     if (!['try_and_buy', 'payment_pending'].includes(batch.status)) {
+         throw new ApiError(409, `Invalid State: Currently ${batch.status}, expected try_and_buy or payment_pending.`);
+     }
 
      if (String(otp).trim() !== String(batch.deliveryOtp).trim()) {
          batch.deliveryOtpAttempts += 1;
@@ -317,6 +326,7 @@ export const completeBatchDelivery = asyncHandler(async (req, res) => {
 
      batch.status = 'delivered';
      await batch.save();
-     
+     await markRiderAvailable(batch.deliveryBoyId);
+
      res.status(200).json(new ApiResponse(200, batch, "Batch delivered and verified successfully!"));
 });

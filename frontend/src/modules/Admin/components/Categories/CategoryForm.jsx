@@ -337,7 +337,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
                         ? "Uploading..."
                         : formData.image
                         ? "Replace Image"
-                        : "Upload to Cloudinary"}
+                        : "Upload Image"}
                       <input
                         type="file"
                         accept="image/*"

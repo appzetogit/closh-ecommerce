@@ -238,7 +238,7 @@ const BrandForm = ({ brand, onClose, onSave }) => {
                   <div className="mt-3">
                     <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer text-sm font-semibold">
                       <FiUpload />
-                      {isUploadingLogo ? "Uploading..." : "Upload to Cloudinary"}
+                      {isUploadingLogo ? "Uploading..." : "Upload Logo"}
                       <input
                         type="file"
                         accept="image/*"

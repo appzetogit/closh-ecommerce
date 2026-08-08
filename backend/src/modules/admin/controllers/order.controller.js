@@ -14,6 +14,7 @@ import DeliveryBatch from '../../../models/DeliveryBatch.model.js';
 import Vendor from '../../../models/Vendor.model.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
+import { assertRiderIsFree, markRiderBusy } from '../../../services/deliveryAvailability.service.js';
 
 // GET /api/admin/orders
 export const getAllOrders = asyncHandler(async (req, res) => {
@@ -390,12 +391,14 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
         throw new ApiError(409, `Cannot assign delivery for ${order.status} order.`);
     }
 
+    await assertRiderIsFree(deliveryBoyId, { excludeOrderId: order._id });
+
     const previousDeliveryBoyId = order.deliveryBoyId ? String(order.deliveryBoyId) : '';
     const isReassigned = previousDeliveryBoyId && previousDeliveryBoyId !== String(deliveryBoyId);
 
     order.deliveryBoyId = deliveryBoyId;
     order.riderAcceptedAt = new Date(); // Admin manually assigns, so treat it as accepted
-    if (['ready_for_pickup', 'all_vendors_ready', 'searching', 'ready_for_delivery', 'processing'].includes(order.status)) {
+    if (['accepted', 'ready_for_pickup', 'all_vendors_ready', 'searching', 'ready_for_delivery', 'processing'].includes(order.status)) {
         order.status = 'assigned';
     } else if (order.status === 'pending') {
         order.status = 'processing';
@@ -484,7 +487,8 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
     }
 
     await order.save();
-    
+    await markRiderBusy(deliveryBoyId);
+
     // Unified role-aware notifications for assignment
     await OrderNotificationService.notifyOrderUpdate(order._id, 'assigned');
 

@@ -15,6 +15,7 @@ import {
 } from '../../../services/refreshToken.service.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { cacheInvalidate } from './order.controller.js';
+import { assertRiderIsFree } from '../../../services/deliveryAvailability.service.js';
 
 // In-memory store for registration OTPs (phone -> { otp, expiry, verified })
 const registrationOtpStore = new Map();
@@ -660,15 +661,25 @@ export const updateProfile = asyncHandler(async (req, res) => {
         if (boy.applicationStatus !== 'approved') {
             throw new ApiError(403, `Your application is currently ${boy.applicationStatus}. You cannot change your status.`);
         }
-        
+
+        let nextStatus;
+        let nextIsAvailable;
         if (status) {
-            const normalized = status.toLowerCase();
-            boy.status = normalized;
-            boy.isAvailable = normalized !== 'offline';
+            nextStatus = status.toLowerCase();
+            nextIsAvailable = nextStatus !== 'offline';
         } else if (typeof isAvailable === 'boolean') {
-            boy.isAvailable = isAvailable;
-            boy.status = isAvailable ? 'available' : 'offline';
+            nextIsAvailable = isAvailable;
+            nextStatus = isAvailable ? 'available' : 'offline';
         }
+
+        if (nextStatus === 'available') {
+            // Don't let a rider (or a stale/duplicate client request) self-report
+            // available while they still have an active delivery in progress.
+            await assertRiderIsFree(boy._id);
+        }
+
+        boy.status = nextStatus;
+        boy.isAvailable = nextIsAvailable;
     }
 
     await boy.save();
@@ -680,6 +691,9 @@ export const updateProfile = asyncHandler(async (req, res) => {
 const extractCloudinaryPublicId = (url = '') => {
     if (!url || typeof url !== 'string') return null;
     try {
+        // Locally-stored uploads (see upload.service.js) — no Cloudinary /v.../ segment.
+        const localMatch = url.match(/\/uploads\/(.+)\.[a-zA-Z0-9]+$/);
+        if (localMatch) return localMatch[1];
         const matches = url.match(/\/v\d+\/(.+)\.[a-zA-Z0-9]+$/);
         return matches ? matches[1] : null;
     } catch {

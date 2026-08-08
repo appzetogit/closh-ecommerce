@@ -157,3 +157,8 @@ backend/create-admin.js
 backend/fix_category_images.js
 backend/send-test-push.js
 backend/broadcast-test.js
+
+# User-uploaded/migrated media (deployed to the VPS directly, not via git)
+uploads/
+cloudinary-migration-assets.tar.gz
+*.tar.gz

@@ -342,7 +342,7 @@ const HomeSliders = () => {
                   />
                   <label className={`inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg transition-colors text-sm font-semibold ${isUploadingImage ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-gray-200"}`}>
                     <FiUpload />
-                    {isUploadingImage ? "Uploading..." : "Upload to Cloudinary"}
+                    {isUploadingImage ? "Uploading..." : "Upload Image"}
                     <input
                       type="file"
                       accept="image/*"

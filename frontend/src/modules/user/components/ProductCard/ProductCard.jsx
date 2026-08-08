@@ -3,6 +3,7 @@ import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCategory } from '../../context/CategoryContext';
+import { getPlaceholderImage } from '../../../../shared/utils/helpers';
 
 const ProductCard = ({ product }) => {
     const { toggleWishlist, isInWishlist } = useWishlist();
@@ -22,6 +23,7 @@ const ProductCard = ({ product }) => {
                             src={product.image}
                             alt={product.name}
                             className={`absolute inset-0 w-full h-full object-contain transition-transform duration-700 ease-out group-hover:scale-110 ${product.stock === 'out_of_stock' ? 'grayscale opacity-70' : ''}`}
+                            onError={(e) => { e.target.onerror = null; e.target.src = getPlaceholderImage(400, 533, 'Image unavailable'); }}
                         />
 
                         {/* Top Right Actions (Wishlist) - Glassmorphism */}

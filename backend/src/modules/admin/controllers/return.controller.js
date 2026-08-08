@@ -11,6 +11,7 @@ import { asyncHandler } from '../../../utils/asyncHandler.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
+import { assertRiderIsFree, markRiderBusy } from '../../../services/deliveryAvailability.service.js';
 
 const enrichReturnItems = (request) => {
     const orderItems = Array.isArray(request?.orderId?.items) ? request.orderId.items : [];
@@ -462,16 +463,19 @@ export const assignDeliveryBoyToReturn = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Delivery boy not found');
     }
 
+    await assertRiderIsFree(deliveryBoyId, { excludeReturnId: returnReq._id });
+
     returnReq.deliveryBoyId = deliveryBoyId;
     returnReq.status = 'processing';
-    
+
     // Generate Pickup OTP for customer
     const otp = DeliveryOtpService.generateOtp();
     returnReq.pickupOtpHash = DeliveryOtpService.hashOtp(otp);
     returnReq.pickupOtpExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     returnReq.pickupOtpDebug = otp;
-    
+
     await returnReq.save();
+    await markRiderBusy(deliveryBoyId);
     
     // Notify Customer about OTP
     if (returnReq.userId) {

@@ -266,12 +266,23 @@ const AssignDelivery = () => {
                   onChange={(e) => setSelectedDeliveryBoyId(e.target.value)}
                   options={[
                     { value: "", label: "Select Delivery Boy" },
-                    ...deliveryBoys.map((boy) => ({
-                      value: String(boy.id || boy._id),
-                      label: `${boy.name} (${boy.phone || "N/A"})`,
-                    })),
+                    ...[...deliveryBoys]
+                      .sort((a, b) => (a.status === "busy") - (b.status === "busy"))
+                      .map((boy) => ({
+                        value: String(boy.id || boy._id),
+                        label:
+                          boy.status === "busy"
+                            ? `${boy.name} (${boy.phone || "N/A"}) — On a delivery`
+                            : `${boy.name} (${boy.phone || "N/A"})`,
+                      })),
                   ]}
                 />
+                {selectedDeliveryBoyId &&
+                  deliveryBoys.find((b) => String(b.id || b._id) === selectedDeliveryBoyId)?.status === "busy" && (
+                    <p className="mt-1.5 text-xs text-amber-600 font-medium">
+                      This rider is currently on another delivery. Assigning them now may be rejected until they finish it.
+                    </p>
+                  )}
                 <div className="mt-5 flex items-center justify-end gap-2">
                   <button
                     type="button"
