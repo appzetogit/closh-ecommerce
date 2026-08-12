@@ -162,3 +162,8 @@ backend/broadcast-test.js
 uploads/
 cloudinary-migration-assets.tar.gz
 *.tar.gz
+
+# Generated WebP/resized derivatives (see middlewares/imageOptimizer.js)
+.image-cache/
+cloudinary-migration-assets.tar.gz
+*.tar.gz

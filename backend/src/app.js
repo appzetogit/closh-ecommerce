@@ -17,6 +17,7 @@ import deliveryTrackingRoutes from './modules/delivery/routes/tracking.routes.js
 
 // Middleware imports
 import { apiLimiter } from './middlewares/rateLimiter.js';
+import { createImageOptimizer } from './middlewares/imageOptimizer.js';
 import { detailedRequestLogger } from './middlewares/debug.middleware.js';
 import errorHandler from './middlewares/errorHandler.js';
 import notFound from './middlewares/notFound.js';
@@ -115,7 +116,13 @@ app.use(
         }
         next();
     },
-    express.static(uploadsRoot)
+    // Converts to WebP for browsers that accept it and honours `?w=<px>`,
+    // falling through to the original bytes for anything it can't handle.
+    createImageOptimizer(uploadsRoot),
+    // Originals keep a shorter TTL than derivatives: filenames are usually
+    // random, but the upload controllers accept a caller-supplied publicId,
+    // so a file *can* be replaced under the same name.
+    express.static(uploadsRoot, { maxAge: '7d' })
 );
 app.use('/api', publicRoutes);            // Public: products, categories, brands, coupons, banners
 app.use('/api/user', userRoutes);         // Customer: auth, addresses, wishlist, reviews, orders

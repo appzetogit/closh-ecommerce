@@ -196,6 +196,39 @@ const calculateVariantAggregateStock = (variants = {}) => {
     }, 0);
 };
 
+// Storefront-facing fields that require admin review before going live on an
+// already-approved product. Deliberately excludes stockQuantity/
+// lowStockThreshold/stock/variants: those are operational inventory data,
+// the dedicated /vendor/stock endpoints already let vendors change them live
+// regardless of approval state, so updateProduct applies them the same way.
+const VENDOR_CONTENT_FIELDS = [
+    'name', 'unit', 'categoryId', 'brandId', 'division', 'description',
+    'vendorPrice', 'originalPrice', 'discount', 'image', 'images',
+    'flashSale', 'isNewArrival', 'isFeatured', 'isVisible', 'codAllowed',
+    'returnable', 'cancelable', 'taxIncluded', 'hsnCode', 'warrantyPeriod',
+    'guaranteePeriod', 'taxRate', 'seoTitle', 'seoDescription', 'tags', 'faqs',
+];
+const REFERENCE_ID_FIELDS = new Set(['categoryId', 'brandId']);
+
+// True if any content field in `updates` actually differs from what's
+// already live on `product`. The vendor edit form always re-submits the
+// entire product on every save (not a diff), so without this check a pure
+// stock correction would still open an admin approval request with nothing
+// left in it to approve.
+const hasStagedContentChanges = (updates, product) => {
+    return VENDOR_CONTENT_FIELDS.some((key) => {
+        if (!Object.prototype.hasOwnProperty.call(updates, key)) return false;
+        const nextValue = updates[key];
+        if (typeof nextValue === 'undefined') return false;
+
+        const currentValue = product[key];
+        if (REFERENCE_ID_FIELDS.has(key)) {
+            return String(nextValue || '') !== String(currentValue || '');
+        }
+        return JSON.stringify(nextValue) !== JSON.stringify(currentValue);
+    });
+};
+
 // GET /api/vendor/products
 export const getVendorProducts = asyncHandler(async (req, res) => {
     const { page = 1, limit = 20, search, stock } = req.query;
@@ -306,7 +339,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
     if (!product) throw new ApiError(404, 'Product not found or access denied.');
 
     if (product.approvalStatus === 'approved' && product.isActive) {
-        // STAGED UPDATES: Save changes into pendingUpdates instead of directly modifying the active product.
+        // STAGED UPDATES: catalog/content changes wait for admin review, but
+        // stock is operational data (see VENDOR_CONTENT_FIELDS above) — apply
+        // it to the live product immediately, matching the dedicated
+        // /vendor/stock endpoints, so the vendor's own Manage Stock table
+        // reflects it right away instead of sitting in pendingUpdates.
         const updates = { ...req.body };
 
         if (typeof updates.price !== 'undefined') {
@@ -321,41 +358,69 @@ export const updateProduct = asyncHandler(async (req, res) => {
         if (Object.prototype.hasOwnProperty.call(updates, 'faqs')) {
             updates.faqs = sanitizeFaqs(updates.faqs);
         }
+
+        let liveStockChanged = false;
         if (typeof updates.stockQuantity !== 'undefined' || typeof updates.lowStockThreshold !== 'undefined') {
             const stockQuantity = Number(updates.stockQuantity ?? product.stockQuantity ?? 0);
             const lowStockThreshold = Number(updates.lowStockThreshold ?? product.lowStockThreshold ?? 10);
             if (!Number.isFinite(stockQuantity) || stockQuantity < 0) throw new ApiError(400, 'Invalid stock quantity.');
             if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) throw new ApiError(400, 'Invalid low stock threshold.');
-            updates.stockQuantity = stockQuantity;
-            updates.lowStockThreshold = lowStockThreshold;
-            updates.stock = deriveStockStatus(stockQuantity, lowStockThreshold);
+            product.stockQuantity = stockQuantity;
+            product.lowStockThreshold = lowStockThreshold;
+            product.stock = deriveStockStatus(stockQuantity, lowStockThreshold);
+            liveStockChanged = true;
         }
         if (Object.prototype.hasOwnProperty.call(updates, 'variants')) {
             const fallbackPrice = updates.vendorPrice ?? product.vendorPrice;
-            updates.variants = normalizeVariantsPayload(updates.variants, fallbackPrice);
-            const variantAggregateStock = calculateVariantAggregateStock(updates.variants);
+            product.variants = normalizeVariantsPayload(updates.variants, fallbackPrice);
+            const variantAggregateStock = calculateVariantAggregateStock(product.variants);
             if (Number.isFinite(variantAggregateStock)) {
-                updates.stockQuantity = variantAggregateStock;
-                updates.stock = deriveStockStatus(
-                    Number(updates.stockQuantity ?? 0),
-                    Number(updates.lowStockThreshold ?? product.lowStockThreshold ?? 10)
+                product.stockQuantity = variantAggregateStock;
+                product.stock = deriveStockStatus(
+                    Number(product.stockQuantity ?? 0),
+                    Number(product.lowStockThreshold ?? 10)
                 );
             }
+            liveStockChanged = true;
         }
 
-        product.pendingUpdates = updates;
-        product.hasPendingUpdates = true;
+        // Already applied live above — keep out of the staged snapshot so a
+        // later admin approval of an unrelated content change can't
+        // overwrite the live stock with a stale staged value.
+        delete updates.stockQuantity;
+        delete updates.lowStockThreshold;
+        delete updates.stock;
+        delete updates.variants;
+
+        const needsApproval = hasStagedContentChanges(updates, product);
+        if (needsApproval) {
+            product.pendingUpdates = updates;
+            product.hasPendingUpdates = true;
+        }
+
         await product.save();
 
-        emitEvent('admin_products', 'product_updated_by_vendor', {
-            productId: String(product._id),
-            name: product.name,
-            vendorId: String(req.user.id),
-            approvalStatus: 'approved',
-            hasPendingUpdates: true
-        });
+        if (liveStockChanged) {
+            await clearCachePattern('products:list:*');
+        }
 
-        return res.status(200).json(new ApiResponse(200, product, 'Product updates saved and sent for admin approval. Existing product remains live.'));
+        if (needsApproval) {
+            emitEvent('admin_products', 'product_updated_by_vendor', {
+                productId: String(product._id),
+                name: product.name,
+                vendorId: String(req.user.id),
+                approvalStatus: 'approved',
+                hasPendingUpdates: true
+            });
+
+            return res.status(200).json(new ApiResponse(200, product, 'Product updates saved and sent for admin approval. Existing product remains live.'));
+        }
+
+        return res.status(200).json(new ApiResponse(
+            200,
+            product,
+            liveStockChanged ? 'Stock updated.' : 'Product updated.'
+        ));
     }
 
     // Fallback for non-approved products: modify directly
