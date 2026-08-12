@@ -7,7 +7,7 @@ import Badge from "../../../../shared/components/Badge";
 import ConfirmModal from "../../components/ConfirmModal";
 import ProductFormModal from "../../components/ProductFormModal";
 import AnimatedSelect from "../../components/AnimatedSelect";
-import { formatPrice } from "../../../../shared/utils/helpers";
+import { formatPrice, getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 import { useCategoryStore } from "../../../../shared/store/categoryStore";
 import { useBrandStore } from "../../../../shared/store/brandStore";
@@ -159,8 +159,9 @@ const ManageProducts = () => {
       render: (value, row) => (
         <div className="flex items-center gap-3">
           <img
-            src={row.image}
+            src={getOptimizedImageUrl(row.image, 40)}
             alt={value}
+            loading="lazy"
             className="w-10 h-10 object-cover rounded-lg"
             onError={(e) => {
               e.target.src = "https://placehold.co/50x50?text=Product";

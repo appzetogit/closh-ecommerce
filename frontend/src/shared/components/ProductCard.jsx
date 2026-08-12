@@ -31,6 +31,7 @@ const ProductCard = ({ product }) => {
             <LazyImage
               src={product.image}
               alt={product.name}
+              width={300}
               className={`absolute inset-0 w-full h-full object-contain transition-transform duration-700 group-hover:scale-110 ${(product.stock === 'out_of_stock' || product.stockQuantity <= 0) ? 'grayscale opacity-70' : ''}`}
               onError={(e) => { e.target.src = getPlaceholderImage(400, 533, "Product"); }}
             />

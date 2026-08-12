@@ -51,6 +51,7 @@ const ProductListItem = ({ product, index, isFlashSale = false }) => {
             <LazyImage
               src={product.image}
               alt={product.name}
+              width={160}
               className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
               onError={(e) => {
                 e.target.src = "https://via.placeholder.com/200x200?text=Product";

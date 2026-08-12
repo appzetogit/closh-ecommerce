@@ -65,6 +65,33 @@ export const getImageUrl = (image, fallback = "/placeholder.jpg") => {
 };
 
 /**
+ * Ask the API for a resized copy of a locally-hosted upload.
+ *
+ * The backend serves /uploads/ through an optimiser that already converts to
+ * WebP on its own (see backend/src/middlewares/imageOptimizer.js). Adding a
+ * width tells it to resize too, which is the difference between a 168 KB
+ * full-size WebP and a 24 KB card thumbnail.
+ *
+ * Non-upload sources — data URIs, blobs, placeholders and any leftover
+ * Cloudinary URLs — are passed straight through untouched.
+ *
+ * @param {string} src - Original image URL
+ * @param {number} [width] - Desired render width in CSS pixels
+ * @returns {string} URL to load
+ */
+export const getOptimizedImageUrl = (src, width) => {
+  if (!src || typeof src !== "string") return src;
+  if (!width || !Number.isFinite(width)) return src;
+  if (!src.includes("/uploads/")) return src;
+  if (src.startsWith("data:") || src.startsWith("blob:")) return src;
+  if (/[?&]w=/.test(src)) return src;
+
+  // Request 2x so the image still looks sharp on retina/high-DPI screens.
+  const target = Math.ceil(width * 2);
+  return `${src}${src.includes("?") ? "&" : "?"}w=${target}`;
+};
+
+/**
  * Generate a placeholder image as SVG data URI
  * @param {number} width - Image width
  * @param {number} height - Image height

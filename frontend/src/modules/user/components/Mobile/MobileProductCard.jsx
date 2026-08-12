@@ -52,6 +52,7 @@ const MobileProductCard = ({ product }) => {
             <LazyImage
               src={product.image}
               alt={product.name}
+              width={200}
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.target.src = getPlaceholderImage(200, 200, "Product");

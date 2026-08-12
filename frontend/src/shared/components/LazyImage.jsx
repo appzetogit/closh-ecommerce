@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { getPlaceholderImage } from "../utils/helpers";
+import { getPlaceholderImage, getOptimizedImageUrl } from "../utils/helpers";
 
 const LazyImage = ({
   src,
@@ -9,6 +9,9 @@ const LazyImage = ({
   placeholderWidth = 200,
   placeholderHeight = 200,
   placeholderText,
+  // Render width in CSS pixels. Passing it lets the API return a resized
+  // derivative instead of the full-size original.
+  width,
   ...props
 }) => {
   const [imageSrc, setImageSrc] = useState(null);
@@ -22,7 +25,7 @@ const LazyImage = ({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setImageSrc(src);
+            setImageSrc(getOptimizedImageUrl(src, width));
             observer.disconnect();
           }
         });
@@ -43,7 +46,7 @@ const LazyImage = ({
       }
       observer.disconnect();
     };
-  }, [src]);
+  }, [src, width]);
 
   const handleLoad = () => {
     setIsLoaded(true);

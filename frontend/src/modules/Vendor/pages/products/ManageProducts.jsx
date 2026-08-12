@@ -7,7 +7,7 @@ import ExportButton from "../../../Admin/components/ExportButton";
 import Badge from "../../../../shared/components/Badge";
 import ConfirmModal from "../../../Admin/components/ConfirmModal";
 import AnimatedSelect from "../../../Admin/components/AnimatedSelect";
-import { formatPrice } from "../../../../shared/utils/helpers";
+import { formatPrice, getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 import { useVendorAuthStore } from "../../store/vendorAuthStore";
 import { useVendorProductStore } from "../../store/vendorProductStore";
 import { useCategoryStore } from "../../../../shared/store/categoryStore";
@@ -94,8 +94,9 @@ const ManageProducts = () => {
       render: (value, row) => (
         <div className="flex items-center gap-3">
           <img
-            src={row.image || row.images?.[0]}
+            src={getOptimizedImageUrl(row.image || row.images?.[0], 40)}
             alt={value}
+            loading="lazy"
             className="w-10 h-10 object-cover rounded-lg"
             onError={(e) => {
               e.target.src = "https://via.placeholder.com/50x50?text=Product";
