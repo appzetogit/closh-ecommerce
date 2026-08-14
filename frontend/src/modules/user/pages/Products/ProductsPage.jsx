@@ -36,10 +36,10 @@ const ProductsPage = () => {
     const [selectedBrands, setSelectedBrands] = useState(searchParams.getAll('brand') || []);
     const [selectedSubCategories, setSelectedSubCategories] = useState(searchParams.getAll('subCategory') || []);
     const [selectedSort, setSelectedSort] = useState(searchParams.get('sort') || 'newest');
-    const [selectedFabrics, setSelectedFabrics] = useState([]);
-    const [selectedPatterns, setSelectedPatterns] = useState([]);
-    const [selectedFits, setSelectedFits] = useState([]);
-    const [selectedSizes, setSelectedSizes] = useState([]);
+    const [selectedFabrics, setSelectedFabrics] = useState(searchParams.getAll('fabric') || []);
+    const [selectedPatterns, setSelectedPatterns] = useState(searchParams.getAll('pattern') || []);
+    const [selectedFits, setSelectedFits] = useState(searchParams.getAll('fit') || []);
+    const [selectedSizes, setSelectedSizes] = useState(searchParams.getAll('size') || []);
 
     useEffect(() => {
         const params = new URLSearchParams(searchParams);
@@ -53,6 +53,18 @@ const ProductsPage = () => {
         params.delete('subCategory');
         selectedSubCategories.forEach(s => params.append('subCategory', s));
 
+        params.delete('size');
+        selectedSizes.forEach(s => params.append('size', s));
+
+        params.delete('fabric');
+        selectedFabrics.forEach(f => params.append('fabric', f));
+
+        params.delete('pattern');
+        selectedPatterns.forEach(p => params.append('pattern', p));
+
+        params.delete('fit');
+        selectedFits.forEach(f => params.append('fit', f));
+
         if (selectedSort !== 'newest') params.set('sort', selectedSort);
         else params.delete('sort');
 
@@ -61,7 +73,7 @@ const ProductsPage = () => {
         if (nextQuery !== currentQuery) {
             setSearchParams(params, { replace: true });
         }
-    }, [selectedGender, selectedBrands, selectedSubCategories, selectedSort]);
+    }, [selectedGender, selectedBrands, selectedSubCategories, selectedSort, selectedSizes, selectedFabrics, selectedPatterns, selectedFits]);
 
     // Sync headerSearchValue to URL so backend fetch triggers
     useEffect(() => {

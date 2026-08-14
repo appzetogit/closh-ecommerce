@@ -155,7 +155,7 @@ const CheckoutPage = () => {
                 const found = response.data?.find(c => c.code.toUpperCase() === finalCode.toUpperCase());
                 if (found) {
                     const now = new Date();
-                    const expiry = found.endDate || found.expiryDate;
+                    const expiry = found.expiresAt || found.endDate || found.expiryDate;
                     if (expiry && new Date(expiry) < now) {
                         setPromoError('This code has expired');
                     } else if (totalPrice < (found.minOrderValue || found.minPurchase || 0)) {

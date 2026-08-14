@@ -33,18 +33,14 @@ const OPTIMIZABLE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 // allowlist, `?w=1,2,3...` would let anyone fill the disk with derivatives.
 const WIDTH_BUCKETS = [64, 128, 200, 300, 400, 600, 800, 1000, 1200, 1600, 2000];
 
+// Quality is fixed rather than caller-controlled: nothing calls this with a
+// `?q=`, and letting it vary would multiply against every width bucket,
+// undermining the point of bucketing widths in the first place.
 const DEFAULT_QUALITY = 78;
-const MIN_QUALITY = 40;
-const MAX_QUALITY = 95;
 
 const snapWidth = (requested) => {
     if (!Number.isFinite(requested) || requested <= 0) return null;
     return WIDTH_BUCKETS.find((bucket) => bucket >= requested) ?? WIDTH_BUCKETS.at(-1);
-};
-
-const clampQuality = (requested) => {
-    if (!Number.isFinite(requested)) return DEFAULT_QUALITY;
-    return Math.min(MAX_QUALITY, Math.max(MIN_QUALITY, requested));
 };
 
 export const createImageOptimizer = (uploadsRoot, { cacheRoot } = {}) => {
@@ -113,7 +109,7 @@ export const createImageOptimizer = (uploadsRoot, { cacheRoot } = {}) => {
         if (!sourcePath.startsWith(resolvedUploadsRoot + path.sep)) return next();
 
         const width = snapWidth(parseInt(req.query.w, 10));
-        const quality = clampQuality(parseInt(req.query.q, 10));
+        const quality = DEFAULT_QUALITY;
 
         // Serve WebP whenever the client says it can decode it.
         const acceptsWebp = String(req.headers.accept || '').includes('image/webp');

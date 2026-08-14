@@ -290,12 +290,12 @@ const PaymentPage = () => {
 
                 if (found) {
                     const now = new Date();
-                    const expiry = found.endDate || found.expiryDate;
+                    const expiry = found.expiresAt || found.endDate || found.expiryDate;
                     if (expiry && new Date(expiry) < now) {
                         setPromoError('This code has expired');
                     } else if (subtotal < (found.minOrderValue || found.minPurchase || 0)) {
                         setPromoError(`Minimum purchase of ₹${found.minOrderValue || found.minPurchase} required`);
-                    } else if (found.usageLimit !== -1 && (found.usedCount || 0) >= found.usageLimit) {
+                    } else if (found.usageLimit && (found.usedCount || 0) >= found.usageLimit) {
                         setPromoError('Usage limit reached for this code');
                     } else {
                         setAppliedPromo({

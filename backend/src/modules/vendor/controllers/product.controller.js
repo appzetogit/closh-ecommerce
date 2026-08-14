@@ -196,18 +196,22 @@ const calculateVariantAggregateStock = (variants = {}) => {
     }, 0);
 };
 
-// Storefront-facing fields that require admin review before going live on an
-// already-approved product. Deliberately excludes stockQuantity/
-// lowStockThreshold/stock/variants: those are operational inventory data,
-// the dedicated /vendor/stock endpoints already let vendors change them live
-// regardless of approval state, so updateProduct applies them the same way.
-const VENDOR_CONTENT_FIELDS = [
-    'name', 'unit', 'categoryId', 'brandId', 'division', 'description',
-    'vendorPrice', 'originalPrice', 'discount', 'image', 'images',
-    'flashSale', 'isNewArrival', 'isFeatured', 'isVisible', 'codAllowed',
-    'returnable', 'cancelable', 'taxIncluded', 'hsnCode', 'warrantyPeriod',
-    'guaranteePeriod', 'taxRate', 'seoTitle', 'seoDescription', 'tags', 'faqs',
-];
+// Fields updateProduct always applies live rather than staging: operational
+// inventory data (handled separately, see below), plus request/document
+// bookkeeping keys that are never legitimate "content" to review. Kept as an
+// exclude-list rather than an allowlist so a schema field nobody thought to
+// list here still gets compared correctly instead of silently dropped.
+const NON_CONTENT_FIELDS = new Set([
+    'stockQuantity', 'lowStockThreshold', 'stock', 'variants',
+    '_id', 'id', 'vendorId', 'slug', 'approvalStatus',
+    'pendingUpdates', 'hasPendingUpdates', 'createdAt', 'updatedAt', '__v',
+    'rating', 'reviewCount', 'offlineSold', 'isActive', 'relatedProducts',
+]);
+// Only compare keys that are actual Product schema paths — the vendor form
+// also submits a few frontend-only fields (e.g. `subcategoryId`, already
+// folded into `categoryId` above) that don't exist on the document and would
+// otherwise always read as "changed" against `undefined`.
+const PRODUCT_SCHEMA_FIELDS = new Set(Object.keys(Product.schema.paths));
 const REFERENCE_ID_FIELDS = new Set(['categoryId', 'brandId']);
 
 // True if any content field in `updates` actually differs from what's
@@ -216,8 +220,9 @@ const REFERENCE_ID_FIELDS = new Set(['categoryId', 'brandId']);
 // stock correction would still open an admin approval request with nothing
 // left in it to approve.
 const hasStagedContentChanges = (updates, product) => {
-    return VENDOR_CONTENT_FIELDS.some((key) => {
-        if (!Object.prototype.hasOwnProperty.call(updates, key)) return false;
+    return Object.keys(updates).some((key) => {
+        if (NON_CONTENT_FIELDS.has(key)) return false;
+        if (!PRODUCT_SCHEMA_FIELDS.has(key)) return false;
         const nextValue = updates[key];
         if (typeof nextValue === 'undefined') return false;
 

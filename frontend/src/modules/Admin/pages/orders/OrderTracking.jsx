@@ -17,6 +17,46 @@ import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-m
 
 const libraries = ['places', 'geometry', 'drawing'];
 
+// Order.model.js's status enum is far more granular (rider search,
+// multi-vendor readiness, etc.) than is useful to show at a glance, so every
+// real status collapses into one of these 5 stages instead of only
+// recognizing "processing"/"shipped"/"delivered" and leaving everything
+// else (picked_up, assigned, out_for_delivery, ...) stuck on step 1.
+const STAGE_LABELS = ["Order Placed", "Processing", "Picked Up", "Shipped", "Delivered"];
+const STAGE_ICONS = [FiCheckCircle, FiClock, FiPackage, FiTruck, FiMapPin];
+
+const STATUS_STAGE_INDEX = {
+  pending: 0,
+  accepted: 1,
+  processing: 1,
+  ready_for_pickup: 1,
+  all_vendors_ready: 1,
+  ready_for_delivery: 1,
+  searching: 1,
+  assigned: 1,
+  picked_up: 2,
+  shipped: 3,
+  out_for_delivery: 3,
+  delivered: 4,
+  // Try & Buy / return states all happen after the base delivery, so the
+  // tracker should still read as fully delivered for them.
+  try_active: 4,
+  try_buy_completed: 4,
+  'return requested': 4,
+  returned: 4,
+  returning_unselected_items: 4,
+  returned_to_vendor: 4,
+  // Cancellation can happen at any stage; without stage history to know how
+  // far the order actually got, don't imply progress that may not have
+  // happened.
+  cancelled: 0,
+};
+
+// A rider is actively out with the order for all of these — this is when
+// the live map + polling should be active, not just once status hits
+// "shipped".
+const RIDER_ACTIVE_STATUSES = ['assigned', 'picked_up', 'shipped', 'out_for_delivery', 'delivered'];
+
 const OrderTracking = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -75,8 +115,7 @@ const OrderTracking = () => {
 
   // Live polling: refresh order data every 10s when actively tracking a delivery
   useEffect(() => {
-    const activeStatuses = ['shipped', 'out_for_delivery', 'delivered'];
-    if (!selectedOrder || !activeStatuses.includes(selectedOrder.status)) return;
+    if (!selectedOrder || !RIDER_ACTIVE_STATUSES.includes(selectedOrder.status)) return;
 
     const poll = setInterval(async () => {
       try {
@@ -103,33 +142,12 @@ const OrderTracking = () => {
   }, [selectedOrder?.id, selectedOrder?.status]);
 
   const getTrackingSteps = (status) => {
-    const steps = [
-      { label: "Order Placed", status: "completed", icon: FiCheckCircle },
-      {
-        label: "Processing",
-        status:
-          status === "processing" ||
-            status === "shipped" ||
-            status === "delivered"
-            ? "completed"
-            : "pending",
-        icon: FiPackage,
-      },
-      {
-        label: "Shipped",
-        status:
-          status === "shipped" || status === "delivered"
-            ? "completed"
-            : "pending",
-        icon: FiTruck,
-      },
-      {
-        label: "Delivered",
-        status: status === "delivered" ? "completed" : "pending",
-        icon: FiMapPin,
-      },
-    ];
-    return steps;
+    const currentStage = STATUS_STAGE_INDEX[status] ?? 0;
+    return STAGE_LABELS.map((label, index) => ({
+      label,
+      status: index <= currentStage ? "completed" : "pending",
+      icon: STAGE_ICONS[index],
+    }));
   };
 
   const columns = [
@@ -262,7 +280,7 @@ const OrderTracking = () => {
             </div>
 
             {/* Live Map Section */}
-            {(selectedOrder.status === 'shipped' || selectedOrder.status === 'out_for_delivery' || selectedOrder.status === 'delivered') && (
+            {RIDER_ACTIVE_STATUSES.includes(selectedOrder.status) && (
               <div className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-inner border border-gray-100 relative bg-white">
                 {riderPos ? (
                   <>
