@@ -534,6 +534,18 @@ export const useDeliveryAuthStore = create(
           set({ isUpdatingOrderStatus: false }); return order;
         } catch (e) { set({ isUpdatingOrderStatus: false }); throw e; }
       },
+      startDelivery: async (id, opt = {}) => {
+        try {
+          const res = await api.patch(`/delivery/orders/${id}/start`, opt);
+          const order = normalizeOrder(res.data?.data || res.data || res);
+          if (get().selectedOrder?.id === id) set({ selectedOrder: order });
+          return order;
+        } catch (e) {
+          // Non-fatal: pickup already succeeded, so don't block the rider on this.
+          console.error('Failed to mark order out for delivery:', e?.response?.data?.message || e.message);
+          return null;
+        }
+      },
       markArrivedAtCustomer: async (id, opt = {}) => {
         set({ isUpdatingOrderStatus: true });
         try {

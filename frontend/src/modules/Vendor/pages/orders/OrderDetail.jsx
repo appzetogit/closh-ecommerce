@@ -398,6 +398,9 @@ const OrderDetail = () => {
         const customerName = order.customer?.name || order.userId?.name || order.guestInfo?.name || 'Guest';
         const shippingNameRaw = addr.name || '';
         const custName = ['home', 'work', 'other'].includes(shippingNameRaw.toLowerCase()) ? customerName : (shippingNameRaw || customerName);
+        const couponCode = order.couponCode || '';
+        const couponDiscount = Number(order.couponDiscount || 0);
+        const itemsGrandTotal = vendorItems.reduce((s, i) => s + (i.price ?? 0) * (i.quantity || 1), 0);
 
         const invoiceContent = `
             <!DOCTYPE html>
@@ -549,13 +552,19 @@ const OrderDetail = () => {
                                 return (taxAmount / 2).toFixed(2);
                             })()}</td>
                             <td>0.00</td>
-                            <td>${(vendorItems.reduce((s,i)=>s+(i.price??0)*(i.quantity||1),0)).toFixed(2)}</td>
+                            <td>${itemsGrandTotal.toFixed(2)}</td>
                         </tr>
+                        ${couponCode && couponDiscount > 0 ? `
+                        <tr>
+                            <td colspan="11" class="text-right">Coupon Applied (${couponCode})</td>
+                            <td>-${couponDiscount.toFixed(2)}</td>
+                        </tr>
+                        ` : ''}
                         <tr class="grand-total-row">
                             <td colspan="11" class="text-right">Grand Total (GST Inclusive)</td>
-                            <td>${(vendorItems.reduce((s,i)=>s+(i.price??0)*(i.quantity||1),0)).toFixed(2)}</td>
+                            <td>${(itemsGrandTotal - couponDiscount).toFixed(2)}</td>
                         </tr>
-    
+
                     </tbody>
                 </table>
 
@@ -564,10 +573,10 @@ const OrderDetail = () => {
                 </div>
 
                 <script>
-                    window.onload = function() { 
+                    window.onload = function() {
                         setTimeout(function() {
                             window.print();
-                        }, 500); 
+                        }, 500);
                     }
                 </script>
             </body>

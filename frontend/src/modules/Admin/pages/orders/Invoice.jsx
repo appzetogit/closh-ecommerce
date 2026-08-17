@@ -159,6 +159,9 @@ const Invoice = () => {
       `;
     }
 
+    const couponCode = order.couponCode || '';
+    const couponDiscount = Number(order.couponDiscount || 0);
+
     const addr = order.shippingAddress || order.address || {};
     const customerName = order.customer?.name || order.userId?.name || order.guestInfo?.name || '';
     const shippingNameRaw = addr.name || '';
@@ -274,9 +277,15 @@ const Invoice = () => {
                       <td>${totalIgst.toFixed(2)}</td>
                       <td>${totalSellingPriceSum.toFixed(2)}</td>
                   </tr>
+                  ${couponCode && couponDiscount > 0 ? `
+                  <tr>
+                      <td colspan="10" class="text-right">Coupon Applied (${couponCode})</td>
+                      <td>-${couponDiscount.toFixed(2)}</td>
+                  </tr>
+                  ` : ''}
                   <tr class="grand-total-row">
                       <td colspan="10" class="text-right">Grand Total</td>
-                      <td>${totalSellingPriceSum.toFixed(2)}</td>
+                      <td>${(totalSellingPriceSum - couponDiscount).toFixed(2)}</td>
                   </tr>
               </tbody>
           </table>

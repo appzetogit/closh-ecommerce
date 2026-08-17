@@ -44,6 +44,7 @@ const DeliveryOrderDetail = () => {
     isLoadingOrder,
     isUpdatingOrderStatus,
     updateOrderStatus,
+    startDelivery,
     markArrivedAtCustomer,
     submitTryAndBuy,
     setPaymentMethod,
@@ -309,6 +310,14 @@ const DeliveryOrderDetail = () => {
       const updated = await updateOrderStatus(id, status, options);
       setOrder(updated);
       toast.success(msg);
+
+      // Move straight to "out for delivery" as soon as pickup is confirmed,
+      // instead of waiting for "I have arrived" — so the customer/admin
+      // tracker shows "Shipped" while the rider is actually en route.
+      if (status === 'picked_up') {
+        const started = await startDelivery(id);
+        if (started) setOrder(started);
+      }
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Update failed');
     }

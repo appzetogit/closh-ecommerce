@@ -530,9 +530,20 @@ const PaymentPage = () => {
                         },
                         theme: { color: '#000000' },
                         modal: {
-                            ondismiss: () => {
+                            ondismiss: async () => {
+                                // The order was already created (pending payment) before this
+                                // modal opened. If the user backs out of Razorpay without
+                                // paying, that order must be cancelled here — otherwise it's
+                                // left sitting as "Order Placed" even though nothing was paid.
+                                try {
+                                    await api.patch(`/user/orders/${response.orderId}/cancel`, {
+                                        reason: 'Payment cancelled by customer'
+                                    });
+                                } catch (err) {
+                                    console.error('Failed to cancel unpaid order after payment dismiss:', err);
+                                }
                                 setIsProcessing(false);
-                                toast.error('Payment cancelled');
+                                toast.error('Payment cancelled. Order was not placed.');
                             }
                         }
                     };

@@ -448,7 +448,19 @@ export const completeMultiVendorDelivery = asyncHandler(async (req, res) => {
         .select('+deliveryOtpHash +deliveryOtpDebug +deliveryOtpExpiry');
     if (!order) throw new ApiError(404, 'Order not found.');
 
-    if (!order.compareDeliveryOtp(otp)) {
+    // Try-and-buy orders generate a separate, hashed OTP on order.deliveryFlow (see
+    // deliveryOtp.service.js). That is the OTP actually sent to the customer for such
+    // orders, so it must be accepted here too — otherwise the customer's real OTP is
+    // rejected because it never matches the plaintext order.deliveryOtpHash below.
+    const normalizedOtp = String(otp).trim();
+    const flow = order.deliveryFlow;
+    let flowOtpMatch = false;
+    if (flow?.otpHash) {
+        const { hashOtp } = await import('../../../services/deliveryOtp.service.js');
+        flowOtpMatch = flow.otpHash === hashOtp(normalizedOtp) || (process.env.NODE_ENV !== 'production' && flow.otpDebug === normalizedOtp);
+    }
+
+    if (!order.compareDeliveryOtp(normalizedOtp) && !flowOtpMatch) {
         order.deliveryOtpAttempts = (order.deliveryOtpAttempts || 0) + 1;
         await order.save();
         throw new ApiError(400, `Incorrect OTP. Attempt ${order.deliveryOtpAttempts}.`);
@@ -457,9 +469,20 @@ export const completeMultiVendorDelivery = asyncHandler(async (req, res) => {
     order.status = 'delivered';
     order.deliveredAt = new Date();
     order.deliveryOtpVerifiedAt = new Date();
+    if (order.deliveryFlow) {
+        order.deliveryFlow.phase = 'delivered';
+        order.deliveryFlow.otpVerified = true;
+        order.deliveryFlow.otpVerifiedAt = new Date();
+    }
     // Mark all vendorItems as delivered
     order.vendorItems = order.vendorItems.map(vi => ({ ...vi.toObject(), status: 'delivered' }));
     await order.save();
+
+    // Credit vendor + rider earnings — this path previously skipped wallet settlement entirely.
+    const { WalletService } = await import('../../../services/wallet.service.js');
+    await WalletService.processOrderCompletion(order).catch(err => {
+        console.error(`[Wallet] Error processing earnings for multi-vendor order ${order._id}:`, err.message);
+    });
 
     await DeliveryBatch.findOneAndUpdate(
         { deliveryBoyId, isMultiVendor: true },
