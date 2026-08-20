@@ -87,6 +87,10 @@ export const acceptMultiVendorOrder = asyncHandler(async (req, res) => {
                 status: 'assigned',
                 deliveryBoyId,
                 assignedAt: new Date(),
+                // Claiming the order IS accepting it. Without this the 120s
+                // rider-auto-assign-timeout worker treats the claim as unaccepted
+                // and silently clears deliveryBoyId out from under the rider.
+                riderAcceptedAt: new Date(),
             },
         },
         { new: true }

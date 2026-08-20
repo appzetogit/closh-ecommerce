@@ -45,7 +45,14 @@ export const WalletService = {
                 // Fallback for other flows that might have a finalAmount
                 subtotalRatio = flow.finalAmount / order.total;
             }
-            const isCod = order.paymentMethod === 'cash' || order.paymentMethod === 'cod';
+            // A COD order can still be settled digitally at the doorstep (rider offers a
+            // Razorpay/UPI QR). In that case the rider physically receives NO cash, so it
+            // must not be added to their cash-in-hand — order.paymentMethod alone is not
+            // enough to decide this, because it stays 'cod' for such orders.
+            const paidDigitallyAtDoor = order.paymentStatus === 'paid'
+                && ['qr', 'online'].includes(order.deliveryFlow?.paymentMethod);
+            const isCod = (order.paymentMethod === 'cash' || order.paymentMethod === 'cod')
+                && !paidDigitallyAtDoor;
 
             // 1. Credit Delivery Boy
             if (order.deliveryBoyId) {

@@ -31,6 +31,18 @@ const DELIVERY_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 const CACHE_TTL_SECONDS = 90; // 1.5 min cache for summary endpoints
 
+/**
+ * A COD order settled digitally at the doorstep must stop reporting itself as COD —
+ * otherwise every screen shows "Cash on Delivery" and, worse, the rider gets debited
+ * cash-in-hand they never received. deliveryFlow.paymentMethod keeps the record that
+ * this was a doorstep collection, so no information is lost.
+ */
+const markPaidOnline = (order) => {
+    if (order.paymentMethod === 'cod' || order.paymentMethod === 'cash') {
+        order.paymentMethod = 'upi';
+    }
+};
+
 /** Lightweight Redis cache helpers — silently fall back if Redis is down */
 export const cacheGet = async (key) => {
     try {
@@ -791,7 +803,16 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
     }
 
     const order = await Order.findOne(query).select('+deliveryOtpHash +deliveryOtpExpiry +deliveryOtpSentAt +deliveryOtpAttempts +deliveryOtpDebug +deviceToken');
-    if (!order) throw new ApiError(404, 'Order not found or not assigned to you.');
+    if (!order) {
+        // An order the rider never accepted is released back to the pool after 120s
+        // (rider-auto-assign-timeout worker clears deliveryBoyId). Tell them that
+        // explicitly instead of a bare "not found" they cannot act on.
+        const existing = await Order.findOne({ isDeleted: { $ne: true }, $or: query.$or }).select('deliveryBoyId');
+        if (existing && String(existing.deliveryBoyId || '') !== String(req.user.id)) {
+            throw new ApiError(409, 'This order is no longer assigned to you — it was released or reassigned because it was not accepted in time. Please refresh your task list.');
+        }
+        throw new ApiError(404, 'Order not found or not assigned to you.');
+    }
 
     // Server-side transition guard
     const transitionMap = {
@@ -1722,6 +1743,7 @@ export const verifyQrPayment = asyncHandler(async (req, res) => {
         flow.paymentCollected = true;
         flow.paymentCollectedAt = new Date();
         order.paymentStatus = 'paid';
+        markPaidOnline(order);
         await order.save();
         return res.status(200).json(new ApiResponse(200, { order }, "Manual QR Payment verified successfully."));
     }
@@ -1742,6 +1764,7 @@ export const verifyQrPayment = asyncHandler(async (req, res) => {
             flow.paymentCollected = true;
             flow.paymentCollectedAt = new Date();
             order.paymentStatus = 'paid';
+            markPaidOnline(order);
             await order.save();
             return res.status(200).json(new ApiResponse(200, { order }, "QR Payment verified successfully."));
         } else {
@@ -1780,6 +1803,7 @@ export const verifyDoorstepPayment = asyncHandler(async (req, res) => {
     order.paymentStatus = 'paid';
     order.razorpayPaymentId = razorpayPaymentId;
     order.razorpaySignature = razorpaySignature;
+    markPaidOnline(order);
 
     flow.paymentCollected = true;
     flow.paymentCollectedAt = new Date();
@@ -1923,7 +1947,11 @@ export const handleCompleteDelivery = asyncHandler(async (req, res) => {
     const isTryAndBuy = order.orderType === 'try_and_buy' || order.orderType === 'check_and_buy';
 
     if (!deliveryProofPhoto) throw new ApiError(400, 'Delivery proof photo is required.');
-    if (isCodOrder && !openBoxPhoto) throw new ApiError(400, 'Open box photo (item verification) is required for COD orders.');
+    // An order that was COD but got paid digitally at the door still needs the open-box
+    // proof — flow.paymentMethod marks it as a doorstep collection even though
+    // order.paymentMethod is no longer 'cod'.
+    const wasDoorstepCollection = isCodOrder || !!flow.paymentMethod;
+    if (wasDoorstepCollection && !openBoxPhoto) throw new ApiError(400, 'Open box photo (item verification) is required for COD orders.');
 
     const validPhases = ['payment_pending'];
     // For prepaid orders, we don't force a separate payment method selection step
