@@ -14,7 +14,7 @@ import DeliveryBatch from '../../../models/DeliveryBatch.model.js';
 import Vendor from '../../../models/Vendor.model.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
-import { assertRiderIsFree, markRiderBusy } from '../../../services/deliveryAvailability.service.js';
+import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
 
 // GET /api/admin/orders
 export const getAllOrders = asyncHandler(async (req, res) => {
@@ -488,6 +488,21 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
 
     await order.save();
     await markRiderBusy(deliveryBoyId);
+
+    // On a reassignment the previous rider must be released, otherwise they stay 'busy'
+    // forever and their app keeps showing a mission that is no longer theirs — whose
+    // accept-countdown then auto-rejects and bounces the order back into 'searching'.
+    if (isReassigned) {
+        await markRiderAvailable(previousDeliveryBoyId).catch((err) =>
+            console.error('[AdminAssign] Failed to free previous rider:', err.message)
+        );
+        emitEvent(`delivery_${previousDeliveryBoyId}`, 'order_cancelled', {
+            orderId: order.orderId,
+            id: order._id,
+            message: 'This order was reassigned to another delivery partner by admin.',
+        });
+        console.log(`[AdminAssign] Order ${order.orderId} reassigned ${previousDeliveryBoyId} -> ${deliveryBoyId}; previous rider released.`);
+    }
 
     // Unified role-aware notifications for assignment
     await OrderNotificationService.notifyOrderUpdate(order._id, 'assigned');

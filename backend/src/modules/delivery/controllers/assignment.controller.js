@@ -475,6 +475,15 @@ export const rejectOrderAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Cannot reject order assignment once pickup has started.');
     }
 
+    // The rider app auto-rejects when its 120s accept-countdown runs out. That countdown
+    // only applies to an offer the rider never took — firing it on an order they already
+    // accepted silently strips the order off them and sends it back to 'searching',
+    // which reads as "the order switched riders and now nobody is assigned".
+    if (req.body?.auto === true && order.riderAcceptedAt) {
+        console.log(`[RejectAssignment] Ignored auto-reject for ${order.orderId}: rider already accepted at ${order.riderAcceptedAt}.`);
+        return res.status(200).json(new ApiResponse(200, null, 'Order already accepted; auto-reject ignored.'));
+    }
+
     // 1. Mark this delivery boy as rejected for this order
     if (!order.rejectedDeliveryBoys.includes(deliveryBoyId)) {
         order.rejectedDeliveryBoys.push(deliveryBoyId);

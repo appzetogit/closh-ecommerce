@@ -59,6 +59,36 @@ const deriveTopLevelOrderStatus = (vendorItems = [], fallback = 'pending') => {
 };
 
 // GET /api/vendor/orders
+/**
+ * In a Try & Buy order the customer can keep some items and send others back, so a
+ * single order-level status ("returning_unselected_items") is wrong for every line.
+ * The per-item outcome only lives in deliveryFlow, so resolve it here once and hand
+ * the frontend a plain `itemStatus` per line instead of duplicating this logic there.
+ */
+const buildItemStatusResolver = (order) => {
+    const flow = order.deliveryFlow || {};
+    const keyOf = (i) => `${String(i.productId || '')}|${i.variantKey || ''}`;
+
+    const decisions = new Map();
+    (flow.tryAndBuyItems || []).forEach((i) => {
+        if (i.decision) decisions.set(keyOf(i), i.decision);
+    });
+    // rejectedItems is authoritative — it survives even when tryAndBuyItems is absent.
+    (flow.rejectedItems || []).forEach((i) => decisions.set(keyOf(i), 'rejected'));
+
+    return (item, groupStatus) => {
+        const fallback = groupStatus || order.status;
+        // A cancelled order overrides any earlier per-item decision.
+        if (String(fallback) === 'cancelled') return 'cancelled';
+        if (decisions.size === 0) return fallback;
+
+        const decision = decisions.get(keyOf(item));
+        if (decision === 'rejected') return 'returned';
+        if (decision === 'accepted') return 'delivered';
+        return fallback;
+    };
+};
+
 export const getVendorOrders = asyncHandler(async (req, res) => {
     const { status, page = 1, limit = 20 } = req.query;
     const numericPage = Math.max(1, Number(page) || 1);
@@ -73,12 +103,29 @@ export const getVendorOrders = asyncHandler(async (req, res) => {
     console.log(`[getVendorOrders] Vendor: ${req.user.id}, Filter:`, JSON.stringify(filter));
 
     const orders = await Order.find(filter)
-        .select('orderId status total orderType paymentMethod paymentStatus items.name items.image items.quantity items.variant shippingAddress.name guestInfo.name vendorItems.vendorId vendorItems.status vendorItems.items.name vendorItems.items.image vendorItems.items.quantity vendorItems.items.variant vendorItems.items.vendorPrice vendorItems.subtotal vendorItems.basePrice createdAt updatedAt')
+        .select('orderId status total orderType paymentMethod paymentStatus items.name items.image items.quantity items.variant items.productId items.variantKey shippingAddress.name guestInfo.name vendorItems.vendorId vendorItems.status vendorItems.items.name vendorItems.items.image vendorItems.items.quantity vendorItems.items.variant vendorItems.items.vendorPrice vendorItems.items.productId vendorItems.items.variantKey vendorItems.subtotal vendorItems.basePrice deliveryFlow.tryAndBuyItems deliveryFlow.rejectedItems createdAt updatedAt')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(numericLimit)
         .lean();
-        
+
+    // Resolve the real per-line outcome, then drop deliveryFlow — it was only needed
+    // to derive itemStatus and would otherwise bloat the list payload.
+    orders.forEach((order) => {
+        const resolve = buildItemStatusResolver(order);
+        const vendorGroup = (order.vendorItems || []).find(
+            (g) => String(g.vendorId) === String(req.user.id)
+        );
+        const groupStatus = vendorGroup?.status || order.status;
+
+        (order.items || []).forEach((item) => { item.itemStatus = resolve(item, groupStatus); });
+        (order.vendorItems || []).forEach((group) => {
+            (group.items || []).forEach((item) => { item.itemStatus = resolve(item, group.status); });
+        });
+
+        delete order.deliveryFlow;
+    });
+
     const total = await Order.countDocuments(filter);
     res.status(200).json(new ApiResponse(200, { orders, total, page: numericPage, pages: Math.ceil(total / numericLimit) }, 'Orders fetched.'));
 });

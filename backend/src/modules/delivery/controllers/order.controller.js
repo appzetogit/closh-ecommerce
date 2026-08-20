@@ -106,7 +106,10 @@ export const getAssignedOrders = asyncHandler(async (req, res) => {
     }
 
     const hasPaginationParams = page !== undefined || limit !== undefined;
-    const selectFields = 'orderId status total deliveryEarnings deliveryDistance items.name items.image items.quantity orderType paymentMethod customer phone address shippingAddress guestInfo vendorItems.vendorId vendorItems.vendorName isMultiVendor vendorPickups pickupLocation dropoffLocation createdAt updatedAt';
+    // assignedAt anchors the 120s accept countdown and riderAcceptedAt tells the app the
+    // rider already took this mission — without them the card falls back to updatedAt and
+    // keeps re-offering an order that was accepted long ago.
+    const selectFields = 'orderId status total deliveryEarnings deliveryDistance items.name items.image items.quantity orderType paymentMethod customer phone address shippingAddress guestInfo vendorItems.vendorId vendorItems.vendorName isMultiVendor vendorPickups pickupLocation dropoffLocation assignedAt riderAcceptedAt createdAt updatedAt';
 
     if (!hasPaginationParams) {
         const orders = await Order.find(filter)
