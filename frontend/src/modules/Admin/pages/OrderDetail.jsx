@@ -139,11 +139,12 @@ const OrderDetail = () => {
         // Fetch nearby riders for manual assignment dropdown
         try {
             const ridersRes = await getNearbyRiders(o._id || o.orderId);
-            if (ridersRes?.data?.riders) {
-                setDeliveryBoys(ridersRes.data.riders);
-            }
+            setDeliveryBoys(ridersRes?.data?.riders || []);
         } catch (err) {
             console.error("Error fetching nearby riders:", err);
+            // Surface it — a silently empty dropdown looks like "no riders exist".
+            toast.error(err?.response?.data?.message || 'Could not load delivery partners');
+            setDeliveryBoys([]);
         }
 
       } catch (error) {
@@ -180,7 +181,11 @@ const OrderDetail = () => {
     const handleUrgentAlert = (data) => {
       if (order && (data.orderId === order.orderId || data.orderId === order.id)) {
         setUrgentAlert(data);
-        if (data.nearbyRiders) {
+        // The escalation payload defaults nearbyRiders to [] and only fills it when the
+        // order has usable pickup coords. An empty array is truthy, so guarding on
+        // existence alone wiped the already-loaded dropdown and left the admin with no
+        // rider to pick exactly when the order needed manual dispatch.
+        if (Array.isArray(data.nearbyRiders) && data.nearbyRiders.length > 0) {
           setDeliveryBoys(data.nearbyRiders);
         }
       }
@@ -800,7 +805,9 @@ const OrderDetail = () => {
                     onChange={(e) => setSelectedRiderId(e.target.value)}
                     className="w-full text-xs bg-gray-50 border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 rounded-lg p-2.5 outline-none text-gray-700 font-medium transition-all"
                   >
-                    <option value="">Select Delivery Partner</option>
+                    <option value="">
+                      {deliveryBoys.length === 0 ? 'No delivery partners available' : 'Select Delivery Partner'}
+                    </option>
                     {deliveryBoys.map((boy) => (
                       <option key={boy._id} value={boy._id}>
                         {boy.name} ({boy.phone || "No Phone"}) {boy.distance !== undefined ? `- ${boy.distance}km away` : ''}
@@ -808,6 +815,12 @@ const OrderDetail = () => {
                     ))}
                   </select>
                 </div>
+
+                {deliveryBoys.length === 0 && (
+                  <p className="text-[11px] text-amber-600 font-medium">
+                    No approved, active rider was found within 10&nbsp;km of the pickup point.
+                  </p>
+                )}
 
                 <div className="flex gap-2">
                   {isReassigning && (

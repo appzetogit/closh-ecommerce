@@ -606,14 +606,14 @@ const DeliveryOrders = () => {
                         )}
                       </div>
                     </div>
-                    {filter === 'available' && order.type !== 'return' && (
+                    {filter === 'available' && order.type !== 'return' && !order.riderAcceptedAt && (
                       <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col">
-                        <CountdownTimer 
-                          assignedAt={order.assignedAt || order.updatedAt} 
+                        <CountdownTimer
+                          assignedAt={order.assignedAt || order.updatedAt}
                           onExpire={() => {
                             // Automatically trigger the rejection to notify backend to assign the next rider
                             try {
-                              rejectOrder(order.id || order.orderId);
+                              rejectOrder(order.id || order.orderId, { auto: true });
                             } catch (e) {
                               console.error("Auto-reject failed", e);
                             }
@@ -639,6 +639,12 @@ const DeliveryOrders = () => {
                             Accept
                           </button>
                         </div>
+                      </div>
+                    )}
+                    {filter === 'available' && order.type !== 'return' && order.riderAcceptedAt && (
+                      <div className="mt-3 pt-3 border-t border-slate-100 text-center">
+                        <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Mission Active</p>
+                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">Tap to continue this delivery</p>
                       </div>
                     )}
                   </motion.div>

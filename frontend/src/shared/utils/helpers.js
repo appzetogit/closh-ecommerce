@@ -157,3 +157,35 @@ export const formatDate = (dateString, options = {}) => {
   
   return date.toLocaleDateString('en-IN', defaultOptions);
 };
+
+/**
+ * Styling for a single order line's outcome. A Try & Buy order can end with some
+ * items kept and others sent back, so each line carries its own status (`itemStatus`
+ * from the vendor orders API) rather than the order-level one.
+ * Shown on every line so the vendor can always read a product's own state, even when
+ * the whole order shares one outcome.
+ */
+export const getItemStatusBadge = (itemStatus, orderStatus) => {
+  const status = String(itemStatus || orderStatus || "").toLowerCase().trim();
+  if (!status) return null;
+
+  const styles = {
+    delivered: { label: "Delivered", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    try_buy_completed: { label: "Delivered", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    returned: { label: "Returned", className: "bg-rose-50 text-rose-700 border-rose-200" },
+    returned_to_vendor: { label: "Returned", className: "bg-rose-50 text-rose-700 border-rose-200" },
+    returning_unselected_items: { label: "Returning", className: "bg-amber-50 text-amber-700 border-amber-200" },
+    "return requested": { label: "Return Requested", className: "bg-amber-50 text-amber-700 border-amber-200" },
+    cancelled: { label: "Cancelled", className: "bg-gray-100 text-gray-600 border-gray-200" },
+    canceled: { label: "Cancelled", className: "bg-gray-100 text-gray-600 border-gray-200" },
+    pending: { label: "Pending", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  };
+
+  if (styles[status]) return styles[status];
+
+  // Anything still in flight (accepted / processing / picked_up / out_for_delivery …)
+  return {
+    label: status.replace(/_/g, " "),
+    className: "bg-blue-50 text-blue-700 border-blue-200",
+  };
+};

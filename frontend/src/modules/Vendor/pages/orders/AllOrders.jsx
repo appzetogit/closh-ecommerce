@@ -10,7 +10,7 @@ import DataTable from "../../../Admin/components/DataTable";
 import ExportButton from "../../../Admin/components/ExportButton";
 import Badge from "../../../../shared/components/Badge";
 import AnimatedSelect from "../../../Admin/components/AnimatedSelect";
-import { formatPrice } from '../../../../shared/utils/helpers';
+import { formatPrice, getItemStatusBadge } from '../../../../shared/utils/helpers';
 import { formatVariantLabel } from '../../../../shared/utils/variant';
 import { useVendorAuthStore } from '../../store/vendorAuthStore';
 import { getAllVendorOrders, updateVendorOrderStatus } from '../../services/vendorService';
@@ -181,18 +181,28 @@ const AllOrders = () => {
         
         return (
           <div className="flex flex-col gap-1 py-1 min-w-[140px]">
-            {items.map((item, idx) => (
-              <div key={idx} className="flex flex-col">
-                <span className="text-[13px] font-semibold text-gray-800 leading-tight">
-                  {item.name} <span className="text-gray-400 text-[11px] font-normal">x{item.quantity}</span>
-                </span>
-                {formatVariantLabel(item.variant) && (
-                  <span className="text-[10px] text-gray-500 font-medium leading-tight">
-                    {formatVariantLabel(item.variant)}
+            {items.map((item, idx) => {
+              const itemBadge = getItemStatusBadge(item.itemStatus, vendorItem?.status || row.status);
+              return (
+                <div key={idx} className="flex flex-col">
+                  <span className="text-[13px] font-semibold text-gray-800 leading-tight">
+                    {item.name} <span className="text-gray-400 text-[11px] font-normal">x{item.quantity}</span>
                   </span>
-                )}
-              </div>
-            ))}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {formatVariantLabel(item.variant) && (
+                      <span className="text-[10px] text-gray-500 font-medium leading-tight">
+                        {formatVariantLabel(item.variant)}
+                      </span>
+                    )}
+                    {itemBadge && (
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
+                        {itemBadge.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       },

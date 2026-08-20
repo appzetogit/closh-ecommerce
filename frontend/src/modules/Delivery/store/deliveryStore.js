@@ -484,10 +484,12 @@ export const useDeliveryAuthStore = create(
           throw e;
         }
       },
-      rejectOrder: async (id) => {
+      // `auto` marks a reject fired by the expiring accept-countdown rather than by the
+      // rider tapping Decline — the backend ignores those on an already-accepted order.
+      rejectOrder: async (id, { auto = false } = {}) => {
         set({ isUpdatingOrderStatus: true });
         try {
-          const res = await api.post(`/delivery/orders/${id}/reject`);
+          const res = await api.post(`/delivery/orders/${id}/reject`, { auto });
           set({
             orders: get().orders.filter(o => o.id !== id),
             isUpdatingOrderStatus: false

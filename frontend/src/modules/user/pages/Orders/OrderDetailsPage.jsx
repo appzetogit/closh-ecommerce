@@ -46,13 +46,13 @@ const OrderDetailsPage = () => {
 
 
 
+    // Delivery is open-box: the customer inspects every item with the rider before
+    // accepting it. So "wrong item / wrong size / damaged on arrival" cannot be a
+    // valid post-delivery return reason — those are rejected at the doorstep instead.
     const RETURN_REASONS = [
-        "Wrong size delivered",
-        "Item is defective or damaged",
-        "Item not as described",
         "Changed my mind",
         "Quality not as expected",
-        "Received wrong item"
+        "Item not as described"
     ];
 
     const CANCEL_REASONS = [

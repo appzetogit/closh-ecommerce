@@ -11,7 +11,7 @@ import { IndianRupee } from 'lucide-react';
 import { useVendorAuthStore } from "../store/vendorAuthStore";
 import { useVendorProductStore } from "../store/vendorProductStore";
 import { getVendorOrders, getVendorEarnings } from "../services/vendorService";
-import { formatPrice } from "@shared/utils/helpers";
+import { formatPrice, getItemStatusBadge } from "@shared/utils/helpers";
 import { formatVariantLabel } from "@shared/utils/variant";
 import { FiMapPin, FiAlertCircle } from "react-icons/fi";
 import toast from "react-hot-toast";
@@ -322,7 +322,8 @@ const VendorDashboard = () => {
                 if (['pending', 'accepted', 'processing'].includes(displayStatus)) {
                   return <SwipeOrderCard key={order._id ?? order.orderId} order={order} onStatusUpdate={() => loadDashboardData()} />;
                 }
-                const displayAmount = vendorItem?.basePrice ?? 
+                const lineItems = vendorItem?.items?.length ? vendorItem.items : (order.items || []);
+                const displayAmount = vendorItem?.basePrice ??
                                       vendorItem?.items?.reduce((sum, it) => sum + (it.vendorPrice ?? it.price ?? 0) * (it.quantity ?? 1), 0) ??
                                       vendorItem?.subtotal ?? 0;
                 return (
@@ -331,17 +332,29 @@ const VendorDashboard = () => {
                       <div className="bg-white p-2 rounded-lg shadow-sm shrink-0"><FiPackage className="text-gray-400" /></div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-800 truncate leading-tight">{order.orderId ?? order._id}</p>
-                        <p className="text-[11px] text-gray-600 font-bold truncate mt-1">
-                          {vendorItem?.items?.[0]?.name || order.items?.[0]?.name || 'Order Details'}
-                        </p>
-                        <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                          Qty: {vendorItem?.items?.[0]?.quantity || order.items?.[0]?.quantity || 1}
-                        </p>
-                        {(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant) && formatVariantLabel(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant) && (
-                          <p className="text-[10px] text-gray-400 font-medium truncate mt-0.1">
-                            {formatVariantLabel(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant)}
-                          </p>
-                        )}
+                        {lineItems.length === 0 ? (
+                          <p className="text-[11px] text-gray-600 font-bold truncate mt-1">Order Details</p>
+                        ) : lineItems.map((lineItem, idx) => {
+                          const itemBadge = getItemStatusBadge(lineItem.itemStatus, displayStatus);
+                          return (
+                            <div key={idx} className="mt-1">
+                              <p className="text-[11px] text-gray-600 font-bold truncate">{lineItem.name}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] text-gray-500 font-medium">Qty: {lineItem.quantity || 1}</span>
+                                {formatVariantLabel(lineItem.variant) && (
+                                  <span className="text-[10px] text-gray-400 font-medium">
+                                    {formatVariantLabel(lineItem.variant)}
+                                  </span>
+                                )}
+                                {itemBadge && (
+                                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
+                                    {itemBadge.label}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                         <p className="text-[10px] text-gray-400 mt-1">{new Date(order.createdAt).toLocaleDateString()}</p>
                       </div>
                     </div>
