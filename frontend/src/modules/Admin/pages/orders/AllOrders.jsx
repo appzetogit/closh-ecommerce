@@ -566,6 +566,9 @@ const AllOrders = () => {
       creditCard: "Credit Card",
       cash: "Cash on Delivery",
       prepaid: "Prepaid",
+      upi: "Online (UPI)",
+      bank: "Net Banking",
+      digital_at_door: "Online (Paid at Door)",
     };
     return (
       methodMap[method.toLowerCase()] ||

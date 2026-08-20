@@ -137,16 +137,33 @@ const DeliveryOrderDetail = () => {
   );
 
   const availableStatuses = ['ready_for_pickup', 'pending', 'approved', 'searching', 'all_vendors_ready'];
-  const isAvailableTask = order && !order.deliveryBoyId && (availableStatuses.includes(order.rawStatus) || availableStatuses.includes(order.status));
+
+  // Auto-assignment only *offers* an order to a rider: it sets deliveryBoyId and
+  // status 'assigned' while leaving riderAcceptedAt null, and a 120s worker wipes
+  // the assignment if the rider never explicitly accepts. So an offered order must
+  // show Accept/Decline instead of the pickup flow — otherwise the rider spends
+  // minutes on pickup photos and only then hits "not assigned to you".
+  const preAcceptStatuses = [...availableStatuses, 'assigned'];
+  const isAwaitingMyAcceptance = !!order && !!isAssignedToMe && !order.riderAcceptedAt &&
+    (preAcceptStatuses.includes(order.rawStatus) || preAcceptStatuses.includes(order.status));
+
+  const isAvailableTask = !!order && (
+    (!order.deliveryBoyId && (availableStatuses.includes(order.rawStatus) || availableStatuses.includes(order.status))) ||
+    isAwaitingMyAcceptance
+  );
 
   const isOrderFinished = ['delivered', 'returned', 'returned_to_vendor', 'cancelled', 'canceled', 'return_requested', 'return_approved', 'awaiting_return'].includes(order?.status?.toLowerCase());
 
 
-  const hasActiveTask = (orders || []).some(o =>
-    ['assigned', 'picked_up', 'out_for_delivery', 'arrived', 'processing'].includes(o.status?.toLowerCase()) ||
-    ['accepted', 'picked-up', 'out-for-delivery'].includes(o.status?.toLowerCase()) ||
-    o.rawStatus === 'processing'
-  );
+  // Whether the rider has *another* mission running. The order being viewed must not
+  // count against itself, mirroring the backend accept guard which excludes it too.
+  const hasActiveTask = (orders || []).some(o => {
+    const isThisOrder = [o.id, o._id, o.orderId].some(v => v && String(v) === String(id));
+    if (isThisOrder) return false;
+    return ['assigned', 'picked_up', 'out_for_delivery', 'arrived', 'processing'].includes(o.status?.toLowerCase()) ||
+      ['accepted', 'picked-up', 'out-for-delivery'].includes(o.status?.toLowerCase()) ||
+      o.rawStatus === 'processing';
+  });
 
   useEffect(() => {
     if (liveLocation) setCurrentLocation(liveLocation);

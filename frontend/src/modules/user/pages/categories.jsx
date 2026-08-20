@@ -180,21 +180,21 @@ const MobileCategories = () => {
                 </div>
 
                 {grandSubcategories.length > 0 && (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-x-4 md:gap-x-8 gap-y-6 md:gap-y-10">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-x-4 md:gap-x-8 gap-y-6 md:gap-y-10">
                     {grandSubcategories.map((grand) => (
                       <button
                         key={grand.normId}
                         onClick={() => handleGrandSubSelect(grand.normId)}
                         className="flex flex-col items-center gap-1.5 group transition-transform active:scale-95"
                       >
-                        <div className="w-20 h-20 md:w-24 md:h-24 bg-[#F8F9FA] rounded-[24px] overflow-hidden p-0 flex items-center justify-center border border-transparent transition-all group-hover:border-[#FF5722] shadow-sm">
+                        <div className="w-28 h-28 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-[#F8F9FA] rounded-[24px] overflow-hidden p-0 flex items-center justify-center border border-transparent transition-all group-hover:border-[#FF5722] shadow-sm">
                           <img
                             src={grand.image || "https://via.placeholder.com/150"}
                             alt={grand.name}
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                           />
                         </div>
-                        <span className="text-[10px] md:text-[12px] font-bold text-gray-700 text-center leading-tight max-w-[80px] md:max-w-[100px] group-hover:text-[#FF5722] transition-colors py-1">
+                        <span className="text-[10px] md:text-[12px] font-bold text-gray-700 text-center leading-tight max-w-[120px] sm:max-w-[80px] md:max-w-[100px] group-hover:text-[#FF5722] transition-colors py-1">
                           {grand.name}
                         </span>
                       </button>
