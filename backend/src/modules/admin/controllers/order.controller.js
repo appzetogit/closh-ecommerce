@@ -15,6 +15,7 @@ import Vendor from '../../../models/Vendor.model.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
+import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
 
 // GET /api/admin/orders
 export const getAllOrders = asyncHandler(async (req, res) => {
@@ -72,6 +73,10 @@ export const getAllOrders = asyncHandler(async (req, res) => {
         Order.countDocuments(filter),
     ]);
 
+    // Expose the real per-line outcome so a part-delivered / part-returned order does
+    // not read as a single status. deliveryFlow is dropped — it is only the source.
+    orders.forEach((order) => attachItemStatuses(order, { stripFlow: true }));
+
     res.status(200).json(new ApiResponse(200, {
         orders,
         total,
@@ -99,6 +104,8 @@ export const getOrderById = asyncHandler(async (req, res) => {
     
     // Fetch related return requests
     const returnRequests = await ReturnRequest.find({ orderId: order._id }).lean();
+
+    attachItemStatuses(order);
 
     const responseData = {
         ...order,

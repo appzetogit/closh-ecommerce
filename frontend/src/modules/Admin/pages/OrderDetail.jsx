@@ -22,6 +22,7 @@ import { motion } from 'framer-motion';
 import Badge from '../../../shared/components/Badge';
 import AnimatedSelect from '../components/AnimatedSelect';
 import { formatCurrency, formatDateTime } from '../utils/adminHelpers';
+import { getItemStatusBadge, getOrderOutcomeBadge } from '../../../shared/utils/helpers';
 import { getOrderById, updateOrderStatus, getAllDeliveryBoys, assignDeliveryBoy, getNearbyRiders } from '../services/adminService';
 import socketService from '../../../shared/utils/socket';
 
@@ -314,7 +315,22 @@ const OrderDetail = () => {
                 <FiPrinter className="text-sm" />
                 View Invoice
               </button>
-              <Badge variant={order.status}>{order.status}</Badge>
+              {(() => {
+                // A part-delivered / part-returned order is neither, so surface the
+                // mixed outcome instead of one status that hides half of what happened.
+                const outcome = getOrderOutcomeBadge(itemsArray, order.status);
+                if (outcome?.detail) {
+                  return (
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border leading-none ${outcome.className}`}>
+                        {outcome.label}
+                      </span>
+                      <span className="text-[9px] text-gray-400 font-medium">{outcome.detail}</span>
+                    </div>
+                  );
+                }
+                return <Badge variant={order.status}>{order.status}</Badge>;
+              })()}
               <button
                 onClick={() => setIsEditing(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
@@ -450,7 +466,10 @@ const OrderDetail = () => {
                 Order Items ({itemsCount})
               </h2>
               <div className="space-y-2">
-                {itemsArray.map((item) => (
+                {itemsArray.map((item) => {
+                  const itemBadge = getItemStatusBadge(item.itemStatus, order.status);
+                  const isVoided = ['Returned', 'Cancelled'].includes(itemBadge?.label);
+                  return (
                   <div key={item.id || item.name} className="flex items-center gap-3 p-2.5 bg-white rounded-lg">
                     <img
                       src={getProductImage(item)}
@@ -472,17 +491,25 @@ const OrderDetail = () => {
                       <p className="text-xs text-gray-600">
                         {formatCurrency(item.price || 0)} x {item.quantity || 1}
                       </p>
-                      {formatVariantLabel(item.variant) && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {formatVariantLabel(item.variant)}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {formatVariantLabel(item.variant) && (
+                          <span className="text-[10px] text-gray-400">
+                            {formatVariantLabel(item.variant)}
+                          </span>
+                        )}
+                        {itemBadge && (
+                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
+                            {itemBadge.label}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="font-bold text-sm text-gray-800">
+                    <p className={`font-bold text-sm ${isVoided ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                       {formatCurrency((item.price || 0) * (item.quantity || 1))}
                     </p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

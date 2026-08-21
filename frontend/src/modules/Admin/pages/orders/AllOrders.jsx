@@ -25,7 +25,7 @@ import ExportButton from "../../components/ExportButton";
 import Badge from "../../../../shared/components/Badge";
 import ConfirmModal from "../../components/ConfirmModal";
 import AnimatedSelect from "../../components/AnimatedSelect";
-import { formatPrice } from "../../../../shared/utils/helpers";
+import { formatPrice, getOrderOutcomeBadge } from "../../../../shared/utils/helpers";
 import { formatCurrency, formatDateTime } from "../../utils/adminHelpers";
 import { getAllOrders, deleteOrder, getAllVendors } from "../../services/adminService";
 import toast from "react-hot-toast";
@@ -704,7 +704,21 @@ const AllOrders = () => {
       key: "status",
       label: "Status",
       sortable: true,
-      render: (value) => {
+      render: (value, row) => {
+        // A part-delivered / part-returned order is neither, so surface the mixed
+        // outcome instead of one status that hides half of what happened.
+        const outcome = getOrderOutcomeBadge(row?.items || [], value);
+        if (outcome?.detail) {
+          return (
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${outcome.className}`}>
+                {outcome.label}
+              </span>
+              <span className="text-[9px] text-gray-400 font-medium whitespace-nowrap">{outcome.detail}</span>
+            </div>
+          );
+        }
+
         const getStatusColor = (status) => {
           switch (status?.toLowerCase()) {
             case 'pending': return 'bg-yellow-50 text-yellow-700 border-yellow-100';
