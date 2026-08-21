@@ -189,3 +189,67 @@ export const getItemStatusBadge = (itemStatus, orderStatus) => {
     className: "bg-blue-50 text-blue-700 border-blue-200",
   };
 };
+
+/**
+ * Gross vs net for a vendor's lines on one order. A Try & Buy order can come back with
+ * some items returned, and those must not be counted toward what the vendor actually
+ * earned — the stored group subtotal still includes them.
+ */
+export const getVendorLineTotals = (items = []) => {
+  const excluded = ["returned", "returned_to_vendor", "cancelled", "canceled"];
+  let gross = 0;
+  let net = 0;
+
+  items.forEach((item) => {
+    const amount = Number(item.vendorPrice ?? item.price ?? 0) * Number(item.quantity ?? 1);
+    gross += amount;
+    if (!excluded.includes(String(item.itemStatus || "").toLowerCase())) net += amount;
+  });
+
+  return { gross, net, hasDeduction: net !== gross };
+};
+
+/** Per-line amount for one order item. */
+export const getLineAmount = (item) =>
+  Number(item?.vendorPrice ?? item?.price ?? 0) * Number(item?.quantity ?? 1);
+
+/**
+ * Order-level badge derived from the individual lines. A Try & Buy order where the
+ * customer keeps some items and sends others back is neither "Delivered" nor
+ * "Returned" — labelling it with the raw order status hides half of what happened.
+ */
+export const getOrderOutcomeBadge = (items = [], fallbackStatus) => {
+  const delivered = ["delivered", "try_buy_completed"];
+  const returned = ["returned", "returned_to_vendor"];
+  const cancelled = ["cancelled", "canceled"];
+
+  const statuses = items
+    .map((item) => String(item.itemStatus || "").toLowerCase())
+    .filter(Boolean);
+
+  if (statuses.length === 0) return getItemStatusBadge(fallbackStatus, null);
+
+  const nDelivered = statuses.filter((s) => delivered.includes(s)).length;
+  const nReturned = statuses.filter((s) => returned.includes(s)).length;
+  const nCancelled = statuses.filter((s) => cancelled.includes(s)).length;
+
+  if (nDelivered > 0 && nReturned > 0) {
+    return {
+      label: "Partially Delivered",
+      detail: `${nDelivered} delivered · ${nReturned} returned`,
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+
+  if (nDelivered > 0 && nCancelled > 0) {
+    return {
+      label: "Partially Delivered",
+      detail: `${nDelivered} delivered · ${nCancelled} cancelled`,
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+
+  // Every line shares one outcome — reuse the normal single-status styling.
+  const uniform = statuses.every((s) => s === statuses[0]) ? statuses[0] : fallbackStatus;
+  return getItemStatusBadge(uniform, null);
+};

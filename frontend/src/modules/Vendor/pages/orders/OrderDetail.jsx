@@ -17,7 +17,7 @@ import closhLogo from "../../../../shared/assets/closh_logo.svg";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVendorAuthStore } from '../../store/vendorAuthStore';
 import { getVendorOrderById, updateVendorOrderStatus } from '../../services/vendorService';
-import { formatPrice } from '../../../../shared/utils/helpers';
+import { formatPrice, getItemStatusBadge, getVendorLineTotals, getLineAmount } from '../../../../shared/utils/helpers';
 import { formatVariantLabel } from '../../../../shared/utils/variant';
 import Badge from '../../../../shared/components/Badge';
 import AnimatedSelect from '../../../Admin/components/AnimatedSelect';
@@ -230,6 +230,7 @@ const OrderDetail = () => {
     const vendorItems = vendorItem?.items ?? [];
     const vendorSubtotal = vendorItem?.items?.reduce((sum, it) => sum + (it.vendorPrice ?? it.price ?? 0) * (it.quantity ?? 1), 0) ??
                           vendorItem?.basePrice ?? 0;
+    const lineTotals = getVendorLineTotals(vendorItems);
 
     const [showInvoice, setShowInvoice] = useState(false);
     const [showCommissionInvoice, setShowCommissionInvoice] = useState(false);
@@ -920,7 +921,10 @@ const handleViewVendorInvoice = () => {
                         </div>
                         <div className="divide-y divide-gray-200">
                             {vendorItems.length > 0 ? (
-                                vendorItems.map((item, index) => (
+                                vendorItems.map((item, index) => {
+                                  const itemBadge = getItemStatusBadge(item.itemStatus, vendorItem?.status || order.status);
+                                  const isVoided = ['Returned', 'Cancelled'].includes(itemBadge?.label);
+                                  return (
                                     <div key={index} className="p-4 flex gap-4">
                                         <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                                             <img
@@ -948,17 +952,21 @@ const handleViewVendorInvoice = () => {
                                                                 {formatVariantLabel(item?.variant)}
                                                             </p>
                                                         )}
+                                                        {itemBadge && (
+                                                            <span className={`self-start text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
+                                                                {itemBadge.label}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <p className="font-semibold text-gray-800">
-                                                    {formatPrice(
-                                                        (item.vendorPrice ?? item.price ?? 0) * (item.quantity ?? 1)
-                                                    )}
+                                                <p className={`font-semibold ${isVoided ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                                                    {formatPrice(getLineAmount(item))}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
-                                ))
+                                  );
+                                })
                             ) : (
                                 <div className="p-6 text-center text-gray-500 text-sm">
                                     No item details available for this order.
@@ -972,16 +980,26 @@ const handleViewVendorInvoice = () => {
                                         Your Total Base Price
                                     </p>
                                     <p className="text-lg font-bold text-gray-800">
-                                        {formatPrice(vendorSubtotal)}
+                                        {formatPrice(lineTotals.gross || vendorSubtotal)}
                                     </p>
                                     <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                                        <div className="flex justify-between text-sm">
+                                        {/* The stored subtotal/earnings still include returned lines, so deduct
+                                            them here rather than showing the vendor money they won't receive. */}
+                                        {lineTotals.hasDeduction && (
+                                            <div className="flex justify-between text-sm gap-6">
+                                                <span className="text-gray-500">Returned Items</span>
+                                                <span className="text-rose-500">-{formatPrice(lineTotals.gross - lineTotals.net)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm gap-6">
                                             <span className="text-gray-500">Platform Commission</span>
                                             <span className="text-red-500">-{formatPrice(vendorItem?.commissionAmount || 0)}</span>
                                         </div>
-                                        <div className="flex justify-between text-sm font-bold pt-1 border-t border-dashed border-gray-100">
+                                        <div className="flex justify-between text-sm font-bold pt-1 border-t border-dashed border-gray-100 gap-6">
                                             <span className="text-gray-800">Your Net Earning</span>
-                                            <span className="text-emerald-600">{formatPrice(vendorItem?.vendorEarnings || 0)}</span>
+                                            <span className="text-emerald-600">
+                                                {formatPrice(Math.max(0, lineTotals.net - (vendorItem?.commissionAmount || 0)))}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

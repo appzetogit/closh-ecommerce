@@ -11,7 +11,7 @@ import { IndianRupee } from 'lucide-react';
 import { useVendorAuthStore } from "../store/vendorAuthStore";
 import { useVendorProductStore } from "../store/vendorProductStore";
 import { getVendorOrders, getVendorEarnings } from "../services/vendorService";
-import { formatPrice, getItemStatusBadge } from "@shared/utils/helpers";
+import { formatPrice, getItemStatusBadge, getVendorLineTotals, getLineAmount, getOrderOutcomeBadge } from "@shared/utils/helpers";
 import { formatVariantLabel } from "@shared/utils/variant";
 import { FiMapPin, FiAlertCircle } from "react-icons/fi";
 import toast from "react-hot-toast";
@@ -323,6 +323,8 @@ const VendorDashboard = () => {
                   return <SwipeOrderCard key={order._id ?? order.orderId} order={order} onStatusUpdate={() => loadDashboardData()} />;
                 }
                 const lineItems = vendorItem?.items?.length ? vendorItem.items : (order.items || []);
+                const lineTotals = getVendorLineTotals(lineItems);
+                const outcomeBadge = getOrderOutcomeBadge(lineItems, displayStatus);
                 const displayAmount = vendorItem?.basePrice ??
                                       vendorItem?.items?.reduce((sum, it) => sum + (it.vendorPrice ?? it.price ?? 0) * (it.quantity ?? 1), 0) ??
                                       vendorItem?.subtotal ?? 0;
@@ -346,6 +348,9 @@ const VendorDashboard = () => {
                                     {formatVariantLabel(lineItem.variant)}
                                   </span>
                                 )}
+                                <span className={`text-[10px] font-bold ${itemBadge?.label === 'Returned' || itemBadge?.label === 'Cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                  {formatPrice(getLineAmount(lineItem))}
+                                </span>
                                 {itemBadge && (
                                   <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
                                     {itemBadge.label}
@@ -358,7 +363,29 @@ const VendorDashboard = () => {
                         <p className="text-[10px] text-gray-400 mt-1">{new Date(order.createdAt).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="text-right"><p className="font-bold text-gray-800 text-sm">{formatPrice(displayAmount)}</p><span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${displayStatus === "delivered" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>{displayStatus}</span></div>
+                    <div className="text-right">
+                      {lineTotals.hasDeduction ? (
+                        <>
+                          <p className="text-[10px] text-gray-400 line-through leading-none">{formatPrice(lineTotals.gross)}</p>
+                          <p className="font-bold text-gray-800 text-sm leading-tight">{formatPrice(lineTotals.net)}</p>
+                          <p className="text-[9px] text-gray-400 font-medium mb-0.5">excl. returned</p>
+                        </>
+                      ) : (
+                        <p className="font-bold text-gray-800 text-sm">{formatPrice(displayAmount)}</p>
+                      )}
+                      {outcomeBadge ? (
+                        <>
+                          <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${outcomeBadge.className}`}>
+                            {outcomeBadge.label}
+                          </span>
+                          {outcomeBadge.detail && (
+                            <p className="text-[9px] text-gray-400 font-medium mt-0.5">{outcomeBadge.detail}</p>
+                          )}
+                        </>
+                      ) : (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${displayStatus === "delivered" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>{displayStatus}</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

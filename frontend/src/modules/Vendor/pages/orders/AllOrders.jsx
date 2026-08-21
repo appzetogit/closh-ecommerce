@@ -10,7 +10,7 @@ import DataTable from "../../../Admin/components/DataTable";
 import ExportButton from "../../../Admin/components/ExportButton";
 import Badge from "../../../../shared/components/Badge";
 import AnimatedSelect from "../../../Admin/components/AnimatedSelect";
-import { formatPrice, getItemStatusBadge } from '../../../../shared/utils/helpers';
+import { formatPrice, getItemStatusBadge, getVendorLineTotals, getLineAmount, getOrderOutcomeBadge } from '../../../../shared/utils/helpers';
 import { formatVariantLabel } from '../../../../shared/utils/variant';
 import { useVendorAuthStore } from '../../store/vendorAuthStore';
 import { getAllVendorOrders, updateVendorOrderStatus } from '../../services/vendorService';
@@ -194,6 +194,9 @@ const AllOrders = () => {
                         {formatVariantLabel(item.variant)}
                       </span>
                     )}
+                    <span className={`text-[11px] font-bold leading-tight ${itemBadge?.label === 'Returned' || itemBadge?.label === 'Cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                      {formatPrice(getLineAmount(item))}
+                    </span>
                     {itemBadge && (
                       <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${itemBadge.className}`}>
                         {itemBadge.label}
@@ -211,11 +214,31 @@ const AllOrders = () => {
       key: 'totalAmount',
       label: 'Your Amount',
       sortable: true,
-      render: (_, row) => (
-        <span className="font-semibold text-gray-800">
-          {formatPrice(getVendorSubtotal(row))}
-        </span>
-      ),
+      render: (_, row) => {
+        const vendorItem = row.vendorItems?.find((vi) => {
+          const vId = vi.vendorId?._id || vi.vendorId;
+          return vId?.toString() === vendorId?.toString();
+        });
+        const totals = getVendorLineTotals(vendorItem?.items || []);
+
+        // Returned lines are still inside the stored subtotal, so show what is actually
+        // payable and keep the original visible for reference.
+        if (totals.hasDeduction) {
+          return (
+            <div className="flex flex-col leading-tight">
+              <span className="text-[11px] text-gray-400 line-through">{formatPrice(totals.gross)}</span>
+              <span className="font-semibold text-gray-800">{formatPrice(totals.net)}</span>
+              <span className="text-[9px] text-gray-400 font-medium">excl. returned</span>
+            </div>
+          );
+        }
+
+        return (
+          <span className="font-semibold text-gray-800">
+            {formatPrice(getVendorSubtotal(row))}
+          </span>
+        );
+      },
     },
     {
       key: 'paymentMethod',
@@ -243,6 +266,25 @@ const AllOrders = () => {
       sortable: true,
       render: (_, row) => {
         const status = getOrderStatus(row);
+        const vendorItem = row.vendorItems?.find((vi) => {
+          const vId = vi.vendorId?._id || vi.vendorId;
+          return vId?.toString() === vendorId?.toString();
+        });
+        const outcome = getOrderOutcomeBadge(vendorItem?.items || [], status);
+
+        // A part-delivered / part-returned order is neither, so show the mixed outcome
+        // instead of one status that hides half of what happened.
+        if (outcome?.detail) {
+          return (
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border leading-none ${outcome.className}`}>
+                {outcome.label}
+              </span>
+              <span className="text-[9px] text-gray-400 font-medium">{outcome.detail}</span>
+            </div>
+          );
+        }
+
         return (
           <Badge
             variant={
