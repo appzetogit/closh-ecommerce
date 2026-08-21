@@ -67,7 +67,9 @@ const deriveTopLevelOrderStatus = (vendorItems = [], fallback = 'pending') => {
  */
 const buildItemStatusResolver = (order) => {
     const flow = order.deliveryFlow || {};
-    const keyOf = (i) => `${String(i.productId || '')}|${i.variantKey || ''}`;
+    // productId arrives populated on the detail route and as a raw ObjectId inside
+    // deliveryFlow, so normalise both down to the same id before matching.
+    const keyOf = (i) => `${String(i.productId?._id || i.productId || '')}|${i.variantKey || ''}`;
 
     const decisions = new Map();
     (flow.tryAndBuyItems || []).forEach((i) => {
@@ -179,6 +181,19 @@ export const getVendorOrderById = asyncHandler(async (req, res) => {
           .populate('vendorItems.items.productId', 'hsnCode')
           .lean();
     }
+
+    // Same per-line outcome the orders list exposes, so the detail page can show which
+    // items were kept and which came back instead of one order-wide status.
+    const resolve = buildItemStatusResolver(order);
+    const vendorGroup = (order.vendorItems || []).find(
+        (g) => String(g.vendorId?._id || g.vendorId) === String(req.user.id)
+    );
+    const groupStatus = vendorGroup?.status || order.status;
+
+    (order.items || []).forEach((item) => { item.itemStatus = resolve(item, groupStatus); });
+    (order.vendorItems || []).forEach((group) => {
+        (group.items || []).forEach((item) => { item.itemStatus = resolve(item, group.status); });
+    });
 
     res.status(200).json(new ApiResponse(200, order, 'Order fetched.'));
 });
