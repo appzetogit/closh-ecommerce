@@ -111,7 +111,20 @@ const CheckoutPage = () => {
     const defaultShippingRate = settings?.shipping?.defaultShippingRate !== undefined ? Number(settings.shipping.defaultShippingRate) : 40;
     const platformFee = settings?.orders?.platformFee !== undefined ? Number(settings.orders.platformFee) : 20;
 
-    const shipping = totalPrice > shippingThreshold ? 0 : defaultShippingRate;
+    // >= matches the backend rule (order.controller.js uses `subtotal >= threshold`).
+    // With `>` an order of exactly the threshold was charged here but shipped free by
+    // the server — and it would also contradict the "free on ₹X and above" note below.
+    const shipping = totalPrice >= shippingThreshold ? 0 : defaultShippingRate;
+
+    // Free-delivery nudge, driven purely by the admin-configured threshold. Hidden when
+    // the admin sets the threshold to 0, since there is then nothing to promise.
+    const freeShippingNudge = shippingThreshold > 0
+        ? {
+            threshold: shippingThreshold,
+            unlocked: totalPrice >= shippingThreshold,
+            remaining: Math.max(0, Math.ceil(shippingThreshold - totalPrice)),
+        }
+        : null;
     const tax = 0; // GST removed as per user request
 
     let promoDiscount = 0;
@@ -587,6 +600,32 @@ const CheckoutPage = () => {
                                 <span>Shipping Fee</span>
                                 <span>{shipping === 0 ? <span className="text-[#10B981]">FREE</span> : `₹${shipping}`}</span>
                             </div>
+                            {freeShippingNudge && (
+                                <div className={`flex items-start gap-2 rounded-2xl px-3 py-2.5 border animate-fadeInUp ${
+                                    freeShippingNudge.unlocked
+                                        ? 'bg-emerald-50 border-emerald-100'
+                                        : 'bg-amber-50 border-amber-100'
+                                }`}>
+                                    <Truck
+                                        size={14}
+                                        className={`mt-0.5 shrink-0 ${freeShippingNudge.unlocked ? 'text-[#10B981]' : 'text-amber-600'}`}
+                                    />
+                                    {freeShippingNudge.unlocked ? (
+                                        <p className="text-[11px] font-bold leading-snug text-[#10B981]">
+                                            You've got FREE delivery on this order!
+                                        </p>
+                                    ) : (
+                                        <div className="leading-snug">
+                                            <p className="text-[11px] font-bold text-amber-700">
+                                                Add <span className="text-black">₹{freeShippingNudge.remaining.toLocaleString()}</span> more to get FREE delivery
+                                            </p>
+                                            <p className="text-[10px] font-medium text-amber-600/80 mt-0.5">
+                                                Free delivery on orders of ₹{freeShippingNudge.threshold.toLocaleString()} and above
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <div className="flex justify-between text-[13px] font-bold text-gray-500 uppercase ">
                                 <span>Platform Fee</span>
                                 <span className="text-black">₹{platformFee}</span>
