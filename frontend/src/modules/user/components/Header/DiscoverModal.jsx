@@ -70,7 +70,14 @@ const DiscoverModal = ({ isOpen, onClose }) => {
                 {/* Right Side: Brand Grid */}
                 <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 h-full">
                     <div className="flex justify-between items-center px-4 md:px-8 py-4 md:py-6 border-b border-gray-200">
-                        <h2 className="text-gray-900 text-lg md:text-xl font-bold uppercase ">Featured Brands</h2>
+                        <h2 className="text-gray-900 text-lg md:text-xl font-bold uppercase ">
+                            Featured Brands
+                            {filteredBrands.length > 0 && (
+                                <span className="ml-2 text-[11px] font-bold text-gray-400 normal-case">
+                                    {filteredBrands.length}
+                                </span>
+                            )}
+                        </h2>
                         <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors font-bold text-gray-900 md:hidden">
                              <X size={20} />
                         </button>
@@ -79,7 +86,7 @@ const DiscoverModal = ({ isOpen, onClose }) => {
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8">
                         {isLoading && brands.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-gray-400 font-bold uppercase tracking-widest animate-pulse">Loading Brands...</div>

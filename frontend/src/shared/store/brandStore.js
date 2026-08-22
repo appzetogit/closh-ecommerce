@@ -4,6 +4,7 @@ import { getAllBrands, getPublicBrands, createBrand, updateBrand, deleteBrand } 
 import toast from 'react-hot-toast';
 
 let hasFetchedBrands = false;
+let isFetchingBrands = false;
 
 export const useBrandStore = create(
   persist(
@@ -13,13 +14,16 @@ export const useBrandStore = create(
 
       // Initialize brands
       initialize: async (force = false) => {
-        // Guard: Don't initialize if already loading
+        // Guard: Don't initialize if a fetch is already in flight *this* page load.
+        // hasFetchedBrands is module-level, so it cannot be poisoned by a stale
+        // persisted flag the way state.isLoading could be.
         const state = get();
-        if (state.isLoading) return;
+        if (isFetchingBrands) return;
 
         // If already fetched in this session/page load, rely on the cache unless forced
         if (!force && hasFetchedBrands && state.brands.length > 0) return;
 
+        isFetchingBrands = true;
         set({ isLoading: true });
         try {
           const isAdminArea =
@@ -37,6 +41,8 @@ export const useBrandStore = create(
         } catch (error) {
           set({ isLoading: false });
           // Error toast is handled in api.js interceptor
+        } finally {
+          isFetchingBrands = false;
         }
       },
 
@@ -147,6 +153,11 @@ export const useBrandStore = create(
     {
       name: 'brand-storage',
       storage: createJSONStorage(() => localStorage),
+      // Persist the cached brands only. isLoading is transient: if a fetch was cut off
+      // mid-flight (tab closed, reload, navigation) a persisted `isLoading: true` is
+      // restored on the next visit and the `if (state.isLoading) return` guard above
+      // then blocks every future fetch, permanently freezing an outdated brand list.
+      partialize: (state) => ({ brands: state.brands }),
     }
   )
 );
