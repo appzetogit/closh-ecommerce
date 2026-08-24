@@ -20,7 +20,8 @@ import {
     CheckCircle2,
     Tag,
     Ticket,
-    LayoutGrid
+    LayoutGrid,
+    ZoomIn
 } from 'lucide-react';
 import { useProductStore, normalizeProduct } from '../../../../shared/store/productStore';
 import { useCart } from '../../context/CartContext';
@@ -32,6 +33,7 @@ import LoginModal from '../../components/Modals/LoginModal';
 import { getVariantSignature } from '../../../../shared/utils/variant';
 import ProductReviews from '../../components/Product/ProductReviews';
 import ProductCard from '../../components/ProductCard/ProductCard';
+import ImageZoomViewer from '../../components/Product/ImageZoomViewer';
 import api from '../../../../shared/utils/api';
 
 const ProductDetailsPage = () => {
@@ -47,6 +49,7 @@ const ProductDetailsPage = () => {
     const [loading, setLoading] = useState(true);
     const [selectedSize, setSelectedSize] = useState('');
     const [activeImg, setActiveImg] = useState(0);
+    const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
     const [openAccordion, setOpenAccordion] = useState('description');
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -431,25 +434,31 @@ const ProductDetailsPage = () => {
                         {/* Main Image - Carousel */}
                         <div className="relative aspect-square md:aspect-[3/4] lg:aspect-[4/5] lg:max-h-[600px] lg:max-w-[480px] lg:mx-auto w-full rounded-xl md:rounded-[40px] overflow-hidden bg-white shadow-sm md:shadow-2xl group border border-gray-100 md:border-gray-200">
                             
-                            <div 
+                            <div
                                 ref={carouselRef}
-                                className="w-full h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar scroll-smooth"
+                                className="w-full h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar scroll-smooth cursor-zoom-in"
                                 onScroll={(e) => {
                                     const index = Math.round(e.target.scrollLeft / e.target.offsetWidth);
                                     if(index !== activeImg) {
                                         setActiveImg(index);
                                     }
                                 }}
+                                onClick={() => setIsImageViewerOpen(true)}
                             >
                                 {productImages.map((img, idx) => (
                                     <div key={idx} className="w-full h-full shrink-0 snap-center relative">
-                                        <img 
-                                            src={img} 
-                                            alt={`${product.name} - ${idx}`} 
-                                            className="w-full h-full object-contain mix-blend-multiply transition-transform duration-700 group-hover:scale-105 pointer-events-none" 
+                                        <img
+                                            src={img}
+                                            alt={`${product.name} - ${idx}`}
+                                            className="w-full h-full object-contain mix-blend-multiply transition-transform duration-700 group-hover:scale-105 pointer-events-none"
                                         />
                                     </div>
                                 ))}
+                            </div>
+
+                            {/* Zoom affordance — visible on hover for desktop, always subtly present on mobile */}
+                            <div className="absolute bottom-3 right-3 md:bottom-6 md:right-6 z-20 pointer-events-none bg-black/40 backdrop-blur-sm text-white rounded-full p-2 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                <ZoomIn size={16} />
                             </div>
 
                             {/* Tags/Badges - Smaller on Mobile */}
@@ -889,6 +898,16 @@ const ProductDetailsPage = () => {
                 onClose={() => setIsSizeChartOpen(false)}
                 product={product}
             />
+
+            {/* Full-screen Image Zoom Viewer */}
+            {isImageViewerOpen && (
+                <ImageZoomViewer
+                    images={productImages}
+                    startIndex={activeImg}
+                    onClose={() => setIsImageViewerOpen(false)}
+                    productName={product.name}
+                />
+            )}
 
             {/* Added to Cart Success Popup */}
             {showAddedToast && createPortal(
