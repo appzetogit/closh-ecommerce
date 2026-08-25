@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 
@@ -65,14 +65,15 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
         }
     };
 
-    const handleTouchMove = (e) => {
+    // Both only touch refs and functional state updaters (no direct closure over
+    // `transform`/`isDragging`), so they can be memoized once and safely called from a
+    // listener that is attached only on mount.
+    const handleTouchMove = useCallback((e) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            e.preventDefault();
             const dist = distanceBetween(e.touches);
             const ratio = pinchRef.current.startDist > 0 ? dist / pinchRef.current.startDist : 1;
             setTransform((t) => ({ ...t, scale: clampScale(pinchRef.current.startScale * ratio) }));
         } else if (e.touches.length === 1 && dragRef.current) {
-            e.preventDefault();
             const touch = e.touches[0];
             setTransform((t) => ({
                 ...t,
@@ -80,7 +81,45 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
                 y: dragRef.current.originY + (touch.clientY - dragRef.current.startY),
             }));
         }
-    };
+    }, []);
+
+    const handleWheel = useCallback((e) => {
+        const delta = e.deltaY < 0 ? 0.2 : -0.2;
+        setTransform((t) => {
+            const nextScale = clampScale(t.scale + delta);
+            return nextScale === 1 ? { scale: 1, x: 0, y: 0 } : { ...t, scale: nextScale };
+        });
+    }, []);
+
+    // Native, explicitly non-passive touchmove/wheel listeners, attached once on mount.
+    // Attaching these via JSX (onTouchMove / onWheel) leaves the browser free to treat
+    // them as passive — since React 17 that IS the default for these two events — which
+    // is exactly the state that makes preventDefault() misbehave: a silent no-op in most
+    // desktop browsers, but a thrown TypeError in stricter mobile WebViews. That thrown
+    // error is what was reaching the app's error boundary on every pinch gesture.
+    // Registering manually with { passive: false } removes the ambiguity entirely.
+    useEffect(() => {
+        const node = containerRef.current;
+        if (!node) return undefined;
+
+        const onTouchMoveNative = (e) => {
+            if (e.touches.length === 2 || (e.touches.length === 1 && dragRef.current)) {
+                e.preventDefault();
+            }
+            handleTouchMove(e);
+        };
+        const onWheelNative = (e) => {
+            e.preventDefault();
+            handleWheel(e);
+        };
+
+        node.addEventListener('touchmove', onTouchMoveNative, { passive: false });
+        node.addEventListener('wheel', onWheelNative, { passive: false });
+        return () => {
+            node.removeEventListener('touchmove', onTouchMoveNative);
+            node.removeEventListener('wheel', onWheelNative);
+        };
+    }, [handleTouchMove, handleWheel]);
 
     const handleTouchEnd = (e) => {
         // Snap back to bounds if zoomed out below 1
@@ -112,15 +151,6 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
 
     const handleDoubleClick = () => {
         setTransform((t) => (t.scale > 1.01 ? { scale: 1, x: 0, y: 0 } : { scale: DOUBLE_TAP_SCALE, x: 0, y: 0 }));
-    };
-
-    const handleWheel = (e) => {
-        e.preventDefault();
-        const delta = e.deltaY < 0 ? 0.2 : -0.2;
-        setTransform((t) => {
-            const nextScale = clampScale(t.scale + delta);
-            return nextScale === 1 ? { scale: 1, x: 0, y: 0 } : { ...t, scale: nextScale };
-        });
     };
 
     // Desktop mouse drag when zoomed
@@ -165,9 +195,7 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
                 ref={containerRef}
                 className="flex-1 relative overflow-hidden touch-none select-none"
                 onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
