@@ -35,8 +35,13 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
         resetTransform();
     }, [images.length]);
 
+    // Indexed access, not array destructuring: TouchList doesn't reliably support the
+    // iterator protocol across browsers/webviews, so `const [a, b] = touches` throws
+    // "touches is not iterable" the moment a second finger touches down — exactly the
+    // pinch gesture this is for.
     const distanceBetween = (touches) => {
-        const [a, b] = touches;
+        const a = touches[0];
+        const b = touches[1];
         return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     };
 
@@ -64,7 +69,7 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
         if (e.touches.length === 2 && pinchRef.current) {
             e.preventDefault();
             const dist = distanceBetween(e.touches);
-            const ratio = dist / pinchRef.current.startDist;
+            const ratio = pinchRef.current.startDist > 0 ? dist / pinchRef.current.startDist : 1;
             setTransform((t) => ({ ...t, scale: clampScale(pinchRef.current.startScale * ratio) }));
         } else if (e.touches.length === 1 && dragRef.current) {
             e.preventDefault();
