@@ -2697,6 +2697,12 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
         // Notify user and vendor
         emitEvent(`user_${returnReq.userId?._id}`, 'return_completed', { returnId: returnReq._id });
         emitEvent(`vendor_${returnReq.vendorId}`, 'return_completed', { returnId: returnReq._id });
+
+        // Whoever assigned this return marked the rider 'busy' but nothing released
+        // them on completion — same gap as dropoffReturnAtVendor below.
+        await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' }).catch((err) =>
+            console.error('[ReturnComplete] Failed to free rider after return completion:', err.message)
+        );
     } else {
         throw new ApiError(400, 'Invalid return status.');
     }
@@ -2832,6 +2838,14 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
 
     if (returnReq.status === 'completed') {
         await WalletService.processOrderReturn(returnReq).catch(e => console.error(e));
+
+        // admin/return.controller.js marks the rider 'busy' the moment this return is
+        // assigned to them, but nothing released it back on completion — the rider
+        // stayed locked out of every future order/return (assertRiderIsFree keeps
+        // rejecting them) until someone noticed and fixed it by hand.
+        await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' }).catch((err) =>
+            console.error('[ReturnDropoff] Failed to free rider after return completion:', err.message)
+        );
     }
 
     const order = await Order.findById(returnReq.orderId);

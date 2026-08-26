@@ -39,9 +39,12 @@ export async function assertRiderIsFree(deliveryBoyId, { excludeOrderId, exclude
 
 /**
  * Marks the rider busy. Call right after a successful assignment.
+ * Also stamps lastAssignedAt so autoAssignDeliveryBoy can rotate fairly among
+ * several nearby riders instead of always handing every order to whichever one
+ * happens to be nearest (see autoAssignment.service.js).
  */
 export async function markRiderBusy(deliveryBoyId) {
-    await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'busy' });
+    await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'busy', lastAssignedAt: new Date() });
 }
 
 /**

@@ -63,6 +63,10 @@ const deliveryBoySchema = new mongoose.Schema(
             },
         },
         totalDeliveries: { type: Number, default: 0 },
+        // Drives fair rotation in autoAssignment.service.js — without it, the nearest
+        // available rider wins every single order forever, since distance alone never
+        // changes between two riders parked at the same spot.
+        lastAssignedAt: { type: Date, default: null },
         rating: { type: Number, default: 0 },
         cashInHand: { type: Number, default: 0 },
         cashCollected: { type: Number, default: 0 }, // keeping for compatibility, will update logic to sync both

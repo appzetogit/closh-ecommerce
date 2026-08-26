@@ -141,8 +141,22 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             return false;
         }
 
-        const chosenRider = deliveryBoys[0];
-        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId}`);
+        // Fair rotation among the nearby candidates. `deliveryBoys` was sorted purely by
+        // distance, so picking [0] handed every single order to whichever rider is
+        // physically closest to that vendor — a rider parked nearest a busy vendor
+        // would win literally every order there, forever, while others in the same
+        // area never got one. Distance never changes between two riders idling at the
+        // same spot, so this was a hard determinism, not just a statistical bias.
+        // Re-ranking the (already-nearby) candidates by how long they've been idle
+        // keeps the proximity constraint (still only the nearest 5) but stops one
+        // rider from monopolizing every order in that pocket.
+        const sortedByIdleTime = [...deliveryBoys].sort((a, b) => {
+            const aTime = a.lastAssignedAt ? new Date(a.lastAssignedAt).getTime() : 0;
+            const bTime = b.lastAssignedAt ? new Date(b.lastAssignedAt).getTime() : 0;
+            return aTime - bTime; // never-assigned (0) or longest-idle first
+        });
+        const chosenRider = sortedByIdleTime[0];
+        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
 
         // 3. Optimize pickup route sequence from rider's current location
         const riderCoords = chosenRider.currentLocation?.coordinates || firstVendorLocation;
@@ -195,7 +209,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         await order.save();
 
         // 5. Update Delivery Boy status to busy
-        await DeliveryBoy.findByIdAndUpdate(chosenRider._id, { status: 'busy' });
+        await DeliveryBoy.findByIdAndUpdate(chosenRider._id, { status: 'busy', lastAssignedAt: new Date() });
 
         // 6. Create DeliveryBatch for tracing stop-by-stop pickups
         const pickupStops = vendorPickups.map((stop) => ({
