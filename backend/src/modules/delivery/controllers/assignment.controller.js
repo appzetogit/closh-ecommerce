@@ -353,8 +353,12 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(409, 'Order is no longer available or has already been assigned.');
     }
 
-    // Update Delivery Boy status to busy so they don't receive new requests
-    await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'busy' });
+    // Update Delivery Boy status to busy so they don't receive new requests.
+    // lastAssignedAt feeds autoAssignment.service.js's fairness rotation — without it
+    // here too, a rider who mostly self-accepts (rather than being auto-assigned)
+    // would never accrue "idle time" and would keep winning every auto-assigned order
+    // in their area as well.
+    await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'busy', lastAssignedAt: new Date() });
 
     // ── Multi-Vendor Stop Setup & DeliveryBatch creation ──
     if (order.isMultiVendor || order.vendorPickups?.length > 0 || order.status === 'all_vendors_ready') {
