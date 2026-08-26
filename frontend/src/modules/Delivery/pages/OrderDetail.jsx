@@ -807,6 +807,43 @@ const DeliveryOrderDetail = () => {
         </header>
 
         <div className="max-w-md mx-auto pt-4">
+          {/* TERMINAL STATE BANNER — order.status can end (cancelled/delivered/returned)
+              while getPhase() has no mapping for it, so currentPhase falls through to
+              null. Every phase-specific block below only checks `currentPhase !== X`,
+              so a null phase silently matches the generic "post-arrival" branch and
+              keeps showing stale camera/verification UI with nowhere to go, since the
+              bottom action bar is separately hidden via isOrderFinished. Show a clear,
+              unmissable summary + exit here instead of leaving the rider stuck. */}
+          {isOrderFinished && (
+            <div className="px-4 pt-2 pb-4">
+              <div className={`rounded-2xl border p-5 text-center shadow-sm ${
+                order.status === 'delivered'
+                  ? 'bg-emerald-50 border-emerald-100'
+                  : 'bg-rose-50 border-rose-100'
+              }`}>
+                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-3 ${
+                  order.status === 'delivered' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                }`}>
+                  {order.status === 'delivered' ? <FiCheckCircle size={24} /> : <FiX size={24} />}
+                </div>
+                <h2 className="text-[13px] font-black uppercase tracking-widest text-slate-900 mb-1">
+                  Order {String(order.status).replace(/_/g, ' ')}
+                </h2>
+                <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+                  {order.status === 'cancelled' || order.status === 'canceled'
+                    ? (order.cancellationReason || 'This order was cancelled.')
+                    : 'This mission has already been closed out — there is nothing left to do here.'}
+                </p>
+                <button
+                  onClick={() => navigate('/delivery/dashboard')}
+                  className="mt-4 w-full h-11 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* HERO MAP SECTION - AT TRUE TOP */}
           {(!hasArrived && currentPhase) && (
             <div className="w-full h-[540px] bg-white relative">
