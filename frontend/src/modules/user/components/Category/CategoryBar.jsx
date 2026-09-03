@@ -83,7 +83,7 @@ const CategoryBar = () => {
                             )}
 
                             <div className="relative z-10 flex flex-col items-center">
-                                <div className="w-13 h-13 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full p-[2px] transition-transform duration-300 group-hover:scale-105">
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full p-[2px] transition-transform duration-300 group-hover:scale-105">
                                     <div className="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
                                         <img
                                             src={cat.image || "https://via.placeholder.com/150"}
