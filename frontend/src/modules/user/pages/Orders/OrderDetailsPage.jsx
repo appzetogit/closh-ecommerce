@@ -285,12 +285,18 @@ const OrderDetailsPage = () => {
         let totalSellingPriceSum = 0;
 
         const itemsHtml = order.items.map(item => {
-            const qty = item.quantity || 1;
+            // Exclude units already returned via a completed return request so the
+            // invoice always shows the actual amount payable, not the original order value.
+            const originalQty = item.quantity || 1;
+            const returnedQty = Math.min(Number(item.returnedQuantity || 0), originalQty);
+            const qty = originalQty - returnedQty;
+            if (qty <= 0) return null;
+
             const mrp = item.originalPrice || item.price || 0;
             const sellingPrice = item.price || 0;
             const totalSellingPrice = sellingPrice * qty;
             const totalMrp = mrp * qty;
-            
+
             // Calculate GST
             let itemCgst = 0, itemSgst = 0, itemIgst = 0;
             const gstRate = sellingPrice <= 2500 ? 5 : 18;
@@ -303,7 +309,7 @@ const OrderDetailsPage = () => {
                 itemCgst = gstAmount / 2;
                 itemSgst = gstAmount / 2;
             }
-            
+
             const calculatedTaxableValue = totalSellingPrice - (itemCgst + itemSgst + itemIgst);
             const discount = totalMrp - totalSellingPrice;
 
@@ -317,7 +323,7 @@ const OrderDetailsPage = () => {
 
             return `
                 <tr>
-                    <td class="text-left">${item.name} ${item.selectedSize ? `(${item.selectedSize})` : ''}</td>
+                    <td class="text-left">${item.name} ${item.selectedSize ? `(${item.selectedSize})` : ''}${returnedQty > 0 ? ` <span style="color:#c00;font-size:9px;">(${returnedQty} returned)</span>` : ''}</td>
                     <td>${item.hsnCode || item.productId?.hsnCode || item.product?.hsnCode || 'N/A'}</td>
                     <td>${mrp.toFixed(2)}</td>
                     <td>${qty}</td>
@@ -330,7 +336,7 @@ const OrderDetailsPage = () => {
                     <td>${totalSellingPrice.toFixed(2)}</td>
                 </tr>
             `;
-        }).join('');
+        }).filter(Boolean).join('');
 
         const invoiceContent = `
             <!DOCTYPE html>
@@ -439,15 +445,19 @@ const OrderDetailsPage = () => {
                     </tbody>
                 </table>
 
+                ${Number(order.returnedAmount || 0) > 0 ? `
+                <p style="font-size: 11px; color: #666; margin: -10px 0 15px;">Note: This invoice reflects the amount payable after excluding ₹${Number(order.returnedAmount).toFixed(2)} worth of returned item(s).</p>
+                ` : ''}
+
                 <div class="footer">
                     <p class="bold" style="color: #000; font-size: 12px; margin-bottom: 5px;">This is a computer generated invoice and does not require a signature.</p>
                 </div>
 
                 <script>
-                    window.onload = function() { 
+                    window.onload = function() {
                         setTimeout(function() {
                             window.print();
-                        }, 500); 
+                        }, 500);
                     }
                 </script>
             </body>

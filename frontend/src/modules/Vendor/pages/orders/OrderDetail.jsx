@@ -401,7 +401,9 @@ const OrderDetail = () => {
         const custName = ['home', 'work', 'other'].includes(shippingNameRaw.toLowerCase()) ? customerName : (shippingNameRaw || customerName);
         const couponCode = order.couponCode || '';
         const couponDiscount = Number(order.couponDiscount || 0);
-        const itemsGrandTotal = vendorItems.reduce((s, i) => s + (i.price ?? 0) * (i.quantity || 1), 0);
+        // Effective (post-return) quantity: excludes units already returned via a completed return request.
+        const effectiveQty = (i) => Math.max(0, (i.quantity || 1) - Math.min(Number(i.returnedQuantity || 0), i.quantity || 1));
+        const itemsGrandTotal = vendorItems.reduce((s, i) => s + (i.price ?? 0) * effectiveQty(i), 0);
 
         const invoiceContent = `
             <!DOCTYPE html>
@@ -493,12 +495,18 @@ const OrderDetail = () => {
                     </thead>
                     <tbody>
                         ${vendorItems.map(item => {
-                            const qty = item.quantity || 1;
+                            // Exclude units already returned via a completed return request so
+                            // the invoice always shows the actual amount payable.
+                            const originalQty = item.quantity || 1;
+                            const returnedQty = Math.min(Number(item.returnedQuantity || 0), originalQty);
+                            const qty = originalQty - returnedQty;
+                            if (qty <= 0) return '';
+
                             const mrp = item.originalPrice || item.price || 0;
                             const sellingPrice = item.price ?? 0;
                             const totalSellingPrice = sellingPrice * qty;
                             const totalMrp = mrp * qty;
-                            
+
                             const rules = taxSettings?.gstRules || [];
                             const applicableRule = rules.find(r => sellingPrice >= r.minPrice && sellingPrice <= r.maxPrice);
                             const gstRate = applicableRule ? applicableRule.rate : (sellingPrice <= 2500 ? 5 : 18);
@@ -507,12 +515,12 @@ const OrderDetail = () => {
                             const itemCgst = gstAmount / 2;
                             const itemSgst = gstAmount / 2;
                             const itemIgst = 0;
-                            
+
                             const discount = totalMrp - totalSellingPrice;
-                            
+
                             return `
                                 <tr>
-                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}</td>
+                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}${returnedQty > 0 ? ` <span style="color:#c00;font-size:9px;">(${returnedQty} returned)</span>` : ''}</td>
                                     <td>${item.hsnCode || item.productId?.hsnCode || item.product?.hsnCode || 'N/A'}</td>
                                     <td>${mrp.toFixed(2)}</td>
                                     <td>${qty}</td>
@@ -527,7 +535,7 @@ const OrderDetail = () => {
                                 </tr>
                             `;
                         }).join('')}
-                        
+
                         <tr class="totals-row">
                             <td colspan="8" class="text-right">Total</td>
                             <td>${(() => {
@@ -536,8 +544,9 @@ const OrderDetail = () => {
             const price = item.price ?? 0;
             const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
             const rate = rule ? rule.rate : 5;
-            const taxable = (price * (item.quantity || 1)) / (1 + (rate/100));
-            return sum + ((price * (item.quantity || 1)) - taxable);
+            const q = effectiveQty(item);
+            const taxable = (price * q) / (1 + (rate/100));
+            return sum + ((price * q) - taxable);
         }, 0) : 0;
                                 return (taxAmount / 2).toFixed(2);
                             })()}</td>
@@ -547,8 +556,9 @@ const OrderDetail = () => {
             const price = item.price ?? 0;
             const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
             const rate = rule ? rule.rate : 5;
-            const taxable = (price * (item.quantity || 1)) / (1 + (rate/100));
-            return sum + ((price * (item.quantity || 1)) - taxable);
+            const q = effectiveQty(item);
+            const taxable = (price * q) / (1 + (rate/100));
+            return sum + ((price * q) - taxable);
         }, 0) : 0;
                                 return (taxAmount / 2).toFixed(2);
                             })()}</td>
@@ -568,6 +578,10 @@ const OrderDetail = () => {
 
                     </tbody>
                 </table>
+
+                ${Number(order.returnedAmount || 0) > 0 ? `
+                <p style="font-size: 11px; color: #666; margin: -10px 0 15px;">Note: This invoice reflects the amount payable after excluding ₹${Number(order.returnedAmount).toFixed(2)} worth of returned item(s).</p>
+                ` : ''}
 
                 <div class="footer">
                     <p class="bold" style="color: #000; font-size: 12px; margin-bottom: 5px;">This is a computer generated invoice and does not require a signature.</p>
@@ -741,8 +755,9 @@ const handleViewVendorInvoice = () => {
             const price = item.vendorPrice ?? item.price ?? 0;
             const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
             const rate = rule ? rule.rate : 5;
-            const taxable = (price * (item.quantity || 1)) / (1 + (rate/100));
-            return sum + ((price * (item.quantity || 1)) - taxable);
+            const q = effectiveQty(item);
+            const taxable = (price * q) / (1 + (rate/100));
+            return sum + ((price * q) - taxable);
         }, 0) : 0;
                                 return (taxAmount / 2).toFixed(2);
                             })()}</td>
@@ -752,8 +767,9 @@ const handleViewVendorInvoice = () => {
             const price = item.vendorPrice ?? item.price ?? 0;
             const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
             const rate = rule ? rule.rate : 5;
-            const taxable = (price * (item.quantity || 1)) / (1 + (rate/100));
-            return sum + ((price * (item.quantity || 1)) - taxable);
+            const q = effectiveQty(item);
+            const taxable = (price * q) / (1 + (rate/100));
+            return sum + ((price * q) - taxable);
         }, 0) : 0;
                                 return (taxAmount / 2).toFixed(2);
                             })()}</td>

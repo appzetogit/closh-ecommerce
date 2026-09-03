@@ -65,12 +65,18 @@ const Invoice = () => {
     let totalSellingPriceSum = 0;
 
     const itemsHtml = items.map(item => {
-      const qty = item.quantity || 1;
+      // Exclude units already returned via a completed Return Request so the
+      // invoice always shows the actual amount payable, not the original order value.
+      const originalQty = item.quantity || 1;
+      const returnedQty = Math.min(Number(item.returnedQuantity || 0), originalQty);
+      const qty = originalQty - returnedQty;
+      if (qty <= 0) return null;
+
       const mrp = item.originalPrice || item.price || 0;
       const sellingPrice = item.price || 0;
       const totalSellingPrice = sellingPrice * qty;
       const totalMrp = mrp * qty;
-      
+
       const gstRate = sellingPrice <= 2500 ? 5 : 18;
       const cgstRate = gstRate / 2;
       const sgstRate = gstRate / 2;
@@ -84,7 +90,7 @@ const Invoice = () => {
           itemCgst = gstAmount / 2;
           itemSgst = gstAmount / 2;
       }
-      
+
       const calculatedTaxableValue = totalSellingPrice - (itemCgst + itemSgst + itemIgst);
       const discount = totalMrp - totalSellingPrice;
 
@@ -98,7 +104,7 @@ const Invoice = () => {
 
       return `
         <tr>
-            <td class="text-left">${item.name} ${item.selectedSize ? `(${item.selectedSize})` : (item.variant && Object.keys(item.variant).length > 0 ? `(${Object.values(item.variant).join(', ')})` : '')}</td>
+            <td class="text-left">${item.name} ${item.selectedSize ? `(${item.selectedSize})` : (item.variant && Object.keys(item.variant).length > 0 ? `(${Object.values(item.variant).join(', ')})` : '')}${returnedQty > 0 ? ` <span style="color:#c00;font-size:9px;">(${returnedQty} returned)</span>` : ''}</td>
             <td>${item.hsnCode || item.productId?.hsnCode || item.product?.hsnCode || 'N/A'}</td>
             <td>${mrp.toFixed(2)}</td>
             <td>${qty}</td>
@@ -111,7 +117,7 @@ const Invoice = () => {
             <td>${totalSellingPrice.toFixed(2)}</td>
         </tr>
       `;
-    }).join('');
+    }).filter(Boolean).join('');
 
     // Platform Services Invoice calculations
     const shipping = order.shipping || 0;
@@ -289,6 +295,10 @@ const Invoice = () => {
                   </tr>
               </tbody>
           </table>
+
+          ${Number(order.returnedAmount || 0) > 0 ? `
+          <p style="font-size: 11px; color: #666; margin: -10px 0 15px;">Note: This invoice reflects the amount payable after excluding ₹${Number(order.returnedAmount).toFixed(2)} worth of returned item(s).</p>
+          ` : ''}
 
           <div class="footer">
               <p class="bold" style="color: #000; font-size: 12px; margin-bottom: 5px;">This is a computer generated invoice and does not require a signature.</p>
