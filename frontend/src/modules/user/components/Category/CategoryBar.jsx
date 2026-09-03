@@ -57,33 +57,46 @@ const CategoryBar = () => {
             initial={false}
             animate={{ background: currentGradient }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
-            className="w-full pb-0.5 pt-0 border-b border-gray-100"
+            className="w-full pt-1.5 pb-0 border-b border-gray-100"
         >
             <div 
                 ref={scrollRef}
-                className="flex overflow-x-auto scrollbar-hide gap-4 md:gap-10 px-4 md:px-8 py-2 items-center"
+                className="flex overflow-x-auto scrollbar-hide gap-1.5 sm:gap-3 md:gap-6 px-3 sm:px-6 md:px-8 items-end"
             >
                 {rootCategories.map((cat) => {
-                    const isSelected = activeCategory === cat.name;
+                    const isSelected = activeCategory === cat.name || 
+                        ((activeCategory === 'All' || activeCategory === 'CLOSH') && (cat.name === 'CLOSH' || cat.name === 'All'));
+                    
                     return (
                         <button
                             key={cat._id || cat.id}
                             onClick={() => handleCategoryClick(cat)}
-                            className="flex flex-col items-center flex-shrink-0 group transition-all"
+                            className="relative flex flex-col items-center flex-shrink-0 group px-3 sm:px-4 md:px-5 pt-2 pb-2 focus:outline-none transition-all"
                         >
-                            <div className={`w-14 h-14 md:w-16 md:h-16 rounded-full p-[2px] transition-all duration-300 ${isSelected ? 'bg-blue-900' : 'bg-transparent'}`}>
-                                <div className="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center p-0.5 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
-                                    <img
-                                        src={cat.image || "https://via.placeholder.com/150"}
-                                        alt={cat.name}
-                                        className={`w-full h-full object-cover rounded-full transition-transform duration-500 ${isSelected ? 'scale-105' : 'group-hover:scale-105'}`}
-                                        onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=' + cat.name }}
-                                    />
+                            {/* Arched / Oval White Active Tab Background */}
+                            {isSelected && (
+                                <motion.div
+                                    layoutId="activeCategoryArch"
+                                    className="absolute inset-0 bg-white rounded-t-full shadow-[0_-2px_10px_rgba(0,0,0,0.04)] z-0"
+                                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                                />
+                            )}
+
+                            <div className="relative z-10 flex flex-col items-center">
+                                <div className="w-13 h-13 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full p-[2px] transition-transform duration-300 group-hover:scale-105">
+                                    <div className="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+                                        <img
+                                            src={cat.image || "https://via.placeholder.com/150"}
+                                            alt={cat.name}
+                                            className={`w-full h-full object-cover rounded-full transition-transform duration-300 ${isSelected ? 'scale-105' : ''}`}
+                                            onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=' + encodeURIComponent(cat.name) }}
+                                        />
+                                    </div>
                                 </div>
+                                <span className={`text-[11px] md:text-[12px] mt-1.5 transition-colors duration-200 tracking-tight ${isSelected ? 'font-bold text-gray-900' : 'font-semibold text-gray-600 group-hover:text-gray-900'}`}>
+                                    {cat.name}
+                                </span>
                             </div>
-                            <span className={`text-[11px] md:text-[12px] mt-1.5 font-bold transition-all ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>
-                                {cat.name}
-                            </span>
                         </button>
                     );
                 })}
