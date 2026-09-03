@@ -10,8 +10,10 @@ import { ApiResponse } from '../../../utils/ApiResponse.js';
 import { asyncHandler } from '../../../utils/asyncHandler.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
+import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import { assertRiderIsFree, markRiderBusy } from '../../../services/deliveryAvailability.service.js';
+import { emitEvent } from '../../../services/socket.service.js';
 
 const enrichReturnItems = (request) => {
     const orderItems = Array.isArray(request?.orderId?.items) ? request.orderId.items : [];
@@ -362,7 +364,7 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     }
                 }
 
-                if (status === 'completed') {
+                if (status === 'completed' && currentStatus !== 'completed') {
                     const stockRestores = (request.items || []).map(async (item) => {
                         const qty = Number(item?.quantity || 0);
                         if (!item?.productId || qty <= 0) return;
@@ -370,7 +372,7 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                         if (!product) return;
 
                         product.stockQuantity += qty;
-                        
+
                         // Handle variant stock
                         const size = item.selectedSize || item.variant?.size || (item.variant && Object.values(item.variant)[0]);
                         if (size && product.variants?.stockMap && product.variants.stockMap.has(size)) {
@@ -384,9 +386,14 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                         await product.save();
                     });
                     await Promise.all(stockRestores);
-                    
+
                     // Reverse vendor earnings and commission
                     await WalletService.processOrderReturn(request);
+
+                    // Stamp returned quantities/amount onto the order so invoices
+                    // (admin/user/vendor) show the actual amount payable after this return.
+                    applyReturnToOrder(order, request);
+                    await order.save();
                 }
             }
         }

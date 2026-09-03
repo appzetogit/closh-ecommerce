@@ -13,6 +13,7 @@ import Vendor from '../../../models/Vendor.model.js';
 import Address from '../../../models/Address.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
+import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
 
 const enrichReturnItems = (request) => {
     const orderItems = Array.isArray(request?.orderId?.items) ? request.orderId.items : [];
@@ -192,6 +193,7 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
         .populate('orderId', 'orderId total items vendorItems status paymentStatus');
     if (!request) throw new ApiError(404, 'Return request not found.');
 
+    const previousStatus = request.status;
     const nextStatus = status || request.status;
     const nextRefundStatus = refundStatus || request.refundStatus;
     const nextRejectionReason = rejectionReason !== undefined
@@ -221,7 +223,7 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
     if (status !== 'rejected' && request.rejectionReason) request.rejectionReason = '';
 
     // If status is approved, setup the delivery task
-    if (status === 'approved' && request.status !== 'approved') {
+    if (status === 'approved' && previousStatus !== 'approved') {
         const vendor = await Vendor.findById(request.vendorId);
         const order = await Order.findById(request.orderId);
 
@@ -297,7 +299,7 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                 // Do not prematurely set order status to 'returned' upon approval
                 // It will be set when the return is actually 'completed'
 
-                if (status === 'completed') {
+                if (status === 'completed' && previousStatus !== 'completed') {
                     const stockRestores = (request.items || []).map(async (item) => {
                         const qty = Number(item?.quantity || 0);
                         const variantKey = item?.selectedSize || item?.variant?.size || item?.variantKey || (item?.variant && Object.values(item.variant)[0]);
@@ -324,6 +326,10 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                     // Reverse vendor earnings and commission
                     await WalletService.processOrderReturn(request);
 
+                    // Stamp returned quantities/amount onto the order so invoices
+                    // (admin/user/vendor) show the actual amount payable after this return.
+                    applyReturnToOrder(order, request);
+
                     // Mark full order returned/refunded only when every vendor in this order completed returns.
                     const completedReturns = await ReturnRequest.find({
                         orderId: order._id,
@@ -343,8 +349,9 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                             order.status = 'returned';
                         }
                         order.paymentStatus = 'refunded';
-                        await order.save();
                     }
+
+                    await order.save();
                 }
             }
         }

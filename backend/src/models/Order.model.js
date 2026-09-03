@@ -27,6 +27,10 @@ const orderItemSchema = new mongoose.Schema({
     variant: { type: mongoose.Schema.Types.Mixed, default: {} },
     variantKey: String,
     hasSpecificVariantStock: { type: Boolean, default: false },
+    // Units of this line that have gone through a completed ReturnRequest.
+    // Kept in sync by applyReturnToOrder() so invoices always show the actual
+    // payable quantity/amount instead of the originally purchased one.
+    returnedQuantity: { type: Number, default: 0 },
 });
 
 const vendorItemGroupSchema = new mongoose.Schema({
@@ -260,6 +264,11 @@ const orderSchema = new mongoose.Schema(
         total: { type: Number, default: 0 },
         couponCode: { type: String },
         couponDiscount: { type: Number, default: 0 },
+        // Sum of item.price * quantity for every unit returned across all completed
+        // ReturnRequests on this order. `total` stays the original order value (used
+        // by analytics/settlement); this is the running deduction used by invoices
+        // to show the actual amount payable after returns.
+        returnedAmount: { type: Number, default: 0 },
         idempotencyKey: { type: String, sparse: true },
         idempotencyScope: { type: String, sparse: true },
         trackingNumber: { type: String, unique: true, sparse: true },
