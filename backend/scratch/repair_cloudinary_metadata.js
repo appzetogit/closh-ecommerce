@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
@@ -7,9 +8,9 @@ import { v2 as cloudinary } from 'cloudinary';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 cloudinary.config({
-    cloud_name: 'qtthyytk',
-    api_key: '395275689762367',
-    api_secret: 'qEr5zKjniIuWSSoN0aFqZuKeInE',
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 const PUBLIC_BASE_URL = 'https://api.closh.in';
