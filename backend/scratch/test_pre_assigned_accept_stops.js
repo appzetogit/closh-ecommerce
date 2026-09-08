@@ -1,10 +1,11 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 import Order from '../src/models/Order.model.js';
 import DeliveryBoy from '../src/models/DeliveryBoy.model.js';
 import DeliveryBatch from '../src/models/DeliveryBatch.model.js';
 import Vendor from '../src/models/Vendor.model.js'; // Import Vendor model so it registers
 
-const MONGO_URI = "mongodb://sagarchouhan7609_db_user:KFEVeH7lz1eXUVm2@ac-rl5zlnj-shard-00-00.ongvntq.mongodb.net:27017,ac-rl5zlnj-shard-00-01.ongvntq.mongodb.net:27017,ac-rl5zlnj-shard-00-02.ongvntq.mongodb.net:27017/clothify?ssl=true&replicaSet=atlas-13vyk9-shard-0&authSource=admin&retryWrites=true&w=majority";
+const MONGO_URI = process.env.MONGO_URI;
 
 async function run() {
     await mongoose.connect(MONGO_URI);
