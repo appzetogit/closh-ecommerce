@@ -13,9 +13,9 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 // assets (qtthyytk) — NOT necessarily what's active in .env right now, since
 // .env may be pointed at a different account for future uploads.
 cloudinary.config({
-    cloud_name: 'qtthyytk',
-    api_key: '395275689762367',
-    api_secret: 'qEr5zKjniIuWSSoN0aFqZuKeInE',
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 const PUBLIC_BASE_URL = 'https://api.closh.in';

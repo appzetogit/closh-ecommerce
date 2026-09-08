@@ -1,5 +1,6 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
-const uri = 'mongodb+srv://closhcommerce_db_user:closhcommerce_db_user@closh.2zob2g5.mongodb.net/?appName=Closh';
+const uri = process.env.MONGO_URI;
 mongoose.connect(uri)
   .then(async () => {
     const Product = mongoose.connection.collection('products');

@@ -764,54 +764,137 @@ export const placeOrder = asyncHandler(async (req, res) => {
     );
 });
 
+// Constant-time comparison of the two hex digests. A plain `!==` leaks timing
+// information; length is checked first because timingSafeEqual throws on
+// mismatched buffer sizes.
+const signaturesMatch = (expected, provided) => {
+    const expectedBuf = Buffer.from(String(expected || ''), 'utf8');
+    const providedBuf = Buffer.from(String(provided || ''), 'utf8');
+    if (expectedBuf.length !== providedBuf.length) return false;
+    return crypto.timingSafeEqual(expectedBuf, providedBuf);
+};
+
 // POST /api/user/orders/verify-payment
 export const verifyPayment = asyncHandler(async (req, res) => {
     const { orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
 
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+    if (!orderId || !razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
         throw new ApiError(400, "Missing payment verification details.");
     }
 
-    const order = await Order.findOne({ orderId });
+    const userId = req.user?._id || req.user?.id;
+
+    // Scope the lookup to the caller: one customer must never be able to move
+    // another account's order to 'paid'.
+    const order = await Order.findOne({ orderId, userId });
     if (!order) throw new ApiError(404, "Order not found.");
 
-    // Verify signature
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    hmac.update(razorpayOrderId + "|" + razorpayPaymentId);
-    const generatedSignature = hmac.digest('hex');
+    // Idempotent replay: the client retries this endpoint after a dropped
+    // response, and Razorpay's handler can fire more than once. Re-running the
+    // block below would re-notify every vendor and re-assign a rider.
+    if (order.paymentStatus === 'paid') {
+        if (order.razorpayPaymentId && order.razorpayPaymentId !== razorpayPaymentId) {
+            throw new ApiError(409, "This order was already paid with a different payment.");
+        }
+        return res.status(200).json(
+            new ApiResponse(200, { orderId: order.orderId, alreadyVerified: true }, "Payment already verified.")
+        );
+    }
 
-    if (generatedSignature !== razorpaySignature) {
+    // SECURITY: the signature only proves Razorpay accepted `razorpayPaymentId`
+    // for `razorpayOrderId` — it says nothing about *which* of our orders that
+    // is. Without this binding, a valid signature from a cheap order the caller
+    // genuinely paid for can be replayed against any other order. The Razorpay
+    // order was created server-side in placeOrder() with amount = order.total,
+    // so binding to it also binds the amount.
+    if (!order.razorpayOrderId) {
+        throw new ApiError(400, "No online payment was initiated for this order.");
+    }
+    if (order.razorpayOrderId !== razorpayOrderId) {
+        console.error(
+            `[Payment] Razorpay order mismatch on ${order.orderId}: expected ${order.razorpayOrderId}, got ${razorpayOrderId}`
+        );
+        throw new ApiError(400, "Payment does not belong to this order.");
+    }
+
+    // Verify signature
+    const expectedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
+
+    if (!signaturesMatch(expectedSignature, razorpaySignature)) {
+        // Only reachable once razorpayOrderId matches this order, so failing the
+        // order here cannot be used to poison an unrelated one.
         order.paymentStatus = 'failed';
         await order.save();
         throw new ApiError(400, "Invalid payment signature. Payment verification failed.");
     }
 
-    // Update order status
-    order.paymentStatus = 'paid';
-    order.razorpayPaymentId = razorpayPaymentId;
-    order.razorpaySignature = razorpaySignature;
+    // Defence in depth: ask Razorpay what it actually holds for this payment.
+    // The signature above is already conclusive, so a gateway or network failure
+    // must not block a paying customer — but a payment that contradicts this
+    // order (wrong order, short amount, not captured) is rejected outright.
+    try {
+        const razorpay = getRazorpayInstance();
+        if (razorpay) {
+            const payment = await razorpay.payments.fetch(razorpayPaymentId);
+            const expectedAmountPaise = Math.round(Number(order.total) * 100);
 
-    // Auto-confirm order if it was pending
-    if (order.status === 'pending') {
-        order.status = 'pending'; // Keep as pending, but mark as paid
+            if (payment?.order_id !== razorpayOrderId) {
+                throw new ApiError(400, "Payment does not belong to this order.");
+            }
+            if (!['captured', 'authorized'].includes(payment?.status)) {
+                throw new ApiError(400, `Payment is not complete (status: ${payment?.status || 'unknown'}).`);
+            }
+            if (Number(payment?.amount) < expectedAmountPaise) {
+                console.error(
+                    `[Payment] Amount short on ${order.orderId}: paid ${payment?.amount}, expected ${expectedAmountPaise}`
+                );
+                throw new ApiError(400, "Paid amount does not match the order total.");
+            }
+        }
+    } catch (fetchError) {
+        if (fetchError instanceof ApiError) throw fetchError;
+        console.warn(
+            `[Payment] Could not re-fetch ${razorpayPaymentId} from Razorpay (${fetchError?.message}). Proceeding on the verified signature.`
+        );
     }
 
-    await order.save();
+    // Claim the order atomically so two concurrent verifications can't both run
+    // the notification / auto-assignment side effects below.
+    const claimed = await Order.findOneAndUpdate(
+        { _id: order._id, paymentStatus: { $ne: 'paid' } },
+        {
+            $set: {
+                paymentStatus: 'paid',
+                razorpayPaymentId,
+                razorpaySignature,
+            },
+        },
+        { new: true }
+    );
+
+    if (!claimed) {
+        return res.status(200).json(
+            new ApiResponse(200, { orderId: order.orderId, alreadyVerified: true }, "Payment already verified.")
+        );
+    }
 
     // Trigger notification and auto assignment for prepaid order after payment succeeds
-    OrderNotificationService.notifyOrderUpdate(order._id, 'pending', {
-        excludeRecipientId: req.user?._id || req.user?.id,
+    OrderNotificationService.notifyOrderUpdate(claimed._id, 'pending', {
+        excludeRecipientId: userId,
         title: 'New Order Received!',
-        message: `You have a new ${order.orderType?.replace(/_/g, ' ') || 'order'} of Rs.${order.total}.`
+        message: `You have a new ${claimed.orderType?.replace(/_/g, ' ') || 'order'} of Rs.${claimed.total}.`
     }).catch(err => console.error('[OrderDebug] Notification failed in verifyPayment:', err));
 
-    autoAssignDeliveryBoy(order._id).catch(err => {
+    autoAssignDeliveryBoy(claimed._id).catch(err => {
         console.error("[AutoAssign Error in verifyPayment]", err);
     });
-    QueueService.scheduleAdminEscalation(order._id);
-    QueueService.scheduleUserNoPartnerNotification(order._id);
+    QueueService.scheduleAdminEscalation(claimed._id);
+    QueueService.scheduleUserNoPartnerNotification(claimed._id);
 
-    res.status(200).json(new ApiResponse(200, { orderId: order.orderId }, "Payment verified successfully."));
+    res.status(200).json(new ApiResponse(200, { orderId: claimed.orderId }, "Payment verified successfully."));
 });
 
 // GET /api/user/orders
