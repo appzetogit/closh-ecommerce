@@ -64,8 +64,8 @@ const HeroSection = () => {
 
     return (
         <section className={`w-full bg-gradient-to-b ${currentHeroBg} transition-colors duration-700`}>
-            <div className="max-w-[1600px] mx-auto px-0 md:px-6 lg:px-8 py-0 md:py-4">
-                <div className="relative h-[160px] sm:h-[180px] md:h-[260px] lg:h-[300px] w-full overflow-hidden rounded-none md:rounded-[24px] shadow-lg group">
+            <div className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-2 md:py-4">
+                <div className="relative h-[200px] sm:h-[220px] md:h-[280px] lg:h-[320px] w-full overflow-hidden rounded-2xl md:rounded-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.12)] group">
                     
                     {/* Main Banner Slider */}
                     {slides.map((banner, index) => (
@@ -132,12 +132,12 @@ const HeroSection = () => {
                     ))}
 
                     {/* Minimal Dots (Bottom Right) */}
-                    <div className="absolute bottom-4 right-6 z-30 flex items-center gap-1.5">
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5">
                         {slides.map((_, index) => (
                             <button
                                 key={index}
                                 onClick={() => setCurrentSlide(index)}
-                                className={`h-1.5 rounded-full transition-all duration-500 ${index === currentSlide ? 'w-8 bg-white' : 'w-2 bg-white/30 hover:bg-white/50'}`}
+                                className={`h-1.5 rounded-full transition-all duration-500 ${index === currentSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'}`}
                             />
                         ))}
                     </div>

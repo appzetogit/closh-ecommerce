@@ -147,16 +147,24 @@ dist
 src/config/*.json
 
 
-backend/*test*.js
-backend/debug_*.js
-backend/check*.js
-backend/find*.js
-backend/seed*.js
-backend/get_token.js
-backend/create-admin.js
-backend/fix_category_images.js
-backend/send-test-push.js
-backend/broadcast-test.js
+# Local debug / scratch scripts. These are written against a live database and
+# have repeatedly been committed with inline connection strings, so keep them
+# out of the repo. Paths are relative to this file (backend/), not the repo root.
+*test*.js
+*test*.cjs
+debug_*.js
+check*.js
+find*.js
+seed*.js
+scratch_*.js
+get_token.js
+create-admin.js
+fix_category_images.js
+send-test-push.js
+broadcast-test.js
+
+# ...but the real test suite under src/ is not debris.
+!src/**/*.test.js
 
 # User-uploaded/migrated media (deployed to the VPS directly, not via git)
 uploads/

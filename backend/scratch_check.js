@@ -1,10 +1,11 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Order } from './src/models/Order.model.js';
 import Commission from './src/models/Commission.model.js';
 
 async function check() {
     try {
-        await mongoose.connect('mongodb+srv://mayurchadokar14_db_user:sORqnMJxbSjnstzY@cluster0.ueig0du.mongodb.net/clouse');
+        await mongoose.connect(process.env.MONGO_URI);
         const order = await Order.findOne({ orderId: 'ORD-260707-PKFK' });
         console.log("Order found:", order ? {
             orderId: order.orderId,
