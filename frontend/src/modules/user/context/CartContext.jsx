@@ -48,6 +48,7 @@ export const CartProvider = ({ children }) => {
             vendorId: product.vendorId?._id || product.vendorId || 1,
             vendorName: product.vendorId?.storeName || product.vendorName || 'Store',
             stockQuantity: product.stockQuantity || product.stock,
+            tryAndBuyEnabled: product.tryAndBuyEnabled !== false,
             variants: product.variants,
             variant: {
                 ...(product.variant || {}),

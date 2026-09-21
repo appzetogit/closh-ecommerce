@@ -22,6 +22,7 @@ export const createProductSchema = Joi.object({
     minimumOrderQuantity: Joi.number().integer().min(0).allow(null).optional(),
     warrantyPeriod: Joi.string().allow('', null).optional(),
     guaranteePeriod: Joi.string().allow('', null).optional(),
+    tryAndBuyEnabled: Joi.boolean().optional(),
     productCode: Joi.string().trim().uppercase().max(64).allow('', null).optional().messages({
         'string.max': 'Product code cannot exceed 64 characters.',
     }),
@@ -87,6 +88,7 @@ export const updateProductSchema = Joi.object({
     minimumOrderQuantity: Joi.number().integer().min(0).allow(null).optional(),
     warrantyPeriod: Joi.string().allow('', null).optional(),
     guaranteePeriod: Joi.string().allow('', null).optional(),
+    tryAndBuyEnabled: Joi.boolean().optional(),
     productCode: Joi.string().trim().uppercase().max(64).allow('', null).optional().messages({
         'string.max': 'Product code cannot exceed 64 characters.',
     }),

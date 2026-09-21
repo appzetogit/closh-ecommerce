@@ -54,6 +54,7 @@ const productBaseSchema = {
     warrantyPeriod: Joi.string().allow('').optional(),
     guaranteePeriod: Joi.string().allow('').optional(),
     division: Joi.string().valid('Men', 'Women', 'Boys', 'Girls', 'Kids', 'Unisex').optional(),
+    tryAndBuyEnabled: Joi.boolean().optional(),
     productCode: Joi.string().trim().uppercase().max(64).allow('', null).optional().messages({
         'string.max': 'Product code cannot exceed 64 characters.',
     }),

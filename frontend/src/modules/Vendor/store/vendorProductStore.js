@@ -176,6 +176,32 @@ export const useVendorProductStore = create((set, get) => ({
      * @param {number} stockQuantity
      * @returns {boolean} success
      */
+    /**
+     * Turn Try & Buy on or off for one product. The API treats this as
+     * operational (like stock), so it goes live without admin approval.
+     * @param {string} productId
+     * @param {boolean} enabled
+     * @returns {boolean} success
+     */
+    patchTryAndBuy: async (productId, enabled) => {
+        set({ isSaving: true });
+        try {
+            const res = await updateVendorProduct(productId, { tryAndBuyEnabled: enabled });
+            const updated = res.data ?? res;
+            set((state) => ({
+                products: state.products.map((p) =>
+                    (p._id ?? p.id) === productId ? { ...p, ...updated, tryAndBuyEnabled: enabled } : p
+                ),
+                isSaving: false,
+            }));
+            toast.success(enabled ? 'Try & Buy enabled' : 'Try & Buy turned off — Check & Buy only');
+            return true;
+        } catch {
+            set({ isSaving: false });
+            return false;
+        }
+    },
+
     patchStock: async (productId, stockQuantity) => {
         set({ isSaving: true });
         try {

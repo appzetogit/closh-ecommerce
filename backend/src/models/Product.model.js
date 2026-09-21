@@ -61,6 +61,11 @@ const productSchema = new mongoose.Schema(
         isVisible: { type: Boolean, default: true },
         codAllowed: { type: Boolean, default: true },
         returnable: { type: Boolean, default: true },
+        // Whether this product may be bought through Try & Buy, where the
+        // rider waits while the customer tries it on. Off for things that
+        // cannot be tried at the door (innerwear, for example) — those stay
+        // Check & Buy only. Enforced in placeOrder, not just in the UI.
+        tryAndBuyEnabled: { type: Boolean, default: true, index: true },
         cancelable: { type: Boolean, default: true },
         taxIncluded: { type: Boolean, default: false },
         warrantyPeriod: { type: String },

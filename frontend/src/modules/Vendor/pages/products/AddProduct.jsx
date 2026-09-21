@@ -43,6 +43,7 @@ const AddProduct = () => {
     brandId: null,
     division: "Unisex",
     productCode: "",
+    tryAndBuyEnabled: true,
     stock: "in_stock",
     stockQuantity: "",
     totalAllowedQuantity: "",
@@ -1391,6 +1392,22 @@ const AddProduct = () => {
             Product Options
           </h2>
           <div className="space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="tryAndBuyEnabled"
+                checked={formData.tryAndBuyEnabled !== false}
+                onChange={handleChange}
+                className="w-4 h-4 mt-0.5 text-primary-600 rounded focus:ring-primary-500"
+              />
+              <span className="text-xs font-semibold text-gray-700">
+                Available for Try &amp; Buy
+                <span className="block text-[10px] font-normal text-gray-500">
+                  Uncheck for items that cannot be tried on at the door, such as
+                  innerwear. Those stay Check &amp; Buy only.
+                </span>
+              </span>
+            </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

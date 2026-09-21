@@ -44,6 +44,8 @@ const CheckoutPage = () => {
         return sessionStorage.getItem('checkout-delivery-type') || 'try_and_buy';
     });
     const [showServiceInfo, setShowServiceInfo] = useState(false);
+    // Names of cart products the vendor has excluded from Try & Buy.
+    const [noTryAndBuyItems, setNoTryAndBuyItems] = useState([]);
 
     // Promo Code States
     const [promoCode, setPromoCode] = useState('');
@@ -54,6 +56,43 @@ const CheckoutPage = () => {
     const [upsellProducts, setUpsellProducts] = useState([]);
     const [isUpsellLoading, setIsUpsellLoading] = useState(true);
     const [zoomedImage, setZoomedImage] = useState(null);
+
+    // Some products can't be tried at the door (innerwear and similar), so the
+    // vendor marks them Check & Buy only. Read the flag from the catalogue
+    // rather than the cart line: a cart saved before this existed has no flag,
+    // and the vendor can flip it after the item was added.
+    useEffect(() => {
+        const ids = [...new Set(cart.map((i) => i.id).filter(Boolean))];
+        if (ids.length === 0) {
+            setNoTryAndBuyItems([]);
+            return undefined;
+        }
+        let cancelled = false;
+        api.get('/products', { params: { ids: ids.join(','), limit: ids.length } })
+            .then((res) => {
+                const payload = res?.data || res;
+                const list = payload?.products || payload?.data?.products || [];
+                const blocked = list
+                    .filter((p) => p.tryAndBuyEnabled === false)
+                    .map((p) => p.name)
+                    .filter(Boolean);
+                if (!cancelled) setNoTryAndBuyItems(blocked);
+            })
+            .catch(() => {
+                // Leave the choice open on a lookup failure; placeOrder still
+                // rejects an ineligible Try & Buy order with a clear message.
+                if (!cancelled) setNoTryAndBuyItems([]);
+            });
+        return () => { cancelled = true; };
+    }, [cart]);
+
+    const tryAndBuyBlocked = noTryAndBuyItems.length > 0;
+
+    useEffect(() => {
+        if (tryAndBuyBlocked && deliveryType === 'try_and_buy') {
+            setDeliveryType('check_and_buy');
+        }
+    }, [tryAndBuyBlocked, deliveryType]);
 
     // Persist delivery type selection so it survives back-navigation from payment page
     useEffect(() => {
@@ -381,18 +420,21 @@ const CheckoutPage = () => {
                         </div>
                         {/* Service type options — always show both options */}
                         <div className="grid grid-cols-2 gap-3">
-                            {/* Try & Buy — always visible */}
-                            <label className="relative cursor-pointer">
+                            {/* Try & Buy — unavailable when the cart holds an excluded item */}
+                            <label className={tryAndBuyBlocked ? 'relative cursor-not-allowed' : 'relative cursor-pointer'}>
                                 <input
                                     type="radio"
                                     name="deliveryType"
                                     className="peer hidden"
+                                    disabled={tryAndBuyBlocked}
                                     checked={deliveryType === 'try_and_buy'}
-                                    onChange={() => setDeliveryType('try_and_buy')}
+                                    onChange={() => !tryAndBuyBlocked && setDeliveryType('try_and_buy')}
                                 />
-                                <div className="p-2 rounded-xl border-2 border-gray-100 peer-checked:border-black peer-checked:bg-white transition-all h-full text-center">
-                                    <span className="text-[9px] font-bold uppercase block mb-1 text-[#9F1239]">Try & Buy</span>
-                                    <p className="text-[7px] font-bold text-gray-400 leading-tight">Try at door</p>
+                                <div className={`p-2 rounded-xl border-2 transition-all h-full text-center ${tryAndBuyBlocked ? 'border-gray-100 bg-gray-50 opacity-50' : 'border-gray-100 peer-checked:border-black peer-checked:bg-white'}`}>
+                                    <span className="text-[9px] font-bold uppercase block mb-1 text-[#9F1239]">Try &amp; Buy</span>
+                                    <p className="text-[7px] font-bold text-gray-400 leading-tight">
+                                        {tryAndBuyBlocked ? 'Not for these items' : 'Try at door'}
+                                    </p>
                                 </div>
                             </label>
                             {/* Check & Buy — always visible */}
@@ -410,6 +452,20 @@ const CheckoutPage = () => {
                                 </div>
                             </label>
                         </div>
+
+                        {tryAndBuyBlocked && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2.5 mt-2">
+                                <ShieldCheck size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                                <div className="text-left">
+                                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-wide">Check &amp; Buy only</p>
+                                    <p className="text-[9px] font-bold text-amber-700 leading-relaxed mt-0.5">
+                                        {noTryAndBuyItems.length === 1
+                                            ? `"${noTryAndBuyItems[0]}" cannot be tried at the door, so this order is Check & Buy.`
+                                            : `${noTryAndBuyItems.length} items in your cart cannot be tried at the door, so this order is Check & Buy.`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Info banners */}
                         {false && isMultiVendor && (

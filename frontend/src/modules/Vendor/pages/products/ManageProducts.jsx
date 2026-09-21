@@ -17,7 +17,7 @@ import toast from "react-hot-toast";
 const ManageProducts = () => {
   const navigate = useNavigate();
   const { vendor } = useVendorAuthStore();
-  const { products, isLoading, fetchProducts, removeProduct } = useVendorProductStore();
+  const { products, isLoading, fetchProducts, removeProduct, patchTryAndBuy } = useVendorProductStore();
   const { categories, initialize: initCategories } = useCategoryStore();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,6 +160,32 @@ const ManageProducts = () => {
           {vendor?.isOnline !== false ? "STORE ONLINE" : "STORE OFFLINE"}
         </Badge>
       ),
+    },
+    {
+      key: "tryAndBuyEnabled",
+      label: "Try & Buy",
+      sortable: true,
+      render: (value, row) => {
+        // Default on: products predating this switch stay eligible.
+        const enabled = value !== false;
+        return (
+          <button
+            type="button"
+            title={enabled
+              ? "Customers can try this at the door. Turn off for items that cannot be tried on, e.g. innerwear."
+              : "Check & Buy only — this product is hidden from Try & Buy orders."}
+            onClick={(e) => {
+              e.stopPropagation();
+              patchTryAndBuy(row._id ?? row.id, !enabled);
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 ${enabled ? "bg-emerald-500" : "bg-gray-300"}`}
+            aria-pressed={enabled}
+            aria-label={enabled ? "Try & Buy enabled" : "Try & Buy disabled"}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        );
+      },
     },
     {
       key: "actions",

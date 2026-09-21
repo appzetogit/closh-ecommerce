@@ -50,7 +50,7 @@ const ProductCard = ({ product }) => {
                             </div>
                         ) : (
                                 <div className="absolute bottom-0 left-0 bg-[#000033] text-white text-[9px] md:text-[11px] font-black px-3 py-0.5 rounded-tr-lg z-20 shadow-lg border-t border-r border-white/10 uppercase tracking-wider">
-                                    Try & Buy
+                                    {product.tryAndBuyEnabled === false ? 'Check & Buy' : 'Try & Buy'}
                                 </div>
                             )}
                     </div>

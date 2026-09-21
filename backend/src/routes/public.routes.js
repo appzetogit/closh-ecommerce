@@ -332,7 +332,7 @@ const listProducts = asyncHandler(async (req, res) => {
     }
 
     let products = await Product.find(filter)
-        .select('name slug price originalPrice image images categoryId brandId vendorId stock stockQuantity rating reviewCount isActive isVisible flashSale isNewArrival discount variants division productCode')
+        .select('name slug price originalPrice image images categoryId brandId vendorId stock stockQuantity rating reviewCount isActive isVisible flashSale isNewArrival discount variants division productCode tryAndBuyEnabled')
         .populate('categoryId', 'name')
         .populate('brandId', 'name')
         .populate('vendorId', 'storeName isOnline shopLocation')

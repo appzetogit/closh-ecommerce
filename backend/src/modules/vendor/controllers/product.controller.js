@@ -202,6 +202,9 @@ const calculateVariantAggregateStock = (variants = {}) => {
 // exclude-list rather than an allowlist so a schema field nobody thought to
 // list here still gets compared correctly instead of silently dropped.
 const NON_CONTENT_FIELDS = new Set([
+    // tryAndBuyEnabled is an operational switch the vendor flips from the
+    // product list, so it applies live rather than queuing for approval.
+    'tryAndBuyEnabled',
     'stockQuantity', 'lowStockThreshold', 'stock', 'variants',
     '_id', 'id', 'vendorId', 'slug', 'approvalStatus',
     'pendingUpdates', 'hasPendingUpdates', 'createdAt', 'updatedAt', '__v',
@@ -364,6 +367,13 @@ export const updateProduct = asyncHandler(async (req, res) => {
             updates.faqs = sanitizeFaqs(updates.faqs);
         }
 
+        // Applied live, like stock — see NON_CONTENT_FIELDS.
+        let liveToggleChanged = false;
+        if (Object.prototype.hasOwnProperty.call(updates, 'tryAndBuyEnabled')) {
+            product.tryAndBuyEnabled = Boolean(updates.tryAndBuyEnabled);
+            liveToggleChanged = true;
+        }
+
         let liveStockChanged = false;
         if (typeof updates.stockQuantity !== 'undefined' || typeof updates.lowStockThreshold !== 'undefined') {
             const stockQuantity = Number(updates.stockQuantity ?? product.stockQuantity ?? 0);
@@ -396,6 +406,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
         delete updates.lowStockThreshold;
         delete updates.stock;
         delete updates.variants;
+        delete updates.tryAndBuyEnabled;
 
         const needsApproval = hasStagedContentChanges(updates, product);
         if (needsApproval) {
@@ -405,7 +416,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
         await product.save();
 
-        if (liveStockChanged) {
+        if (liveStockChanged || liveToggleChanged) {
             await clearCachePattern('products:list:*');
         }
 
@@ -424,7 +435,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
         return res.status(200).json(new ApiResponse(
             200,
             product,
-            liveStockChanged ? 'Stock updated.' : 'Product updated.'
+            liveStockChanged ? 'Stock updated.' : (liveToggleChanged ? 'Try & Buy availability updated.' : 'Product updated.')
         ));
     }
 

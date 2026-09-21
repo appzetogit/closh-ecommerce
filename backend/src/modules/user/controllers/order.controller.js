@@ -291,6 +291,16 @@ export const placeOrder = asyncHandler(async (req, res) => {
             throw new ApiError(404, `Product not found: ${item.productId}`);
         }
 
+        // Some products cannot be tried at the door (innerwear and the like);
+        // the vendor marks those Check & Buy only. The UI hides Try & Buy for
+        // them, but the order is where it actually has to hold.
+        if (orderType === 'try_and_buy' && productDoc.tryAndBuyEnabled === false) {
+            throw new ApiError(
+                400,
+                `"${productDoc.name}" is not available for Try & Buy. Please switch to Check & Buy or remove it from your cart.`
+            );
+        }
+
         // Check if store is offline
         if (productDoc.vendorId && productDoc.vendorId.isOnline === false) {
             throw new ApiError(400, `The store "${productDoc.vendorId.storeName}" is currently offline. Orders cannot be placed at this time.`);
