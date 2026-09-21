@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const orderItemSchema = new mongoose.Schema({
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', index: true },
+    // Snapshot of Product.productCode at purchase time — the code on the
+    // physical sticker. Kept on the line so it survives later edits to the
+    // catalogue entry.
+    productCode: String,
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', index: true },
     name: String,
     image: String,
@@ -111,6 +115,7 @@ const vendorPickupStopSchema = new mongoose.Schema({
 // ──────────── Delivery Flow (Antigravity Engine) ────────────
 const deliveryFlowItemSchema = new mongoose.Schema({
     productId: { type: mongoose.Schema.Types.ObjectId },
+    productCode: String,
     vendorId: { type: mongoose.Schema.Types.ObjectId },
     name: String,
     image: String,

@@ -492,6 +492,11 @@ const OrderDetail = () => {
                         {formatCurrency(item.price || 0)} x {item.quantity || 1}
                       </p>
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {(item.productCode || item.productId?.productCode) && (
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-900 text-white leading-none tracking-wide">
+                            {item.productCode || item.productId?.productCode}
+                          </span>
+                        )}
                         {formatVariantLabel(item.variant) && (
                           <span className="text-[10px] text-gray-400">
                             {formatVariantLabel(item.variant)}

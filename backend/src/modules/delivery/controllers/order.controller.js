@@ -1524,6 +1524,7 @@ export const handleArrivedAtCustomer = asyncHandler(async (req, res) => {
     if (isSpecializedOrder && (!flow.tryAndBuyItems || flow.tryAndBuyItems.length === 0)) {
         flow.tryAndBuyItems = (order.items || []).map(item => ({
             productId: item.productId,
+            productCode: item.productCode,
             vendorId: item.vendorId,
             name: item.name,
             image: item.image,

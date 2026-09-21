@@ -58,6 +58,8 @@ const ProductFormModal = ({ isOpen, onClose, productId, onSuccess }) => {
     warrantyPeriod: "",
     guaranteePeriod: "",
     hsnCode: "",
+    productCode: "",
+    division: "Unisex",
     flashSale: false,
     isNewArrival: false,
     isFeatured: false,
@@ -321,6 +323,8 @@ const ProductFormModal = ({ isOpen, onClose, productId, onSuccess }) => {
             warrantyPeriod: product.warrantyPeriod || "",
             guaranteePeriod: product.guaranteePeriod || "",
             hsnCode: product.hsnCode || "",
+            productCode: product.productCode || "",
+            division: product.division || "Unisex",
             flashSale: product.flashSale || false,
             isNewArrival: product.isNewArrival || false,
             isFeatured: product.isFeatured || false,
@@ -401,6 +405,8 @@ const ProductFormModal = ({ isOpen, onClose, productId, onSuccess }) => {
         warrantyPeriod: "",
         guaranteePeriod: "",
         hsnCode: "",
+        productCode: "",
+        division: "Unisex",
         flashSale: false,
         isNewArrival: false,
         isFeatured: false,
@@ -1523,6 +1529,42 @@ const ProductFormModal = ({ isOpen, onClose, productId, onSuccess }) => {
                           onChange={handleChange}
                           required
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Product Code
+                        </label>
+                        <input
+                          type="text"
+                          name="productCode"
+                          value={formData.productCode || ""}
+                          onChange={handleChange}
+                          placeholder="Code on the physical sticker, e.g. CLH-1042"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 uppercase"
+                        />
+                        <p className="mt-1 text-[10px] text-gray-500">
+                          Must be unique. Printed on every order line so this exact piece can be matched.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Gender / Division
+                        </label>
+                        <AnimatedSelect
+                          name="division"
+                          value={formData.division || "Unisex"}
+                          onChange={handleChange}
+                          options={[
+                            { value: "Men", label: "Men" },
+                            { value: "Women", label: "Women" },
+                            { value: "Boys", label: "Boys" },
+                            { value: "Girls", label: "Girls" },
+                            { value: "Kids", label: "Kids (shows to Boys + Girls)" },
+                            { value: "Unisex", label: "Unisex (shows to Men + Women)" },
+                          ]}
                         />
                       </div>
 

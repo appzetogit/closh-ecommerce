@@ -865,6 +865,11 @@ const OrderDetailsPage = () => {
                                                 <span className="bg-gray-50 px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold text-gray-600 border border-gray-100 uppercase">
                                                     Size: {item.selectedSize || item.variant?.size || 'N/A'}
                                                 </span>
+                                                {(item.productCode || item.productId?.productCode) && (
+                                                    <span className="bg-gray-900 text-white px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold uppercase tracking-wide">
+                                                        Code: {item.productCode || item.productId?.productCode}
+                                                    </span>
+                                                )}
                                                 {(item.selectedColor || item.variant?.color) && (
                                                     <span className="bg-gray-50 px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold text-gray-600 border border-gray-100 uppercase">
                                                         Color: {item.selectedColor || item.variant?.color}

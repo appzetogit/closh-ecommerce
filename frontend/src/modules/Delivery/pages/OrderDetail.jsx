@@ -1029,6 +1029,11 @@ const DeliveryOrderDetail = () => {
                                                           {key}: {val}
                                                       </span>
                                                   ))}
+                                                  {(item.productCode || item.productId?.productCode) && (
+                                                      <span className="bg-slate-900 text-white px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide">
+                                                          Code: {item.productCode || item.productId?.productCode}
+                                                      </span>
+                                                  )}
                                                   {!item.variant && item.selectedSize && (
                                                       <span className="bg-slate-50 px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-500 uppercase">
                                                           Size: {item.selectedSize}

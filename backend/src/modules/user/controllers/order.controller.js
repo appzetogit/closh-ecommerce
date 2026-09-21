@@ -391,6 +391,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
             productId: product._id,
             vendorId: product.vendorId._id,
             name: product.name,
+            productCode: product.productCode || undefined,
             image: variantImage || product.image,
             price: itemPrice,
             originalPrice: product.originalPrice || itemPrice,
@@ -922,7 +923,7 @@ export const getOrderDetail = asyncHandler(async (req, res) => {
 
     const order = await Order.findOne({ ...filter, userId: req.user.id })
         .populate('deliveryBoyId', 'currentLocation name phone')
-        .populate('items.productId', 'hsnCode')
+        .populate('items.productId', 'hsnCode productCode')
         .select('+deliveryOtpDebug');
 
     if (!order) {

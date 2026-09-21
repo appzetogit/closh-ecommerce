@@ -520,7 +520,7 @@ const OrderDetail = () => {
 
                             return `
                                 <tr>
-                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}${returnedQty > 0 ? ` <span style="color:#c00;font-size:9px;">(${returnedQty} returned)</span>` : ''}</td>
+                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}${(item.productCode || item.productId?.productCode) ? ' <span style="color:#555;font-size:9px;">[' + (item.productCode || item.productId?.productCode) + ']</span>' : ''}${returnedQty > 0 ? ` <span style="color:#c00;font-size:9px;">(${returnedQty} returned)</span>` : ''}</td>
                                     <td>${item.hsnCode || item.productId?.hsnCode || item.product?.hsnCode || 'N/A'}</td>
                                     <td>${mrp.toFixed(2)}</td>
                                     <td>${qty}</td>
@@ -732,7 +732,7 @@ const handleViewVendorInvoice = () => {
                             
                             return `
                                 <tr>
-                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}</td>
+                                    <td class="text-left">${item.name} ${item.variant?.size ? '(' + item.variant.size + ')' : ''}${(item.productCode || item.productId?.productCode) ? ' <span style="color:#555;font-size:9px;">[' + (item.productCode || item.productId?.productCode) + ']</span>' : ''}</td>
                                     <td>${item.hsnCode || item.productId?.hsnCode || item.product?.hsnCode || 'N/A'}</td>
                                     <td>${mrp.toFixed(2)}</td>
                                     <td>${qty}</td>

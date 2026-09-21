@@ -17,6 +17,7 @@ import { Order } from '../models/Order.model.js';
 import Settings from '../models/Settings.model.js';
 import { validateCoupon } from '../services/coupon.service.js';
 import { handleRazorpayWebhook } from '../modules/payment/webhook.controller.js';
+import { resolveDivisionValues } from '../utils/divisionFilter.js';
 
 const router = Router();
 
@@ -152,29 +153,15 @@ const listProducts = asyncHandler(async (req, res) => {
     }
 
     if (division && division !== 'All') {
-        // Map common aliases to match Product model enum: ['Men', 'Women', 'Boys', 'Girls', 'Unisex']
-        let mappedDivision = division;
-        const lowerDiv = division.toLowerCase();
-        
-        if (lowerDiv.includes("men's fashion") || lowerDiv === "mens") {
-            mappedDivision = "Men";
-        } else if (lowerDiv.includes("women's fashion") || lowerDiv === "womens") {
-            mappedDivision = "Women";
-        } else if (lowerDiv.includes("boys") || lowerDiv.includes("kids")) {
-            mappedDivision = "Boys";
-        } else if (lowerDiv.includes("girls")) {
-            mappedDivision = "Girls";
-        }
-
-        // Only apply division filter if it matches the enum (case-insensitive)
-        const enumValues = ['Men', 'Women', 'Boys', 'Girls', 'Unisex'];
-        if (enumValues.some(v => v.toLowerCase() === mappedDivision.toLowerCase())) {
-            filter.division = { $regex: new RegExp(`^${mappedDivision}$`, 'i') };
-        } else {
-            // If not an enum, treat as category if no other category is provided
-            if (!category && !subCategory && !subcategory) {
-                category = division;
-            }
+        // A shopper browsing Men expects menswear AND adult unisex; browsing
+        // Boys expects boyswear AND kids-unisex, but never adult unisex.
+        // resolveDivisionValues() owns those rules.
+        const divisionValues = resolveDivisionValues(division);
+        if (divisionValues) {
+            filter.division = { $in: divisionValues };
+        } else if (!category && !subCategory && !subcategory) {
+            // Not a gender at all — a category name arrived in this param.
+            category = division;
         }
     }
 
@@ -345,7 +332,7 @@ const listProducts = asyncHandler(async (req, res) => {
     }
 
     let products = await Product.find(filter)
-        .select('name slug price originalPrice image images categoryId brandId vendorId stock stockQuantity rating reviewCount isActive isVisible flashSale isNewArrival discount variants division')
+        .select('name slug price originalPrice image images categoryId brandId vendorId stock stockQuantity rating reviewCount isActive isVisible flashSale isNewArrival discount variants division productCode')
         .populate('categoryId', 'name')
         .populate('brandId', 'name')
         .populate('vendorId', 'storeName isOnline shopLocation')

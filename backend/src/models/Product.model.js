@@ -14,9 +14,13 @@ const productSchema = new mongoose.Schema(
         images: [{ type: String }],
         image: { type: String }, // primary image
         categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true, index: true },
-        division: { 
+        // 'Unisex' is ADULT unisex - browsing Men or Women includes it.
+        // 'Kids' is the kids-unisex catch-all - browsing Boys or Girls
+        // includes it, while adult Unisex is deliberately excluded there.
+        // See utils/divisionFilter.js for the browsing rules.
+        division: {
             type: String, 
-            enum: ['Men', 'Women', 'Boys', 'Girls', 'Unisex'], 
+            enum: ['Men', 'Women', 'Boys', 'Girls', 'Kids', 'Unisex'], 
             default: 'Unisex',
             index: true 
         },
@@ -62,6 +66,12 @@ const productSchema = new mongoose.Schema(
         warrantyPeriod: { type: String },
         guaranteePeriod: { type: String },
         hsnCode: { type: String },
+        // Code printed on the physical sticker attached to the garment.
+        // Snapshotted onto every order line so warehouse staff and riders
+        // can match a physical item back to an order line.
+        // Indexed below as a partial UNIQUE index rather than with `index: true`,
+        // which would declare a second, non-unique index on the same key.
+        productCode: { type: String, trim: true, uppercase: true },
         rating: { type: Number, default: 0, min: 0, max: 5 },
         reviewCount: { type: Number, default: 0 },
         taxRate: { type: Number, default: 18 },
@@ -83,6 +93,23 @@ const productSchema = new mongoose.Schema(
         timestamps: true,
         toJSON: { flattenMaps: true },
         toObject: { flattenMaps: true }
+    }
+);
+
+// An empty string is a value and would collide under a unique index, so a
+// blank code is stored as unset and the constraint only covers real codes.
+productSchema.pre('save', function (next) {
+    if (this.productCode !== undefined && String(this.productCode).trim() === '') {
+        this.productCode = undefined;
+    }
+    next();
+});
+
+productSchema.index(
+    { productCode: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { productCode: { $exists: true, $type: 'string' } },
     }
 );
 

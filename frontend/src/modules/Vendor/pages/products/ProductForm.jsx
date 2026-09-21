@@ -44,6 +44,7 @@ const ProductForm = () => {
     subcategoryId: null,
     brandId: null,
     division: "Unisex",
+    productCode: "",
     stock: "in_stock",
     stockQuantity: "",
     totalAllowedQuantity: "",
@@ -212,6 +213,7 @@ const ProductForm = () => {
         : normalizedSubcategoryId || null,
       brandId: normalizedBrandId || null,
       division: product.division || "Unisex",
+      productCode: product.productCode || "",
       stock: product.stock || "in_stock",
       stockQuantity: product.stockQuantity || "",
       totalAllowedQuantity: product.totalAllowedQuantity || "",
@@ -870,6 +872,23 @@ const ProductForm = () => {
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Product Code
+              </label>
+              <input
+                type="text"
+                name="productCode"
+                value={formData.productCode || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm uppercase"
+                placeholder="Code on the physical sticker, e.g. CLH-1042"
+              />
+              <p className="mt-1 text-[10px] text-gray-500">
+                Must be unique. Printed on every order line so this exact piece can be matched.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Unit
               </label>
               <input
@@ -926,7 +945,8 @@ const ProductForm = () => {
                   { value: "Women", label: "Women" },
                   { value: "Boys", label: "Boys" },
                   { value: "Girls", label: "Girls" },
-                  { value: "Unisex", label: "Unisex" },
+                  { value: "Kids", label: "Kids (shows to Boys + Girls)" },
+                  { value: "Unisex", label: "Unisex (shows to Men + Women)" },
                 ]}
               />
             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { productMatchesDivision } from '../../../../shared/utils/division';
 import { useProductStore } from '../../../../shared/store/productStore';
 import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
@@ -264,15 +265,10 @@ const ProductsPage = () => {
         // 1. Gender Filter (Manual override) - Skip if filtering by direct CID
         const hasCid = Boolean(cidFromUrl && /^[0-9a-fA-F]{24}$/.test(cidFromUrl));
         if (selectedGender !== 'All' && !hasCid) {
-            const lowerGender = selectedGender.toLowerCase();
-            let mappedGender = lowerGender;
-            
-            if (lowerGender.includes("women") || lowerGender === "womens") mappedGender = "women";
-            else if (lowerGender.includes("men") || lowerGender === "mens") mappedGender = "men";
-            else if (lowerGender.includes("kids") || lowerGender.includes("boys")) mappedGender = "boys";
-            else if (lowerGender.includes("girls")) mappedGender = "girls";
-            
-            result = result.filter(p => (p.division || '').toLowerCase() === mappedGender);
+            // Matches the API's own rule: browsing Men keeps adult Unisex too,
+            // browsing Boys keeps kids-unisex but never adult Unisex. An exact
+            // match here would drop the unisex pieces the API just returned.
+            result = result.filter((p) => productMatchesDivision(p, selectedGender));
         }
 
         // 4. Header Search Filter (Removed)

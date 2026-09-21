@@ -43,6 +43,20 @@ export const BREAKPOINTS = {
 };
 
 
+// Kids clothing is sized by age, not by the adult S/M/L chart.
+export const KIDS_SIZES = [
+  "0-3 M", "3-6 M", "6-9 M", "9-12 M", "12-18 M", "18-24 M",
+  "2-3 Y", "3-4 Y", "4-5 Y", "5-6 Y", "6-7 Y", "7-8 Y", "8-9 Y", "9-10 Y",
+  "10-11 Y", "11-12 Y", "12-13 Y", "13-14 Y", "14-15 Y", "15-16 Y",
+];
+
+// Kids footwear runs on its own small UK scale.
+export const KIDS_SHOE_SIZES = [
+  "UK 2 (Kids)", "UK 3 (Kids)", "UK 4 (Kids)", "UK 5 (Kids)", "UK 6 (Kids)",
+  "UK 7 (Kids)", "UK 8 (Kids)", "UK 9 (Kids)", "UK 10 (Kids)", "UK 11 (Kids)",
+  "UK 12 (Kids)", "UK 13 (Kids)",
+];
+
 // Product Sizes
 export const PRODUCT_SIZES = [
   "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL",
@@ -50,5 +64,7 @@ export const PRODUCT_SIZES = [
   "Free Size",
   "UK 3", "UK 4", "UK 5", "UK 6", "UK 7", "UK 8", "UK 9", "UK 10", "UK 11", "UK 12",
   "US 4", "US 5", "US 6", "US 7", "US 8", "US 9", "US 10", "US 11", "US 12",
-  "EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45"
+  "EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45",
+  ...KIDS_SIZES,
+  ...KIDS_SHOE_SIZES,
 ];
