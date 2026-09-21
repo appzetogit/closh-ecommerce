@@ -129,6 +129,15 @@ const SwipeOrderCard = ({ order, onStatusUpdate }) => {
                     <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-gray-800 truncate">{vendorItem?.items?.[0]?.name || order.items?.[0]?.name || 'Multiple Products'}</p>
                         <p className="text-[10px] text-gray-500 font-medium mt-0.5">Qty: {vendorItem?.items?.[0]?.quantity || order.items?.[0]?.quantity || 1}</p>
+                        {(() => {
+                            const first = vendorItem?.items?.[0] || order.items?.[0];
+                            const code = first?.productCode || first?.productId?.productCode;
+                            return code ? (
+                                <span className="inline-block mt-0.5 bg-gray-900 text-white text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded">
+                                    {code}
+                                </span>
+                            ) : null;
+                        })()}
                         {(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant) && formatVariantLabel(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant) && (
                             <p className="text-[10px] text-gray-400 font-medium leading-tight mt-0.5">
                                 {formatVariantLabel(vendorItem?.items?.[0]?.variant || order.items?.[0]?.variant)}

@@ -960,6 +960,11 @@ const handleViewVendorInvoice = () => {
                                                         {item.name}
                                                     </h3>
                                                     <div className="flex flex-col gap-1">
+                                                        {(item.productCode || item.productId?.productCode) && (
+                                                            <span className="self-start bg-gray-900 text-white text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded">
+                                                                {item.productCode || item.productId?.productCode}
+                                                            </span>
+                                                        )}
                                                         <p className="text-sm text-gray-500">
                                                             Qty: {item.quantity}
                                                         </p>

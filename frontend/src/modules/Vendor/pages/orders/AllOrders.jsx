@@ -189,6 +189,11 @@ const AllOrders = () => {
                     {item.name} <span className="text-gray-400 text-[11px] font-normal">x{item.quantity}</span>
                   </span>
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    {(item.productCode || item.productId?.productCode) && (
+                      <span className="bg-gray-900 text-white text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded leading-tight">
+                        {item.productCode || item.productId?.productCode}
+                      </span>
+                    )}
                     {formatVariantLabel(item.variant) && (
                       <span className="text-[10px] text-gray-500 font-medium leading-tight">
                         {formatVariantLabel(item.variant)}

@@ -74,7 +74,7 @@ export const getVendorOrders = asyncHandler(async (req, res) => {
     console.log(`[getVendorOrders] Vendor: ${req.user.id}, Filter:`, JSON.stringify(filter));
 
     const orders = await Order.find(filter)
-        .select('orderId status total orderType paymentMethod paymentStatus items.name items.image items.quantity items.variant items.productId items.variantKey shippingAddress.name guestInfo.name vendorItems.vendorId vendorItems.status vendorItems.items.name vendorItems.items.image vendorItems.items.quantity vendorItems.items.variant vendorItems.items.vendorPrice vendorItems.items.productId vendorItems.items.variantKey vendorItems.subtotal vendorItems.basePrice deliveryFlow.tryAndBuyItems deliveryFlow.rejectedItems createdAt updatedAt')
+        .select('orderId status total orderType paymentMethod paymentStatus items.name items.image items.quantity items.variant items.productId items.variantKey items.productCode shippingAddress.name guestInfo.name vendorItems.vendorId vendorItems.status vendorItems.items.name vendorItems.items.image vendorItems.items.quantity vendorItems.items.variant vendorItems.items.vendorPrice vendorItems.items.productId vendorItems.items.variantKey vendorItems.items.productCode vendorItems.subtotal vendorItems.basePrice deliveryFlow.tryAndBuyItems deliveryFlow.rejectedItems createdAt updatedAt')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(numericLimit)

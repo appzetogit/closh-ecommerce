@@ -102,6 +102,11 @@ const NewOrderModal = ({ order, isOpen, onClose, onAccept, isAccepting, isBuzzer
                                                 <span className="w-5 h-5 flex items-center justify-center bg-slate-50 rounded text-slate-400 text-[10px] font-bold shrink-0 mt-0.5">{it.quantity}x</span>
                                                 <div className="flex flex-col min-w-0">
                                                     <span className="font-semibold text-slate-700 truncate">{it.name}</span>
+                                                    {(it.productCode || it.productId?.productCode) && (
+                                                        <span className="self-start mt-0.5 bg-slate-900 text-white text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded">
+                                                            {it.productCode || it.productId?.productCode}
+                                                        </span>
+                                                    )}
                                                     {it.variant && formatVariantLabel(it.variant) && (
                                                         <span className="text-[11px] text-slate-500 font-medium leading-tight">
                                                             {formatVariantLabel(it.variant)}
