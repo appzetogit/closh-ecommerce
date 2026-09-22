@@ -57,32 +57,96 @@ export const getDistanceMatrix = async (origin, destination) => {
  * @param {String} address - The full address string
  * @returns {Array|null} [longitude, latitude]
  */
-export const geocodeAddress = async (address) => {
-    if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'your_google_maps_api_key') {
-        console.warn('Geocoding failed: Missing or invalid Google Maps API key.');
-        return null;
-    }
-
+/**
+ * Keyless geocoder, used when Google is unavailable. OpenStreetMap's Nominatim
+ * is the same service the storefront's address picker already proxies through
+ * /api/geocode. Their usage policy requires an identifying User-Agent.
+ *
+ * @param {String} address
+ * @returns {Array|null} [longitude, latitude]
+ */
+const nominatimLookup = async (query) => {
     try {
-        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
-            params: {
-                address: address,
-                key: GOOGLE_MAPS_API_KEY,
-            }
+        const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+            params: { format: 'json', limit: 1, q: query },
+            headers: { 'User-Agent': 'CloshApp/1.0 (support@closh.in)', Accept: 'application/json' },
+            timeout: 8000,
         });
 
-        const data = response.data;
-        if (data.status !== 'OK' || !data.results?.[0]) {
-            console.warn('Geocoding result not OK for:', address, 'Status:', data.status);
-            return null;
-        }
+        const hit = Array.isArray(response.data) ? response.data[0] : null;
+        if (!hit) return null;
 
-        const location = data.results[0].geometry.location;
-        return [location.lng, location.lat];
+        const lng = Number(hit.lon);
+        const lat = Number(hit.lat);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+        return [lng, lat];
     } catch (error) {
-        console.error('Geocoding Error:', error.message);
+        console.error('[Geocoding] Nominatim error:', error.message);
         return null;
     }
+};
+
+const geocodeViaNominatim = async (address) => {
+    // Nominatim can't resolve shop-level detail ("Shop NO E10, Gaurav Tower
+    // Marg, ...") but resolves the locality fine, so drop the most specific
+    // segment and retry. Landing on the neighbourhood or pincode centroid is a
+    // far better delivery estimate than giving up and pricing off [0, 0].
+    const segments = String(address).split(',').map((s) => s.trim()).filter(Boolean);
+    const MAX_ATTEMPTS = 4;
+
+    for (let i = 0; i < MAX_ATTEMPTS && segments.length - i >= 2; i++) {
+        const query = segments.slice(i).join(', ');
+        const hit = await nominatimLookup(query);
+        if (hit) {
+            if (i > 0) console.log(`[Geocoding] Resolved after dropping ${i} segment(s): "${query}"`);
+            return hit;
+        }
+        // Nominatim asks for at most one request per second.
+        if (i < MAX_ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 1100));
+    }
+
+    console.warn('[Geocoding] Nominatim found nothing for:', address);
+    return null;
+};
+
+/**
+ * Geocode an address to get [longitude, latitude] coordinates.
+ * Tries Google when a key is configured, then falls back to Nominatim, so a
+ * missing or rejected key degrades to a slower geocode rather than none — the
+ * caller uses the result to price the delivery, and a null answer there means
+ * the order is priced off a sentinel coordinate.
+ *
+ * @param {String} address - The full address string
+ * @returns {Array|null} [longitude, latitude]
+ */
+export const geocodeAddress = async (address) => {
+    if (!address || !String(address).trim()) return null;
+
+    const hasGoogleKey = GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'your_google_maps_api_key';
+
+    if (hasGoogleKey) {
+        try {
+            const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+                params: {
+                    address: address,
+                    key: GOOGLE_MAPS_API_KEY,
+                }
+            });
+
+            const data = response.data;
+            if (data.status === 'OK' && data.results?.[0]) {
+                const location = data.results[0].geometry.location;
+                return [location.lng, location.lat];
+            }
+            console.warn('[Geocoding] Google returned', data.status, 'for:', address, '- falling back to Nominatim.');
+        } catch (error) {
+            console.error('[Geocoding] Google error:', error.message, '- falling back to Nominatim.');
+        }
+    } else {
+        console.warn('[Geocoding] No Google Maps key configured; using Nominatim.');
+    }
+
+    return geocodeViaNominatim(address);
 };
 
 /**
