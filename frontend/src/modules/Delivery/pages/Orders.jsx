@@ -203,7 +203,15 @@ const DeliveryOrders = () => {
           navigate(`/delivery/orders/${orderId}`);
         }
       }
-    } catch(err) {}
+    } catch (err) {
+      // This used to swallow every failure silently — no toast, no navigation, no
+      // refresh. If accept failed for ANY reason (a race with another rider, a 409
+      // because it was already reassigned, a network blip), the rider saw nothing
+      // happen and the same Accept/Decline card just sat there, looking exactly like
+      // "I tapped Accept and it did nothing" with zero explanation.
+      toast.error(err?.response?.data?.message || 'Failed to accept mission. Please try again.');
+      loadOrders(currentPage, filter);
+    }
   };
 
   const handleRejectMission = async (e, orderId) => {

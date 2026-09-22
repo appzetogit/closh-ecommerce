@@ -326,10 +326,10 @@ if (isRedisAvailable) {
             const DeliveryBoy = (await import('../models/DeliveryBoy.model.js')).default;
             await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' });
 
-            // 4. Delete the DeliveryBatch if any
+            // 4. Delete the DeliveryBatch for THIS order, if any
             const DeliveryBatch = (await import('../models/DeliveryBatch.model.js')).default;
             await DeliveryBatch.deleteMany({
-                customerId: order.userId,
+                orderId: order._id,
                 deliveryBoyId: deliveryBoyId,
                 status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
             });

@@ -224,8 +224,16 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     // ── Sync Vendor Status to active DeliveryBatch ──
     try {
         const DeliveryBatch = mongoose.model('DeliveryBatch');
+        // Scoped to THIS order's own batch. Matching by customerId alone used to grab
+        // whichever active batch that customer happened to have — if they had two orders
+        // in flight at once, updating one order's status silently mutated the OTHER
+        // order's batch and notified its (unrelated) rider instead. Fall back to the old
+        // customerId-only match only for batches created before orderId existed.
         const activeBatch = await DeliveryBatch.findOne({
-            customerId: order.userId || order.guestInfo?.phone, // Match user or guest
+            $or: [
+                { orderId: order._id },
+                { orderId: { $exists: false }, customerId: order.userId || order.guestInfo?.phone },
+            ],
             status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
         });
         

@@ -421,8 +421,10 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
     if (order.isMultiVendor || order.vendorPickups?.length > 0 || order.status === 'all_vendors_ready' || order.status === 'assigned') {
         if (order.isMultiVendor || order.vendorPickups?.length > 0) {
             try {
-                // Delete any existing DeliveryBatch for this order to avoid duplicates (especially on reassignment)
-                await DeliveryBatch.deleteMany({ customerId: order.userId, status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] } });
+                // Delete any existing DeliveryBatch for THIS order to avoid duplicates on
+                // reassignment. Scoping by customerId alone would also delete a batch
+                // belonging to a different order the same customer has in flight.
+                await DeliveryBatch.deleteMany({ orderId: order._id, status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] } });
 
                 const riderCoords = deliveryBoy.currentLocation?.coordinates;
 
@@ -476,6 +478,7 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
                 const batchId = `MVBATCH-${Date.now()}`;
                 await DeliveryBatch.create({
                     batchId,
+                    orderId: order._id,
                     deliveryBoyId,
                     customerId: order.userId,
                     isMultiVendor: true,

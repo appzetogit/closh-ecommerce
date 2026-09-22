@@ -253,14 +253,17 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             otpVerified: false
         }));
 
+        // Only clear this order's OWN stale batch (if it's being re-assigned), not any
+        // other order the same customer happens to have in flight at the same time.
         await DeliveryBatch.deleteMany({
-            customerId: order.userId,
+            orderId: order._id,
             status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
         });
 
         const batchId = `MVBATCH-${Date.now()}`;
         const newBatch = await DeliveryBatch.create({
             batchId,
+            orderId: order._id,
             deliveryBoyId: chosenRider._id,
             customerId: order.userId || new mongoose.Types.ObjectId(), // Handle guests
             isMultiVendor: order.isMultiVendor,

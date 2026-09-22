@@ -4,6 +4,11 @@ const DeliveryBatchSchema = new mongoose.Schema({
   batchId: { type: String, unique: true, required: true },
   deliveryBoyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // Without this, code that needs "the active batch for this order" had to guess by
+  // matching customerId + status alone — which silently grabs a DIFFERENT active batch
+  // when the same customer has two orders in flight at once, mutating and notifying the
+  // wrong trip/rider entirely. orderId lets that lookup actually be scoped correctly.
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
   
   deliveries: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Delivery' }],
   

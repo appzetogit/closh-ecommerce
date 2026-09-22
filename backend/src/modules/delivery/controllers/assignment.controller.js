@@ -449,6 +449,7 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
             const batchId = `MVBATCH-${Date.now()}`;
             await DeliveryBatch.create({
                 batchId,
+                orderId: order._id,
                 deliveryBoyId,
                 customerId: order.userId,
                 isMultiVendor: true,
@@ -515,9 +516,21 @@ export const rejectOrderAssignment = asyncHandler(async (req, res) => {
     // only applies to an offer the rider never took — firing it on an order they already
     // accepted silently strips the order off them and sends it back to 'searching',
     // which reads as "the order switched riders and now nobody is assigned".
-    if (req.body?.auto === true && order.riderAcceptedAt) {
-        console.log(`[RejectAssignment] Ignored auto-reject for ${order.orderId}: rider already accepted at ${order.riderAcceptedAt}.`);
-        return res.status(200).json(new ApiResponse(200, null, 'Order already accepted; auto-reject ignored.'));
+    //
+    // This guard used to only cover the automatic (timeout) path. A *manual* reject call
+    // had no such check: a stale Decline button, a double-tap during the accept
+    // transition, or a replayed request could still wipe deliveryBoyId/riderAcceptedAt off
+    // an order the rider had already committed to and silently hand it to someone else —
+    // exactly the "still shows Accept/Decline after I accepted" symptom, just triggered
+    // from the reject side instead of the auto-timeout side. Once accepted, ANY reject
+    // attempt (auto or manual) must be refused; a manual one gets an explicit error
+    // instead of a silent no-op so the rider knows why Decline didn't do anything.
+    if (order.riderAcceptedAt) {
+        console.log(`[RejectAssignment] Ignored ${req.body?.auto === true ? 'auto' : 'manual'}-reject for ${order.orderId}: rider already accepted at ${order.riderAcceptedAt}.`);
+        if (req.body?.auto === true) {
+            return res.status(200).json(new ApiResponse(200, null, 'Order already accepted; auto-reject ignored.'));
+        }
+        throw new ApiError(400, 'You already accepted this mission. Use "Customer Refused / Cancel Mission" from the order screen instead.');
     }
 
     // 1. Mark this delivery boy as rejected for this order
@@ -534,9 +547,9 @@ export const rejectOrderAssignment = asyncHandler(async (req, res) => {
     // 3. Re-enable rider availability
     await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' });
 
-    // 4. Delete the DeliveryBatch
+    // 4. Delete the DeliveryBatch for THIS order
     await DeliveryBatch.deleteMany({
-        customerId: order.userId,
+        orderId: order._id,
         deliveryBoyId: deliveryBoyId,
         status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
     });

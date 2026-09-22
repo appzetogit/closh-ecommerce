@@ -151,6 +151,7 @@ export const acceptMultiVendorOrder = asyncHandler(async (req, res) => {
     const batchId = `MVBATCH-${Date.now()}`;
     const batch = await DeliveryBatch.create({
         batchId,
+        orderId: order._id,
         deliveryBoyId,
         customerId: order.userId,
         isMultiVendor: true,
