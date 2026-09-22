@@ -125,14 +125,35 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             }).limit(15).lean();
         }
 
-        // 2.1 Prefer connected riders, but fallback to sleeping riders if none are connected
-        let connectedRiders = deliveryBoys.filter(boy => isDeliveryBoyConnected(boy._id.toString()));
-        deliveryBoys = connectedRiders.length > 0 ? connectedRiders.slice(0, 5) : deliveryBoys.slice(0, 5);
+        // 2.1 Rank by how far each candidate is from the pickup.
+        // This has to happen here rather than relying on the query: the
+        // service-area branch above uses $geoWithin, which returns matches in
+        // no particular order, so without an explicit sort the "nearest 5" were
+        // an arbitrary 5 from anywhere inside the city boundary. Only the 10km
+        // $near fallback comes back distance-ordered.
+        const candidates = deliveryBoys
+            .map((boy) => {
+                const coords = boy.currentLocation?.coordinates;
+                const hasFix = Array.isArray(coords) && coords.length === 2
+                    && !(coords[0] === 0 && coords[1] === 0);
+                return {
+                    boy,
+                    // A rider with no GPS fix must not sort as 0 km away, which
+                    // calculateDistance would return for invalid input.
+                    distanceKm: hasFix ? calculateDistance(firstVendorLocation, coords) : Infinity,
+                };
+            })
+            .sort((a, b) => a.distanceKm - b.distanceKm);
+
+        // Prefer riders with a live socket — they can actually be shown the
+        // request — but fall back to the rest rather than leaving it unassigned.
+        const connectedCandidates = candidates.filter(({ boy }) => isDeliveryBoyConnected(boy._id.toString()));
+        const shortlist = (connectedCandidates.length > 0 ? connectedCandidates : candidates).slice(0, 5);
 
         // STRICT REQUIREMENT: Do not scan globally outside the service area.
         // If no boys are found in the boundaries or 10km radius, do not fall back.
 
-        if (deliveryBoys.length === 0) {
+        if (shortlist.length === 0) {
             console.warn(`[AutoAssignment] ❌ No available delivery partners found in the system for order ${order.orderId}. Waiting for manual intervention.`);
             order.deliveryBoyId = undefined;
             order.status = 'searching';
@@ -141,22 +162,30 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             return false;
         }
 
-        // Fair rotation among the nearby candidates. `deliveryBoys` was sorted purely by
-        // distance, so picking [0] handed every single order to whichever rider is
-        // physically closest to that vendor — a rider parked nearest a busy vendor
-        // would win literally every order there, forever, while others in the same
-        // area never got one. Distance never changes between two riders idling at the
-        // same spot, so this was a hard determinism, not just a statistical bias.
-        // Re-ranking the (already-nearby) candidates by how long they've been idle
-        // keeps the proximity constraint (still only the nearest 5) but stops one
-        // rider from monopolizing every order in that pocket.
-        const sortedByIdleTime = [...deliveryBoys].sort((a, b) => {
-            const aTime = a.lastAssignedAt ? new Date(a.lastAssignedAt).getTime() : 0;
-            const bTime = b.lastAssignedAt ? new Date(b.lastAssignedAt).getTime() : 0;
+        // Proximity decides who gets it; idle time only separates riders who are
+        // effectively the same distance from the vendor. An earlier version
+        // sorted the shortlist purely by lastAssignedAt, which meant a rider 9km
+        // away could take an order from one parked outside the shop — that is
+        // the "any rider gets it" behaviour this replaces.
+        //
+        // The band exists because two riders 300m and 600m from a shop are, in
+        // practice, equally close; rotating between them is fair without ever
+        // sending an order past someone nearer.
+        const FAIRNESS_BAND_KM = 1;
+        const ranked = [...shortlist].sort((a, b) => {
+            const bandA = Math.floor(a.distanceKm / FAIRNESS_BAND_KM);
+            const bandB = Math.floor(b.distanceKm / FAIRNESS_BAND_KM);
+            if (bandA !== bandB) return bandA - bandB;
+            const aTime = a.boy.lastAssignedAt ? new Date(a.boy.lastAssignedAt).getTime() : 0;
+            const bTime = b.boy.lastAssignedAt ? new Date(b.boy.lastAssignedAt).getTime() : 0;
             return aTime - bTime; // never-assigned (0) or longest-idle first
         });
-        const chosenRider = sortedByIdleTime[0];
-        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
+        const chosenRider = ranked[0].boy;
+        console.log(
+            `[AutoAssignment] Shortlist for ${order.orderId}: ` +
+            ranked.map((c) => `${c.boy.name} @ ${Number.isFinite(c.distanceKm) ? c.distanceKm.toFixed(2) + 'km' : 'no GPS'}`).join(', ')
+        );
+        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — ${Number.isFinite(ranked[0].distanceKm) ? ranked[0].distanceKm.toFixed(2) + 'km from pickup' : 'no GPS fix'}, idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
 
         // 3. Optimize pickup route sequence from rider's current location
         const riderCoords = chosenRider.currentLocation?.coordinates || firstVendorLocation;

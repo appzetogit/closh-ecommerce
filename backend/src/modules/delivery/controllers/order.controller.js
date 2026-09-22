@@ -19,7 +19,7 @@ import { sendDeliveryOtpSms } from '../../../services/sms.service.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import redisConnection from '../../../config/redis.js';
 import { WalletService } from '../../../services/wallet.service.js';
-import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee, getVendorDropoffFee } from '../../../utils/geo.js';
+import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee, getVendorDropoffFee, MAX_CLAIM_DISTANCE_KM } from '../../../utils/geo.js';
 import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
 import Vendor from '../../../models/Vendor.model.js';
 import Enquiry from '../../../models/Enquiry.model.js';
@@ -329,12 +329,13 @@ export const getAvailableOrders = asyncHandler(async (req, res) => {
         isDeleted: { $ne: true }
     };
 
-    // Apply 8km spatial filter if rider location is known
-    // 8km in radians = 8 / 6378.1
+    // Only surface pickups the rider could actually reach. The same radius
+    // guards the accept call, so a stale list can't be used to claim an
+    // order from across the city.
     if (riderCoords && riderCoords[0] !== 0 && riderCoords[1] !== 0) {
         filter.pickupLocation = {
             $geoWithin: {
-                $centerSphere: [riderCoords, 8 / 6378.1]
+                $centerSphere: [riderCoords, MAX_CLAIM_DISTANCE_KM / 6378.1]
             }
         };
     }

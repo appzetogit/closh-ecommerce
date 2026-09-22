@@ -10,7 +10,7 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import OrderNotificationService from '../../../services/orderNotification.service.js';
-import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee } from '../../../utils/geo.js';
+import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee, MAX_CLAIM_DISTANCE_KM } from '../../../utils/geo.js';
 import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
 import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
 
@@ -320,6 +320,38 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
 
     if (hasActiveOrder || hasActiveReturn) {
         throw new ApiError(400, 'Mission in progress: You must complete your current task before accepting another.');
+    }
+
+    // ── Proximity guard on an OPEN claim ──
+    // The available-orders list already limits what a rider sees to pickups
+    // within MAX_CLAIM_DISTANCE_KM, but accept used to take any order id: a
+    // stale list or a direct call let someone far away grab an order the
+    // auto-assigner had routed to a closer rider. An order already assigned to
+    // this rider is exempt — the auto-assigner or an admin already chose them.
+    const claimTarget = await Order.findOne({ $or: idFilter })
+        .select('deliveryBoyId pickupLocation orderId')
+        .lean();
+
+    if (claimTarget && !claimTarget.deliveryBoyId) {
+        const pickup = claimTarget.pickupLocation?.coordinates;
+        const rider = await DeliveryBoy.findById(deliveryBoyId).select('currentLocation').lean();
+        const riderCoords = rider?.currentLocation?.coordinates;
+
+        const hasPickupFix = Array.isArray(pickup) && pickup.length === 2 && !(pickup[0] === 0 && pickup[1] === 0);
+        const hasRiderFix = Array.isArray(riderCoords) && riderCoords.length === 2
+            && !(riderCoords[0] === 0 && riderCoords[1] === 0);
+
+        // Only enforce when both ends have a real fix — a missing GPS reading
+        // must not strand an order nobody is allowed to take.
+        if (hasPickupFix && hasRiderFix) {
+            const km = calculateDistance(riderCoords, pickup);
+            if (km > MAX_CLAIM_DISTANCE_KM) {
+                throw new ApiError(
+                    403,
+                    `This pickup is ${km.toFixed(1)}km away. You can only accept orders within ${MAX_CLAIM_DISTANCE_KM}km of your location.`
+                );
+            }
+        }
     }
 
     // Atomic update to prevent double assignment

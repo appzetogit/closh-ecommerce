@@ -4,6 +4,11 @@
  * @param {Array} coords2 - [longitude, latitude]
  * @returns {Number} - Distance in kilometers
  */
+// How far a rider may be from the pickup and still claim an unassigned
+// order. Used both to build the available-orders list and to guard the
+// accept call, so the two can't drift apart.
+export const MAX_CLAIM_DISTANCE_KM = 8;
+
 export const calculateDistance = (coords1, coords2) => {
     if (!coords1 || !coords2 || coords1.length !== 2 || coords2.length !== 2) {
         return 0;
