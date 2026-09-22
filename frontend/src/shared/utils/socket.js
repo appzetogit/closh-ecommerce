@@ -1,11 +1,13 @@
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
 
-// In production, force the API URL to our production domain if env is missing
 import { IMAGE_BASE_URL } from './constants.js';
 
-// Get the actual base URL, but force WS port to 5001 if local development
-const SOCKET_URL = IMAGE_BASE_URL.includes('localhost') ? 'http://localhost:5001' : IMAGE_BASE_URL;
+// Socket.io is attached to the same HTTP server as the REST API (see
+// backend/src/server.js — initSocket() takes the same http.createServer()
+// instance Express uses), so it is always the same origin as the API/image
+// base. There is no separate socket port to hardcode.
+const SOCKET_URL = IMAGE_BASE_URL;
 
 
 class SocketService {

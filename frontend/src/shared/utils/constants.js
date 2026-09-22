@@ -9,17 +9,22 @@ const getApiBaseUrl = () => {
     return envUrl || 'http://localhost:5000/api';
 };
 
-const getImageUrlBase = () => {
+const getImageUrlBase = (apiBaseUrl) => {
     const envUrl = import.meta.env.VITE_IMAGE_BASE_URL;
     const hostname = window.location.hostname;
     const isProduction = hostname.includes('closh.in') || hostname.includes('vercel.app');
     
     if (isProduction) return 'https://api.closh.in';
-    return envUrl || 'http://localhost:5000';
+    if (envUrl) return envUrl;
+    // No VITE_IMAGE_BASE_URL set: derive from the API base rather than a second
+    // hardcoded default. A hardcoded 5000 here silently drifted from whatever
+    // port VITE_API_BASE_URL actually configures (this repo's dev setup uses
+    // 5050), which also broke the socket connection below — it read this value.
+    return apiBaseUrl.replace(/\/api\/?$/, '');
 };
 
 export const API_BASE_URL = getApiBaseUrl();
-export const IMAGE_BASE_URL = getImageUrlBase();
+export const IMAGE_BASE_URL = getImageUrlBase(API_BASE_URL);
 
 // App Constants
 export const APP_NAME = 'Appzeto multi vendor E-commerce';
