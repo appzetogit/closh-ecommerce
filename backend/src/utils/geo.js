@@ -4,6 +4,19 @@
  * @param {Array} coords2 - [longitude, latitude]
  * @returns {Number} - Distance in kilometers
  */
+/**
+ * [0, 0] is the sentinel this codebase stores when a location could not be
+ * resolved — it is a point in the Atlantic, not a delivery address. Treating
+ * it as real produced ~8,600km trips and five-figure rider payouts.
+ *
+ * @param {Array<Number>} coords - [lng, lat]
+ * @returns {Boolean} true when the coordinates are usable
+ */
+export const hasRealCoordinates = (coords) =>
+    Array.isArray(coords) && coords.length === 2
+    && Number.isFinite(coords[0]) && Number.isFinite(coords[1])
+    && !(coords[0] === 0 && coords[1] === 0);
+
 // How far a rider may be from the pickup and still claim an unassigned
 // order. Used both to build the available-orders list and to guard the
 // accept call, so the two can't drift apart.

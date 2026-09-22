@@ -17,7 +17,7 @@ import { createNotification } from '../../../services/notification.service.js';
 import { calculateVendorShippingForGroups } from '../../../services/vendorShipping.service.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import Settings from '../../../models/Settings.model.js';
-import { calculateDistance, getDeliveryEarning, getVendorPickupFee } from '../../../utils/geo.js';
+import { calculateDistance, getDeliveryEarning, getVendorPickupFee, hasRealCoordinates } from '../../../utils/geo.js';
 import { validateAddressServiceability } from '../../../services/serviceArea.service.js';
 import Vendor from '../../../models/Vendor.model.js';
 import { OrderNotificationService } from '../../../services/orderNotification.service.js';
@@ -474,7 +474,9 @@ export const placeOrder = asyncHandler(async (req, res) => {
             console.log(`✅ [Geocoding] Success:`, geocoded);
             dropoffCoords = geocoded;
         } else {
-            console.warn(`❌ [Geocoding] No results. Falling back to [0, 0].`);
+            // Left as the [0, 0] sentinel. Everything distance-derived below
+            // checks for it rather than pricing a trip to the Atlantic.
+            console.warn(`[Geocoding] Could not resolve the delivery address; distance-based pricing will fall back to the base fee.`);
             dropoffCoords = [0, 0];
         }
     }
@@ -501,8 +503,16 @@ export const placeOrder = asyncHandler(async (req, res) => {
     // 1. Calculate nearest vendor distance using Google Maps for the base fee
     const vendorCoordsList = Object.values(vendorMap).map(v => v.shopLocation?.coordinates).filter(c => c && c.length === 2);
     let nearestDistanceToCustomer = 0;
-    
-    if (vendorCoordsList.length > 0) {
+
+    // With no usable dropoff there is no trip length to charge for, so the
+    // rider gets the flat base fee and the distance stays 0 rather than
+    // becoming the distance to [0, 0].
+    const dropoffIsKnown = hasRealCoordinates(dropoffCoords);
+    if (!dropoffIsKnown) {
+        console.warn(`[OrderCalc] Delivery coordinates unknown for ${shippingAddress?.city || 'this address'}; using the base delivery fee.`);
+    }
+
+    if (dropoffIsKnown && vendorCoordsList.length > 0) {
         const distances = [];
         for (const vCoord of vendorCoordsList) {
             try {
