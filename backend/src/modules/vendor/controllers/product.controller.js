@@ -202,9 +202,12 @@ const calculateVariantAggregateStock = (variants = {}) => {
 // exclude-list rather than an allowlist so a schema field nobody thought to
 // list here still gets compared correctly instead of silently dropped.
 const NON_CONTENT_FIELDS = new Set([
-    // tryAndBuyEnabled is an operational switch the vendor flips from the
-    // product list, so it applies live rather than queuing for approval.
-    'tryAndBuyEnabled',
+    // Operational data the vendor owns outright: the Try & Buy switch and
+    // the code printed on the garment's physical sticker. These apply live
+    // rather than queuing for approval — staging productCode meant the
+    // vendor saved a code and then found the field blank on reopening,
+    // because the form reads the live value.
+    'tryAndBuyEnabled', 'productCode',
     'stockQuantity', 'lowStockThreshold', 'stock', 'variants',
     '_id', 'id', 'vendorId', 'slug', 'approvalStatus',
     'pendingUpdates', 'hasPendingUpdates', 'createdAt', 'updatedAt', '__v',
@@ -222,6 +225,11 @@ const REFERENCE_ID_FIELDS = new Set(['categoryId', 'brandId']);
 // entire product on every save (not a diff), so without this check a pure
 // stock correction would still open an admin approval request with nothing
 // left in it to approve.
+// The form posts '' for a field the document stores as null (or vice
+// versa). Treating those as different opened an approval request on every
+// save with nothing in it for the admin to act on.
+const isBlank = (value) => value === null || value === undefined || value === '';
+
 const hasStagedContentChanges = (updates, product) => {
     return Object.keys(updates).some((key) => {
         if (NON_CONTENT_FIELDS.has(key)) return false;
@@ -230,6 +238,7 @@ const hasStagedContentChanges = (updates, product) => {
         if (typeof nextValue === 'undefined') return false;
 
         const currentValue = product[key];
+        if (isBlank(nextValue) && isBlank(currentValue)) return false;
         if (REFERENCE_ID_FIELDS.has(key)) {
             return String(nextValue || '') !== String(currentValue || '');
         }
@@ -373,6 +382,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
             product.tryAndBuyEnabled = Boolean(updates.tryAndBuyEnabled);
             liveToggleChanged = true;
         }
+        if (Object.prototype.hasOwnProperty.call(updates, 'productCode')) {
+            const code = String(updates.productCode ?? '').trim().toUpperCase();
+            product.productCode = code || undefined;
+            liveToggleChanged = true;
+        }
 
         let liveStockChanged = false;
         if (typeof updates.stockQuantity !== 'undefined' || typeof updates.lowStockThreshold !== 'undefined') {
@@ -407,6 +421,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
         delete updates.stock;
         delete updates.variants;
         delete updates.tryAndBuyEnabled;
+        delete updates.productCode;
 
         const needsApproval = hasStagedContentChanges(updates, product);
         if (needsApproval) {
@@ -435,7 +450,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
         return res.status(200).json(new ApiResponse(
             200,
             product,
-            liveStockChanged ? 'Stock updated.' : (liveToggleChanged ? 'Try & Buy availability updated.' : 'Product updated.')
+            liveStockChanged ? 'Stock updated.' : (liveToggleChanged ? 'Product details updated.' : 'Product updated.')
         ));
     }
 
