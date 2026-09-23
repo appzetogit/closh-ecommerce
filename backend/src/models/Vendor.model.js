@@ -78,6 +78,16 @@ const vendorSchema = new mongoose.Schema(
         resetOtpVerified: { type: Boolean, default: false, select: false },
         refreshTokenHash: { type: String, select: false },
         refreshTokenExpiresAt: { type: Date, select: false },
+        refreshTokens: {
+            type: [
+                {
+                    hash: { type: String },
+                    expiresAt: { type: Date },
+                    createdAt: { type: Date, default: Date.now },
+                },
+            ],
+            select: false,
+        },
         joinDate: { type: Date, default: Date.now },
         fcmTokens: [
             {

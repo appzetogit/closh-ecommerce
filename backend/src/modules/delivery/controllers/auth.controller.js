@@ -547,7 +547,7 @@ export const login = asyncHandler(async (req, res) => {
 export const refresh = asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
     const decoded = decodeRefreshTokenOrThrow(refreshToken);
-    const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt applicationStatus rejectionReason isActive');
+    const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens applicationStatus rejectionReason isActive');
 
     if (!deliveryBoy) throw new ApiError(401, 'Invalid refresh token.');
     if (deliveryBoy.applicationStatus === 'pending') {
@@ -576,13 +576,13 @@ export const logout = asyncHandler(async (req, res) => {
     if (refreshToken) {
         try {
             const decoded = decodeRefreshTokenOrThrow(refreshToken);
-            const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt');
-            if (deliveryBoy?.refreshTokenHash) {
+            const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens');
+            if (deliveryBoy) {
                 deliveryBoy.status = 'offline';
                 deliveryBoy.isAvailable = false;
                 await deliveryBoy.save();
                 await cacheInvalidate(`dash:${deliveryBoy._id}`, `profile:${deliveryBoy._id}`);
-                await clearRefreshSession(deliveryBoy);
+                await clearRefreshSession(deliveryBoy, refreshToken);
             }
         } catch {
             // Keep logout idempotent.

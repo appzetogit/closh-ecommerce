@@ -30,7 +30,7 @@ export const login = asyncHandler(async (req, res) => {
 export const refresh = asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
     const decoded = decodeRefreshTokenOrThrow(refreshToken);
-    const admin = await Admin.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt isActive role');
+    const admin = await Admin.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens isActive role');
 
     if (!admin) throw new ApiError(401, 'Invalid refresh token.');
     if (!admin.isActive) throw new ApiError(403, 'Admin account is deactivated.');
@@ -51,9 +51,9 @@ export const logout = asyncHandler(async (req, res) => {
     if (refreshToken) {
         try {
             const decoded = decodeRefreshTokenOrThrow(refreshToken);
-            const admin = await Admin.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt');
-            if (admin?.refreshTokenHash) {
-                await clearRefreshSession(admin);
+            const admin = await Admin.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens');
+            if (admin) {
+                await clearRefreshSession(admin, refreshToken);
             }
         } catch {
             // Keep logout idempotent.

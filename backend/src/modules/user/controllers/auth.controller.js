@@ -254,7 +254,7 @@ export const registerOtp = asyncHandler(async (req, res) => {
 export const refresh = asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
     const decoded = decodeRefreshTokenOrThrow(refreshToken);
-    const user = await User.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt isActive isVerified');
+    const user = await User.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens isActive isVerified');
 
     if (!user) throw new ApiError(401, 'Invalid refresh token.');
     if (!user.isActive) throw new ApiError(403, 'Your account has been deactivated.');
@@ -277,9 +277,9 @@ export const logout = asyncHandler(async (req, res) => {
     if (refreshToken) {
         try {
             const decoded = decodeRefreshTokenOrThrow(refreshToken);
-            const user = await User.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt');
-            if (user?.refreshTokenHash) {
-                await clearRefreshSession(user);
+            const user = await User.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens');
+            if (user) {
+                await clearRefreshSession(user, refreshToken);
             }
         } catch {
             // Keep logout idempotent.

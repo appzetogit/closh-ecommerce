@@ -306,7 +306,7 @@ export const verifyLoginOTP = asyncHandler(async (req, res) => {
 export const refresh = asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
     const decoded = decodeRefreshTokenOrThrow(refreshToken);
-    const vendor = await Vendor.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt status isVerified suspensionReason');
+    const vendor = await Vendor.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens status isVerified suspensionReason');
 
     if (!vendor) throw new ApiError(401, 'Invalid refresh token.');
     if (!vendor.isVerified) throw new ApiError(403, 'Please verify your email first.');
@@ -329,9 +329,9 @@ export const logout = asyncHandler(async (req, res) => {
     if (refreshToken) {
         try {
             const decoded = decodeRefreshTokenOrThrow(refreshToken);
-            const vendor = await Vendor.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt');
-            if (vendor?.refreshTokenHash) {
-                await clearRefreshSession(vendor);
+            const vendor = await Vendor.findById(decoded.id).select('+refreshTokenHash +refreshTokenExpiresAt +refreshTokens');
+            if (vendor) {
+                await clearRefreshSession(vendor, refreshToken);
             }
         } catch {
             // Keep logout idempotent.
