@@ -1,19 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useBrandStore } from '../../../../shared/store/brandStore';
 import { useProductStore } from '../../../../shared/store/productStore';
+import { useSettingsStore } from '../../../../shared/store/settingsStore';
 import HeroSection from '../../components/HeroSection/HeroSection';
-import TrustBadges from '../../components/TrustBadges/TrustBadges';
-import HomeSection from '../../components/Home/HomeSection';
-import OfferTiles from '../../components/Home/OfferTiles';
-import CuratedCollage from '../../components/Home/CuratedCollage';
-import DealsStrip from '../../components/Home/DealsStrip';
-import CategoryScroller from '../../components/Home/CategoryScroller';
-import BrandBestsellers from '../../components/Home/BrandBestsellers';
-import PriceAnchoredGrid from '../../components/Home/PriceAnchoredGrid';
-import UspStrip from '../../components/Home/UspStrip';
-import TryAndBuyExplainer from '../../components/Home/TryAndBuyExplainer';
-import BrandMarquee from '../../components/Home/BrandMarquee';
-import ServiceAreasStrip from '../../components/Home/ServiceAreasStrip';
+import { homeSectionRegistry, homeSectionDefaultOrder } from './homeSectionRegistry';
 
 // Premium Scroll Reveal Animated Wrapper
 const ScrollReveal = ({ children, className = "" }) => {
@@ -51,6 +41,8 @@ const ScrollReveal = ({ children, className = "" }) => {
 const HomePage = () => {
     const initializeBrands = useBrandStore(state => state.initialize);
     const fetchPublicProducts = useProductStore(state => state.fetchPublicProducts);
+    const initializePublicSettings = useSettingsStore(state => state.initializePublic);
+    const homepageSettings = useSettingsStore(state => state.settings?.homepage);
 
     useEffect(() => {
         // Prefetch Discovery (Brands) data so it's ready when the modal opens
@@ -69,68 +61,43 @@ const HomePage = () => {
         fetchPublicProducts({ limit: 100, sort: 'newest', diversify: true });
     }, [fetchPublicProducts]);
 
+    useEffect(() => {
+        // Drives which homepage sections render and in what order — set from
+        // Admin > Content & Features > Home Page.
+        initializePublicSettings();
+    }, [initializePublicSettings]);
+
+    // A key missing from settings (nothing saved yet, or a newly added
+    // section the admin hasn't touched) defaults to enabled, at its
+    // registry-order position — a config gap should never silently delete a
+    // section that was actually shipped.
+    const orderedSectionKeys = useMemo(() => {
+        const configured = homepageSettings?.sections || {};
+        return [...homeSectionDefaultOrder]
+            .filter((key) => configured[key]?.enabled !== false)
+            .sort((a, b) => {
+                const orderA = configured[a]?.order ?? homeSectionDefaultOrder.indexOf(a);
+                const orderB = configured[b]?.order ?? homeSectionDefaultOrder.indexOf(b);
+                return orderA - orderB;
+            });
+    }, [homepageSettings]);
+
+    const heroEnabled = homepageSettings?.heroBannerEnabled !== false;
+
     return (
         <div className="overflow-x-hidden pt-0 bg-white">
             {/* Media hero — rounded card, auto-advancing */}
-            <ScrollReveal>
-                <HeroSection />
-            </ScrollReveal>
+            {heroEnabled && (
+                <ScrollReveal>
+                    <HeroSection />
+                </ScrollReveal>
+            )}
 
-            {/* What the platform actually promises — all four are real features */}
-            <ScrollReveal>
-                <UspStrip />
-            </ScrollReveal>
-
-            {/* 3-up category tiles with colour bars */}
-            <ScrollReveal>
-                <HomeSection>
-                    <OfferTiles />
-                </HomeSection>
-            </ScrollReveal>
-
-            {/* Festive / promotional collage */}
-            <ScrollReveal>
-                <CuratedCollage />
-            </ScrollReveal>
-
-            {/* Wide deal strip (only when a campaign is live) */}
-            <ScrollReveal>
-                <DealsStrip />
-            </ScrollReveal>
-
-            {/* The differentiator, explained in three steps */}
-            <ScrollReveal>
-                <TryAndBuyExplainer />
-            </ScrollReveal>
-
-            {/* Portrait category scroller */}
-            <ScrollReveal>
-                <CategoryScroller />
-            </ScrollReveal>
-
-            {/* Brand cards */}
-            <ScrollReveal>
-                <BrandBestsellers />
-            </ScrollReveal>
-
-            {/* Sub-category grids with real "FROM ₹" anchors */}
-            <ScrollReveal>
-                <PriceAnchoredGrid title="For him" match={/\bmen\b|\bmens\b|\bmen's\b/i} />
-            </ScrollReveal>
-            <ScrollReveal>
-                <PriceAnchoredGrid title="For her" match={/\bwomen\b|\bwomens\b|\bwomen's\b|\bladies\b/i} />
-            </ScrollReveal>
-
-            {/* Closing trust signals: the brand roster, where we deliver, then the badges */}
-            <ScrollReveal>
-                <BrandMarquee />
-            </ScrollReveal>
-            <ScrollReveal>
-                <ServiceAreasStrip />
-            </ScrollReveal>
-            <ScrollReveal>
-                <TrustBadges />
-            </ScrollReveal>
+            {orderedSectionKeys.map((key) => (
+                <ScrollReveal key={key}>
+                    {homeSectionRegistry[key].render()}
+                </ScrollReveal>
+            ))}
 
             {/* Spacer below last section for easier touch scrolling */}
             <div className="w-full h-8 sm:h-12 bg-transparent" />

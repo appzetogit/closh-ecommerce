@@ -30,7 +30,15 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
     parentId: null,
     isActive: true,
     order: "",
+    tryAndBuyEnabled: null,
   });
+
+  // The tri-state flag needs an explicit mapping since null (inherit), true
+  // and false are all distinct states, but AnimatedSelect option values must
+  // be primitives it can compare with === — booleans are passed as their
+  // string form ("true"/"false") and mapped back on submit.
+  const tryAndBuySelectValue = (val) =>
+    val === true ? "true" : val === false ? "false" : null;
 
   useEffect(() => {
     if (category) {
@@ -41,6 +49,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
         parentId: category.parentId || null,
         isActive: category.isActive !== undefined ? category.isActive : true,
         order: category.order ?? "",
+        tryAndBuyEnabled: tryAndBuySelectValue(category.tryAndBuyEnabled),
       });
     } else if (parentId !== null) {
       setFormData({
@@ -50,6 +59,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
         parentId: parentId,
         isActive: true,
         order: "",
+        tryAndBuyEnabled: null,
       });
     }
   }, [category, parentId]);
@@ -86,6 +96,10 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
     const submissionData = {
       ...formData,
       order: (formData.order === "" || formData.order === null) ? 0 : parseInt(formData.order, 10),
+      tryAndBuyEnabled:
+        formData.tryAndBuyEnabled === "true" ? true
+          : formData.tryAndBuyEnabled === "false" ? false
+          : null,
     };
 
     try {
@@ -395,6 +409,29 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
                       Active
                     </span>
                   </label>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Try &amp; Buy
+                    </label>
+                    <AnimatedSelect
+                      name="tryAndBuyEnabled"
+                      value={formData.tryAndBuyEnabled}
+                      onChange={handleChange}
+                      placeholder="Inherit (default: enabled)"
+                      options={[
+                        { value: null, label: "Inherit (default: enabled)" },
+                        { value: "true", label: "Enabled for this category" },
+                        { value: "false", label: "Disabled for this category" },
+                      ]}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Disabling applies to this category and everything under it, and
+                      overrides any individual product's own Try &amp; Buy setting — use
+                      this for things like Undergarments that should never be Try &amp; Buy
+                      regardless of what a vendor sets.
+                    </p>
+                  </div>
                 </div>
               </div>
 

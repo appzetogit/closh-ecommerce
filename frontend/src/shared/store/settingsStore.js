@@ -116,12 +116,22 @@ const defaultSettings = {
   },
   homepage: {
     heroBannerEnabled: true,
+    // Keys here must match the ones HomePage.jsx looks up in its section
+    // registry (see homeSectionRegistry.js) — that's what actually turns a
+    // toggle+order pair here into a real change on the storefront.
     sections: {
-      mostPopular: { enabled: true, order: 1 },
-      trending: { enabled: true, order: 2 },
-      flashSale: { enabled: true, order: 3 },
-      dailyDeals: { enabled: true, order: 4 },
-      recommended: { enabled: true, order: 5 },
+      uspStrip: { enabled: true, order: 1 },
+      offerTiles: { enabled: true, order: 2 },
+      curatedCollage: { enabled: true, order: 3 },
+      dealsStrip: { enabled: true, order: 4 },
+      tryAndBuyExplainer: { enabled: true, order: 5 },
+      categoryScroller: { enabled: true, order: 6 },
+      brandBestsellers: { enabled: true, order: 7 },
+      forHim: { enabled: true, order: 8 },
+      forHer: { enabled: true, order: 9 },
+      brandMarquee: { enabled: true, order: 10 },
+      serviceAreasStrip: { enabled: true, order: 11 },
+      trustBadges: { enabled: true, order: 12 },
     },
   },
   reviews: {

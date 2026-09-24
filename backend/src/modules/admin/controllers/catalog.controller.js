@@ -8,6 +8,7 @@ import Settings from '../../../models/Settings.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
+import { invalidateCategoryFeatureCache } from '../../../utils/categoryFeatures.js';
 
 const sanitizeFaqs = (faqs) => {
     if (!Array.isArray(faqs)) return [];
@@ -239,7 +240,7 @@ const calculateVariantAggregateStock = (variants = {}) => {
 };
 
 const sanitizeCategoryPayload = (payload = {}) => {
-    const allowed = ['name', 'description', 'image', 'icon', 'parentId', 'order', 'isActive'];
+    const allowed = ['name', 'description', 'image', 'icon', 'parentId', 'order', 'isActive', 'tryAndBuyEnabled'];
     const sanitized = {};
     for (const key of allowed) {
         if (Object.prototype.hasOwnProperty.call(payload, key)) {
@@ -248,6 +249,10 @@ const sanitizeCategoryPayload = (payload = {}) => {
     }
     if (Object.prototype.hasOwnProperty.call(sanitized, 'parentId')) {
         sanitized.parentId = sanitized.parentId || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitized, 'tryAndBuyEnabled')) {
+        // '' / null from the "Inherit" option in the admin form means "unset the override".
+        sanitized.tryAndBuyEnabled = sanitized.tryAndBuyEnabled === '' ? null : sanitized.tryAndBuyEnabled;
     }
     return sanitized;
 };
@@ -594,6 +599,7 @@ export const createCategory = asyncHandler(async (req, res) => {
     const category = await Category.create({ name, slug, ...rest });
 
     await deleteCache('categories:all');
+    invalidateCategoryFeatureCache();
 
     res.status(201).json(new ApiResponse(201, category, 'Category created.'));
 });
@@ -620,6 +626,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
     if (!category) throw new ApiError(404, 'Category not found.');
 
     await deleteCache('categories:all');
+    invalidateCategoryFeatureCache();
 
     res.status(200).json(new ApiResponse(200, category, 'Category updated.'));
 });

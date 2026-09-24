@@ -18,6 +18,7 @@ import Settings from '../models/Settings.model.js';
 import { validateCoupon } from '../services/coupon.service.js';
 import { handleRazorpayWebhook } from '../modules/payment/webhook.controller.js';
 import { resolveDivisionValues } from '../utils/divisionFilter.js';
+import { resolveTryAndBuyEligibility } from '../utils/categoryFeatures.js';
 
 const router = Router();
 
@@ -369,6 +370,16 @@ const listProducts = asyncHandler(async (req, res) => {
     const total = await Product.countDocuments(filter);
 
     const activeProducts = await applyActiveCampaigns(products);
+
+    // The storefront can't walk the category tree itself to know whether a
+    // category-level ban (e.g. "no Try & Buy for Undergarments") applies to a
+    // given product — resolve the final effective flag here so ProductCard /
+    // cart / checkout only ever need to read one boolean.
+    for (const p of activeProducts) {
+        const categoryId = p.categoryId?._id || p.categoryId;
+        p.tryAndBuyEnabled = await resolveTryAndBuyEligibility({ tryAndBuyEnabled: p.tryAndBuyEnabled, categoryId });
+    }
+
     const responseData = { products: activeProducts, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
 
     // --- CACHE STORE START ---
@@ -556,6 +567,10 @@ const getProductDetail = asyncHandler(async (req, res) => {
         .populate('vendorId', 'storeName storeLogo rating address shopLocation freeShippingThreshold isOnline');
     if (!product) throw new ApiError(404, 'Product not found.');
     const activeProduct = await applyActiveCampaigns(product);
+    activeProduct.tryAndBuyEnabled = await resolveTryAndBuyEligibility({
+        tryAndBuyEnabled: activeProduct.tryAndBuyEnabled,
+        categoryId: activeProduct.categoryId?._id || activeProduct.categoryId,
+    });
     res.status(200).json(new ApiResponse(200, activeProduct, 'Product detail.'));
 });
 

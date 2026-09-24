@@ -114,6 +114,8 @@ export const createCategorySchema = Joi.object({
     parentId: objectId.allow(null, '').optional(),
     order: Joi.number().integer().min(0).optional(),
     isActive: Joi.boolean().optional(),
+    // null/'' = inherit from ancestor (or default-enabled); true/false = explicit override.
+    tryAndBuyEnabled: Joi.boolean().allow(null, '').optional(),
 });
 
 export const updateCategorySchema = Joi.object({
@@ -124,6 +126,7 @@ export const updateCategorySchema = Joi.object({
     parentId: objectId.allow(null, '').optional(),
     order: Joi.number().integer().min(0).optional(),
     isActive: Joi.boolean().optional(),
+    tryAndBuyEnabled: Joi.boolean().allow(null, '').optional(),
 }).min(1);
 
 export const reorderCategoriesSchema = Joi.object({

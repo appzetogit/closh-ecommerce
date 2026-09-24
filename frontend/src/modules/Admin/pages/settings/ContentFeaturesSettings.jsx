@@ -59,6 +59,36 @@ const ContentFeaturesSettings = () => {
     });
   };
 
+  const handleHomepageSectionOrder = (section, order) => {
+    setHomepageData({
+      ...homepageData,
+      sections: {
+        ...homepageData.sections,
+        [section]: {
+          ...homepageData.sections[section],
+          order,
+        },
+      },
+    });
+  };
+
+  // Friendly labels for the section keys HomePage.jsx's registry uses — see
+  // homeSectionRegistry.js for the key -> component mapping this must match.
+  const homepageSectionLabels = {
+    uspStrip: 'USP Strip (delivery / try&buy / returns / payment icons)',
+    offerTiles: 'Category Tiles (3-up Men/Women/Kids style tiles)',
+    curatedCollage: 'Curated Collage (festive/promo banner grid)',
+    dealsStrip: 'Deals Strip (only shows when a campaign is live)',
+    tryAndBuyExplainer: 'Try & Buy Explainer',
+    categoryScroller: 'Category Scroller (portrait cards)',
+    brandBestsellers: 'Brand Bestsellers',
+    forHim: 'For Him (menswear price-anchored grid)',
+    forHer: 'For Her (womenswear price-anchored grid)',
+    brandMarquee: 'Brand Marquee (scrolling logo strip)',
+    serviceAreasStrip: 'Service Areas Strip',
+    trustBadges: 'Trust Badges',
+  };
+
   const handleReviewsChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (name.startsWith('displaySettings.')) {
@@ -272,21 +302,37 @@ const ContentFeaturesSettings = () => {
 
               <div className="border-t border-gray-200 pt-6">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">Homepage Sections</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Turn sections on/off and set their display order (lower number = higher
+                  on the page). The hero banner above is controlled separately.
+                </p>
                 <div className="space-y-3">
-                  {Object.entries(homepageData.sections || {}).map(([key, section]) => (
-                    <div key={key} className="flex items-center justify-between gap-3 p-3 sm:p-4 border border-gray-200 rounded-lg">
-                      <span className="text-sm font-semibold text-gray-700 capitalize flex-1 min-w-0">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                  {Object.entries(homepageData.sections || {})
+                    .sort((a, b) => (a[1]?.order ?? 0) - (b[1]?.order ?? 0))
+                    .map(([key, section]) => (
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 border border-gray-200 rounded-lg">
+                      <span className="text-sm font-semibold text-gray-700 flex-1 min-w-0">
+                        {homepageSectionLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
                       </span>
-                      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <div className="flex items-center gap-3 flex-shrink-0">
                         <input
-                          type="checkbox"
-                          checked={section.enabled !== false}
-                          onChange={() => handleHomepageSectionToggle(key)}
-                          className="sr-only peer"
+                          type="number"
+                          min="1"
+                          value={section.order ?? ''}
+                          onChange={(e) => handleHomepageSectionOrder(key, parseInt(e.target.value, 10) || 0)}
+                          className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          title="Display order"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                      </label>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={section.enabled !== false}
+                            onChange={() => handleHomepageSectionToggle(key)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
