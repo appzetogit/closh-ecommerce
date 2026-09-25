@@ -14,22 +14,31 @@ const Reviews = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [activeTab, setActiveTab] = useState('product'); // 'product' or 'delivery'
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetchReviewAnalytics();
   }, [fetchReviewAnalytics]);
 
+  // Changing tab/search/status should always jump back to page 1 - otherwise
+  // switching filters while on, say, page 3 can land on a page that no
+  // longer has any results for the new filter.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedStatus, activeTab]);
+
   useEffect(() => {
     const params = {
       search: searchQuery,
-      status: selectedStatus === 'all' ? undefined : selectedStatus
+      status: selectedStatus === 'all' ? undefined : selectedStatus,
+      page: currentPage,
     };
     if (activeTab === 'product') {
       fetchReviews(params);
     } else {
       fetchDeliveryReviews(params);
     }
-  }, [searchQuery, selectedStatus, activeTab, fetchReviews, fetchDeliveryReviews]);
+  }, [searchQuery, selectedStatus, activeTab, currentPage, fetchReviews, fetchDeliveryReviews]);
 
   const handleApprove = async (id) => {
     await updateReviewStatus(id, 'approved');
@@ -322,7 +331,10 @@ const Reviews = () => {
           loading={isLoading}
           pagination={true}
           itemsPerPage={pagination.limit}
+          serverSide
+          page={currentPage}
           totalItems={pagination.total}
+          onPageChange={setCurrentPage}
         />
       </div>
     </motion.div>

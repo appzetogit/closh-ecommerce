@@ -12,11 +12,24 @@ const DataTable = ({
   onRowClick,
   className = '',
   minWidth = 'min-w-[800px]',
+  // Server-side pagination: pass these three when `data` is ALREADY just the
+  // current page's rows (backend does skip/limit). DataTable then stops
+  // re-slicing `data` locally and instead reports page changes upward via
+  // onPageChange so the caller can refetch. Without these, DataTable behaves
+  // exactly as before: it client-side slices a full in-memory `data` array
+  // using its own internal page state.
+  serverSide = false,
+  page: controlledPage,
+  totalItems,
+  onPageChange,
 }) => {
-  const [currentPage, setCurrentPage] = useState(1);
+  const [internalPage, setInternalPage] = useState(1);
+  const currentPage = serverSide ? (controlledPage || 1) : internalPage;
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  // Sorting
+  // Sorting. In server-side mode this only sorts the current page's rows
+  // (there's no full dataset in memory to sort across pages) - the same
+  // trade-off most admin tables backed by server pagination make.
   const sortedData = useMemo(() => {
     if (!sortConfig.key || !sortable) return data;
 
@@ -36,14 +49,15 @@ const DataTable = ({
 
   // Pagination
   const paginatedData = useMemo(() => {
-    if (!pagination) return sortedData;
-    
+    if (!pagination || serverSide) return sortedData;
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return sortedData.slice(startIndex, endIndex);
-  }, [sortedData, currentPage, itemsPerPage, pagination]);
+  }, [sortedData, currentPage, itemsPerPage, pagination, serverSide]);
 
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+  const totalResults = serverSide ? (totalItems ?? 0) : sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / itemsPerPage));
 
   const handleSort = (key) => {
     if (!sortable) return;
@@ -56,7 +70,12 @@ const DataTable = ({
   };
 
   const handlePageChange = (page) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+    const clamped = Math.max(1, Math.min(page, totalPages));
+    if (serverSide) {
+      onPageChange?.(clamped);
+    } else {
+      setInternalPage(clamped);
+    }
   };
 
   // Get primary columns (exclude actions for mobile card view)
@@ -212,8 +231,8 @@ const DataTable = ({
         <div className="bg-white px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0 border-t border-gray-200">
           <div className="text-xs sm:text-sm text-gray-700">
             Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
-            {Math.min(currentPage * itemsPerPage, sortedData.length)} of{' '}
-            {sortedData.length} results
+            {Math.min(currentPage * itemsPerPage, totalResults)} of{' '}
+            {totalResults} results
           </div>
           <div className="flex items-center gap-2">
             <Button

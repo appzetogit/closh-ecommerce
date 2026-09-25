@@ -12,14 +12,24 @@ const Suggestions = () => {
   const { suggestions, isLoading, fetchSuggestions, updateSuggestionStatus, deleteSuggestion, pagination } = useSuggestionStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Changing the search/status filter should always jump back to page 1 -
+  // otherwise you can land on, say, page 3 of an unfiltered list and then
+  // filter down to a search with only 1 page, showing "no data" instead of
+  // the real (page 1) results.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedStatus]);
 
   useEffect(() => {
     const params = {
       search: searchQuery,
       status: selectedStatus === 'all' ? undefined : selectedStatus,
+      page: currentPage,
     };
     fetchSuggestions(params);
-  }, [searchQuery, selectedStatus, fetchSuggestions]);
+  }, [searchQuery, selectedStatus, currentPage, fetchSuggestions]);
 
   const handleMarkReviewed = async (id) => {
     await updateSuggestionStatus(id, 'reviewed');
@@ -149,7 +159,10 @@ const Suggestions = () => {
           loading={isLoading}
           pagination={true}
           itemsPerPage={pagination.limit}
+          serverSide
+          page={currentPage}
           totalItems={pagination.total}
+          onPageChange={setCurrentPage}
         />
       </div>
     </motion.div>
