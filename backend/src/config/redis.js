@@ -32,23 +32,37 @@ redisConnection.on('error', (err) => {
     }
 });
 
+// Only the "wait for the 'ready' event" branch below used to run this - the
+// "already ready" early-return branch just resolved immediately without
+// ever calling it. In production the module-level ioredis client (created
+// at import time, before connectRedis() is even called - see the
+// rateLimiter.js startup-race comment) is essentially always already
+// 'ready' by the time connectRedis() runs, so that early-return branch is
+// the one taken on EVERY boot - meaning this fix never actually ran,
+// which is exactly why "Eviction policy is volatile-lru" kept coming back
+// after every single restart.
+const applyRedisConfig = async () => {
+    try {
+        await redisConnection.config('SET', 'maxmemory-policy', 'noeviction');
+    } catch (err) {
+        console.warn('⚠️ Could not set maxmemory-policy programmatically. You may see BullMQ warnings.', err.message);
+    }
+};
+
 const connectRedis = async () => {
     const isDev = process.env.NODE_ENV !== 'production';
     console.log(`[Redis] Current status: ${redisConnection.status}`);
-    
+
     return new Promise((resolve, reject) => {
         if (redisConnection.status === 'ready') {
             console.log('✅ Redis Connected for Queues (cached)');
-            return resolve(redisConnection);
+            applyRedisConfig().finally(() => resolve(redisConnection));
+            return;
         }
-        
+
         const onReady = async () => {
             console.log('✅ Redis Connected for Queues');
-            try {
-                await redisConnection.config('SET', 'maxmemory-policy', 'noeviction');
-            } catch (err) {
-                console.warn('⚠️ Could not set maxmemory-policy programmatically. You may see BullMQ warnings.');
-            }
+            await applyRedisConfig();
             cleanup();
             resolve(redisConnection);
         };
