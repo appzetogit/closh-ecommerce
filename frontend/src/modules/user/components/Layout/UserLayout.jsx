@@ -3,6 +3,7 @@ import Header from '../../components/Header/Header';
 import Footer from '../../components/Footer/Footer';
 import BottomNav from '../../components/Navigation/BottomNav';
 import ServiceAreaBlocker from './ServiceAreaBlocker';
+import SuggestionBox from '../../components/Feedback/SuggestionBox';
 
 const UserLayout = ({ children, variant = 'default', showHeader = true, showCategoryBar = true }) => {
     const location = useLocation();
@@ -21,6 +22,10 @@ const UserLayout = ({ children, variant = 'default', showHeader = true, showCate
                         {children}
                     </ServiceAreaBlocker>
                 </main>
+                {/* Always rendered, unlike Footer below — the "Suggestions & your
+                    thoughts" box should show at the bottom of every page (including
+                    product/cart/checkout on mobile, where Footer itself is hidden). */}
+                <SuggestionBox />
                 <div className={['product', 'account', 'cart', 'checkout', 'products', 'payment'].includes(variant) || isAddressPage || isTrackOrderPage ? "hidden lg:block" : (variant !== 'shop' ? "" : "hidden")}>
                     <Footer />
                 </div>

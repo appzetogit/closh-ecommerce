@@ -19,6 +19,7 @@ import { validateCoupon } from '../services/coupon.service.js';
 import { handleRazorpayWebhook } from '../modules/payment/webhook.controller.js';
 import { resolveDivisionValues } from '../utils/divisionFilter.js';
 import { resolveTryAndBuyEligibility } from '../utils/categoryFeatures.js';
+import Suggestion from '../models/Suggestion.model.js';
 
 const router = Router();
 
@@ -1053,6 +1054,30 @@ router.post('/check-serviceability', asyncHandler(async (req, res) => {
 router.get('/service-areas', asyncHandler(async (req, res) => {
     const areas = await serviceAreaService.getAllActiveServiceAreas();
     res.json(new ApiResponse(200, areas, 'Service areas fetched'));
+}));
+
+// POST /api/suggestions - the "Suggestions & your thoughts" box shown on every
+// customer page. Guests can submit without an account; optionalAuth attaches
+// req.user only if a valid token happens to be present, same pattern as
+// coupons/validate above.
+router.post('/suggestions', optionalAuth, asyncHandler(async (req, res) => {
+    const message = String(req.body?.message || '').trim();
+    if (!message) {
+        throw new ApiError(400, 'Please write your suggestion before submitting.');
+    }
+    if (message.length > 2000) {
+        throw new ApiError(400, 'That suggestion is too long (2000 characters max).');
+    }
+
+    const suggestion = await Suggestion.create({
+        message,
+        name: String(req.body?.name || '').trim().slice(0, 120),
+        email: String(req.body?.email || '').trim().slice(0, 200),
+        userId: req.user?.id || req.user?._id || null,
+        pageUrl: String(req.body?.pageUrl || '').trim().slice(0, 500),
+    });
+
+    res.status(201).json(new ApiResponse(201, { id: suggestion._id }, 'Thanks for the feedback!'));
 }));
 
 // Legacy support: GET /api/:id (only ObjectId-like values to avoid swallowing unknown routes)

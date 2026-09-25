@@ -291,6 +291,16 @@ export const getDeliveryReviews = (params = {}) =>
 export const getReviewAnalytics = () =>
     api.get('/admin/reviews/analytics');
 
+// ——— Suggestions & Feedback ————————————————————————————————————————————————————
+export const getAllSuggestions = (params = {}) =>
+    api.get('/admin/suggestions', { params });
+
+export const updateSuggestionStatus = (id, status) =>
+    api.patch(`/admin/suggestions/${id}/status`, { status });
+
+export const deleteSuggestion = (id) =>
+    api.delete(`/admin/suggestions/${id}`);
+
 // ——— Support Tickets —————————————————————————————————————————————————————————————
 export const getAllTickets = (params = {}) =>
     api.get('/admin/support/tickets', { params });

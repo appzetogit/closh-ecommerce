@@ -9,6 +9,7 @@ import * as deliveryController from '../controllers/delivery.controller.js';
 import * as returnController from '../controllers/return.controller.js';
 import * as supportController from '../controllers/support.controller.js';
 import * as reviewController from '../controllers/review.controller.js';
+import * as suggestionController from '../controllers/suggestion.controller.js';
 import * as uploadController from '../controllers/upload.controller.js';
 import * as marketingController from '../controllers/marketing.controller.js';
 import * as reportController from '../controllers/report.controller.js';
@@ -216,6 +217,11 @@ router.patch('/reviews/:id/status', ...adminAuth, checkPermission('products_mana
 router.delete('/reviews/:id', ...adminAuth, checkPermission('products_manage'), reviewController.deleteReview);
 router.get('/delivery-reviews', ...adminAuth, checkPermission('products_manage'), reviewController.getDeliveryReviews);
 router.post('/uploads/image', ...adminAuth, uploadSingle('image'), uploadController.uploadImage);
+
+// ─── Suggestions & Feedback (the "Suggestions & your thoughts" box on every customer page) ──
+router.get('/suggestions', ...adminAuth, checkPermission('support_manage'), suggestionController.getAllSuggestions);
+router.patch('/suggestions/:id/status', ...adminAuth, checkPermission('support_manage'), suggestionController.updateSuggestionStatus);
+router.delete('/suggestions/:id', ...adminAuth, checkPermission('support_manage'), suggestionController.deleteSuggestion);
 
 // ─── Attribute Management ─────────────────────────────────────────────────────
 router.get('/attributes', ...adminAuth, checkPermission('attributes_manage'), attributeController.getAllAttributes);

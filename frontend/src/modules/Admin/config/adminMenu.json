@@ -45,6 +45,12 @@
     "children": []
   },
   {
+    "title": "Suggestions",
+    "route": "/admin/suggestions",
+    "permission": "support_manage",
+    "children": []
+  },
+  {
     "title": "Categories",
     "route": "/admin/categories",
     "permission": "categories_manage",

@@ -22,6 +22,7 @@ import {
   FiChevronDown,
   FiX,
   FiUser,
+  FiSend,
 } from "react-icons/fi";
 import { useAdminAuthStore } from "../../store/adminStore";
 import { useNotificationStore } from "../../store/notificationStore";
@@ -45,6 +46,7 @@ const iconMap = {
   "Customer Support": FiMessageCircle,
   "Vendor Support": FiMessageCircle,
   Reviews: FiMessageCircle,
+  Suggestions: FiSend,
   Reports: FiFileText,
   "Analytics & Finance": FiBarChart2,
   Settings: FiSettings,

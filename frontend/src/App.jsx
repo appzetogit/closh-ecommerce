@@ -30,6 +30,7 @@ import StaffManagement from "./modules/Admin/pages/staff/StaffManagement";
 import Campaigns from "./modules/Admin/pages/Campaigns";
 import Banners from "./modules/Admin/pages/Banners";
 import Reviews from "./modules/Admin/pages/Reviews";
+import Suggestions from "./modules/Admin/pages/Suggestions";
 import Analytics from "./modules/Admin/pages/Analytics";
 import Content from "./modules/Admin/pages/Content";
 import Settings from "./modules/Admin/pages/Settings";
@@ -330,6 +331,7 @@ const renderAdminRoutes = () => (
     <Route path="campaigns" element={<Campaigns />} />
     <Route path="banners" element={<Banners />} />
     <Route path="reviews" element={<Reviews />} />
+    <Route path="suggestions" element={<Suggestions />} />
     <Route path="content" element={<Content />} />
     <Route path="service-areas" element={<ServiceAreas />} />
     {/* Catch-all for unmatched routes in this area */}
