@@ -26,6 +26,13 @@ const UserLayout = ({ children, variant = 'default', showHeader = true, showCate
                     thoughts" box should show at the bottom of every page (including
                     product/cart/checkout on mobile, where Footer itself is hidden). */}
                 <SuggestionBox />
+                {/* ProductsPage floats its own Gender/Sort/Filter pill fixed to the
+                    viewport bottom (mobile only) so it stays reachable while scrolling
+                    the grid - but being viewport-fixed, it has no idea the document
+                    ends here, and was overlapping/bleeding through the suggestion box
+                    once a user scrolled all the way down. Reserve blank space the same
+                    height as that pill so it floats over empty padding instead. */}
+                {location.pathname.startsWith('/products') && <div className="h-24 md:hidden" aria-hidden="true" />}
                 <div className={['product', 'account', 'cart', 'checkout', 'products', 'payment'].includes(variant) || isAddressPage || isTrackOrderPage ? "hidden lg:block" : (variant !== 'shop' ? "" : "hidden")}>
                     <Footer />
                 </div>
