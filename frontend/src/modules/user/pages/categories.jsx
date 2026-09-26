@@ -73,11 +73,31 @@ const MobileCategories = () => {
     return allCategories.filter(cat => cat.normParentId === selectedRootId && cat.isActive !== false);
   }, [selectedRootId, allCategories]);
 
+  // A subcategory with no children of its own is a leaf - there's nothing to
+  // show in the "grand-subcategory" grid below it, so it must jump straight
+  // to the product listing instead of rendering an empty page. handleSubSelect
+  // (a manual sidebar click) already does this; the auto-select effect below
+  // didn't, so landing on a root whose FIRST child is itself a leaf (e.g.
+  // Kid > Boys, where Jeans has no further children) silently auto-selected
+  // that leaf and got stuck showing "Shop for Jeans" with a blank grid.
+  const goToProductsIfLeaf = (id, rootId) => {
+    const hasChildren = allCategories.some(cat => cat.normParentId === id && cat.isActive !== false);
+    if (hasChildren) return false;
+    const sub = allCategories.find(c => c.normId === id);
+    const root = allCategories.find(c => c.normId === rootId);
+    const url = `/products?division=${root?.name}&category=${sub?.name}&cid=${id}`;
+    navigate(url.replace(/\s+/g, '+'));
+    return true;
+  };
+
   // Auto-select first subcategory when root changes
   useEffect(() => {
     if (subcategories.length > 0 && !selectedSubId) {
-      setSelectedSubId(subcategories[0].normId);
+      const firstId = subcategories[0].normId;
+      setSelectedSubId(firstId);
+      goToProductsIfLeaf(firstId, selectedRootId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subcategories, selectedSubId]);
 
   // 5. Grand-subcategories (Level 2) - Linked to selected Sub
@@ -96,15 +116,7 @@ const MobileCategories = () => {
   const handleSubSelect = (id) => {
     setSelectedSubId(id);
     if (gridRef.current) gridRef.current.scrollTop = 0;
-
-    // Check if subcategory has children; if not, we can navigate directly
-    const children = allCategories.filter(cat => cat.normParentId === id && cat.isActive !== false);
-    if (children.length === 0) {
-      const sub = allCategories.find(c => c.normId === id);
-      const root = allCategories.find(c => c.normId === selectedRootId);
-      const url = `/products?division=${root?.name}&category=${sub?.name}&cid=${id}`;
-      navigate(url.replace(/\s+/g, '+'));
-    }
+    goToProductsIfLeaf(id, selectedRootId);
   };
 
   const handleGrandSubSelect = (id) => {
