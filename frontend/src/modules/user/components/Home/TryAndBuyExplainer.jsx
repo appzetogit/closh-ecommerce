@@ -52,7 +52,7 @@ const TryAndBuyExplainer = () => {
                                 >
                                     <div className="relative w-9 h-9 md:w-12 md:h-12 rounded-full bg-[#7C5CFF]/20 border border-white/10 flex items-center justify-center mb-2 md:mb-3">
                                         <Icon size={16} className="text-[#C4B5FD] md:size-[20px]" />
-                                        <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 md:w-5 md:h-5 rounded-full bg-[#FFC629] text-gray-900 text-[9px] md:text-[10px] font-black flex items-center justify-center ring-2 ring-[#0F0B1F]">
+                                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#FFC629] text-gray-900 text-[9px] md:text-[10px] font-black flex items-center justify-center ring-2 ring-[#0F0B1F]">
                                             {i + 1}
                                         </span>
                                     </div>
