@@ -8,6 +8,15 @@ const COLLAGE_BANNER_TYPES = ['festival_offer', 'promotional', 'side_banner'];
 
 const resolveLink = (link) => (link === '/product' ? '/products' : link || '/products');
 
+// Category names come straight from the DB and aren't consistently cased
+// there ("BOYS", "GIRLS" vs "Top Wear", "Mens Footwear") - normalize to Title
+// Case for display only, so the tiles read as one set instead of a mix of
+// ALL CAPS and Title Case labels.
+const toTitleCase = (str) =>
+    String(str || '')
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
 const parentIdOf = (cat) => {
     const p = cat?.parentId;
     if (!p) return null;
@@ -147,7 +156,7 @@ const CuratedCollage = () => {
                     </p>
                 )}
                 <p className={`text-white font-black leading-tight drop-shadow ${tall ? 'text-[16px] md:text-[22px]' : 'text-[12px] md:text-[15px]'}`}>
-                    {tile.label}
+                    {toTitleCase(tile.label)}
                 </p>
             </div>
         </button>
