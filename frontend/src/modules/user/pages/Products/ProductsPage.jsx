@@ -14,7 +14,7 @@ import ProductSkeleton from '../../components/ProductCard/ProductSkeleton';
 import { useCategoryStore } from '../../../../shared/store/categoryStore';
 
 const ProductsPage = () => {
-    const { products, isLoading, fetchPublicProducts } = useProductStore();
+    const { products, isLoading, fetchError, fetchPublicProducts } = useProductStore();
     const { categories: allCategoriesStore, initialize: initCategories } = useCategoryStore();
     const { toggleWishlist, isInWishlist, wishlistItems } = useWishlist();
     const { addToCart, getCartCount } = useCart();
@@ -199,6 +199,7 @@ const ProductsPage = () => {
     }, [initCategories]);
 
     // Load products from backend based on active URL filters
+    const [retryTick, setRetryTick] = useState(0);
     useEffect(() => {
         const hasCid = Boolean(cidFromUrl && /^[0-9a-fA-F]{24}$/.test(cidFromUrl));
         const divisionToFetch = hasCid ? undefined : (division || (selectedGender !== 'All' ? selectedGender : undefined));
@@ -219,7 +220,7 @@ const ProductsPage = () => {
                   selectedSort === 'Price: High to Low' ? 'price-desc' :
                   selectedSort === 'Discount' ? 'discount' : 'popular',
         });
-    }, [category, subCategoryFromUrl, cidFromUrl, division, selectedGender, selectedBrands, selectedSubCategories, selectedSort, fetchPublicProducts, searchParams]);
+    }, [category, subCategoryFromUrl, cidFromUrl, division, selectedGender, selectedBrands, selectedSubCategories, selectedSort, fetchPublicProducts, searchParams, retryTick]);
 
     // Derived subcategories based on gender
     const subCategories = useMemo(() => {
@@ -674,6 +675,20 @@ const ProductsPage = () => {
                                     <ProductSkeleton />
                                 </div>
                             ))
+                        ) : fetchError ? (
+                            <div className="col-span-full py-20 px-4 text-center flex flex-col items-center justify-center animate-fadeInUp">
+                                <div className="w-16 h-16 mb-6 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
+                                    <X size={28} className="text-red-400" />
+                                </div>
+                                <h3 className="text-[18px] md:text-xl font-bold uppercase text-gray-900 leading-tight mb-2">Couldn't load products</h3>
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase max-w-[280px] leading-relaxed mb-6">Check your connection and try again.</p>
+                                <button
+                                    onClick={() => setRetryTick(t => t + 1)}
+                                    className="px-10 py-3.5 bg-black text-white text-[11px] font-bold uppercase rounded-full active:scale-95 transition-all"
+                                >
+                                    Retry
+                                </button>
+                            </div>
                         ) : filteredProducts.length > 0 ? filteredProducts.map((product) => (
                             <div key={product.id}>
                                 <ProductCard product={product} />

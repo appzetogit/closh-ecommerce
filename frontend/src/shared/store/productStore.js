@@ -32,9 +32,12 @@ export const normalizeProduct = (p) => {
     };
 };
 
+let fetchRequestId = 0;
+
 export const useProductStore = create((set, get) => ({
     products: [],
     isLoading: false,
+    fetchError: false,
     pagination: {
         total: 0,
         page: 1,
@@ -42,16 +45,23 @@ export const useProductStore = create((set, get) => ({
         pages: 1
     },
 
+    // Every caller (Home feed, category browsing, shop page, ...) shares this
+    // one `products` list, so a stale or failed request must never overwrite
+    // what a newer request already put there - otherwise, e.g., a category
+    // page's fetch failing silently leaves the Home page's 100-item feed on
+    // screen looking like "every category shows the same 100 products".
     fetchPublicProducts: async (params = {}) => {
-        set({ isLoading: true });
+        const requestId = ++fetchRequestId;
+        set({ isLoading: true, fetchError: false });
         try {
             // Backend maps /products to Public routes
             const response = await api.get('/products', { params });
+            if (requestId !== fetchRequestId) return; // superseded by a newer request
             const payload = response?.data || response;
-            
+
             // Handle both ApiResponse wrapped format and direct format
-            const productsList = Array.isArray(payload?.data?.products) 
-                ? payload.data.products 
+            const productsList = Array.isArray(payload?.data?.products)
+                ? payload.data.products
                 : (Array.isArray(payload?.products) ? payload.products : []);
 
             const normalized = productsList.map(normalizeProduct);
@@ -66,11 +76,15 @@ export const useProductStore = create((set, get) => ({
             set({
                 products: normalized,
                 pagination,
-                isLoading: false
+                isLoading: false,
+                fetchError: false
             });
         } catch (error) {
-            set({ isLoading: false });
-            // Suppress error toast for public listing unless it's critical
+            if (requestId !== fetchRequestId) return; // superseded by a newer request
+            // Don't leave a previous, unrelated fetch's products on screen -
+            // that reads as "every filter shows the same wrong list" instead
+            // of the network failure it actually is.
+            set({ isLoading: false, fetchError: true, products: [] });
         }
     },
 
