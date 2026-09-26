@@ -33,6 +33,17 @@ const UserLayout = ({ children, variant = 'default', showHeader = true, showCate
                     once a user scrolled all the way down. Reserve blank space the same
                     height as that pill so it floats over empty padding instead. */}
                 {location.pathname.startsWith('/products') && <div className="h-24 md:hidden" aria-hidden="true" />}
+                {/* Same issue with the regular mobile BottomNav below (h-16, fixed to
+                    the viewport bottom, safe-area padding on top of that): without a
+                    matching spacer here, it sits on top of the suggestion box's Send
+                    button on every other page. */}
+                {displayBottomNav && (
+                    <div
+                        className="h-16 md:hidden"
+                        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                        aria-hidden="true"
+                    />
+                )}
                 <div className={['product', 'account', 'cart', 'checkout', 'products', 'payment'].includes(variant) || isAddressPage || isTrackOrderPage ? "hidden lg:block" : (variant !== 'shop' ? "" : "hidden")}>
                     <Footer />
                 </div>
