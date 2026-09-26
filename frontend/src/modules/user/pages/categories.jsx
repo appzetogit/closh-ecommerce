@@ -80,22 +80,28 @@ const MobileCategories = () => {
   // didn't, so landing on a root whose FIRST child is itself a leaf (e.g.
   // Kid > Boys, where Jeans has no further children) silently auto-selected
   // that leaf and got stuck showing "Shop for Jeans" with a blank grid.
-  const goToProductsIfLeaf = (id, rootId) => {
+  const goToProductsIfLeaf = (id, rootId, { replace = false } = {}) => {
     const hasChildren = allCategories.some(cat => cat.normParentId === id && cat.isActive !== false);
     if (hasChildren) return false;
     const sub = allCategories.find(c => c.normId === id);
     const root = allCategories.find(c => c.normId === rootId);
     const url = `/products?division=${root?.name}&category=${sub?.name}&cid=${id}`;
-    navigate(url.replace(/\s+/g, '+'));
+    navigate(url.replace(/\s+/g, '+'), { replace });
     return true;
   };
 
-  // Auto-select first subcategory when root changes
+  // Auto-select first subcategory when root changes. This redirect must
+  // REPLACE the history entry, not push a new one: the user never chose to
+  // land on this leaf, so /category/:id shouldn't become a real back-button
+  // stop. Without `replace`, hitting back from the product page landed right
+  // back on /category/:id, which immediately re-ran this same effect and
+  // auto-redirected forward again - back button looked completely broken,
+  // it just bounced straight back to where you already were.
   useEffect(() => {
     if (subcategories.length > 0 && !selectedSubId) {
       const firstId = subcategories[0].normId;
       setSelectedSubId(firstId);
-      goToProductsIfLeaf(firstId, selectedRootId);
+      goToProductsIfLeaf(firstId, selectedRootId, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subcategories, selectedSubId]);
