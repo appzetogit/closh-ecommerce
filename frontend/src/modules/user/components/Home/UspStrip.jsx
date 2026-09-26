@@ -17,7 +17,7 @@ const USPS = [
 const UspStrip = () => (
     <section className="w-full bg-white pt-1 pb-3 md:py-4">
         <div className="max-w-[1600px] mx-auto md:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 md:gap-4 px-4 md:px-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4 px-4 md:px-0">
                 {USPS.map(({ icon: Icon, title, sub }) => (
                     <div
                         key={title}
@@ -27,8 +27,11 @@ const UspStrip = () => (
                             <Icon size={18} strokeWidth={2} />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[12px] md:text-[14px] font-black text-gray-900 leading-tight truncate">{title}</p>
-                            <p className="text-[10px] md:text-[12px] text-gray-500 font-medium leading-tight truncate">{sub}</p>
+                            {/* 2 columns on mobile leaves ~95px for text next to the icon -
+                                too narrow for most of these lines to fit on one line, so wrap
+                                instead of truncating (was clipping most subtitles to "..."). */}
+                            <p className="text-[12px] md:text-[14px] font-black text-gray-900 leading-tight">{title}</p>
+                            <p className="text-[10px] md:text-[12px] text-gray-500 font-medium leading-tight">{sub}</p>
                         </div>
                     </div>
                 ))}
