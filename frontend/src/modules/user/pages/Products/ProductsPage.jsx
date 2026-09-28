@@ -132,9 +132,12 @@ const ProductsPage = () => {
         }
     }, [searchParams, brandFromUrl]);
 
-    // Dynamic Filter State — seeded with common sizes as defaults
+    // Dynamic Filter State — derived from the actual products in this
+    // listing (below), not seeded with a default clothing chart: a shoes
+    // listing has no S/M/L, and seeding them here meant they showed up in
+    // the quick size filter anyway even though no product actually used them.
     const [filterOptions, setFilterOptions] = useState({
-        sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+        sizes: [],
         fabrics: [],
         patterns: [],
         fits: []
@@ -144,7 +147,7 @@ const ProductsPage = () => {
     useEffect(() => {
         if (!products || products.length === 0) return;
 
-        const sizesSet = new Set(['XS', 'S', 'M', 'L', 'XL', 'XXL']);
+        const sizesSet = new Set();
         const fabricsSet = new Set();
         const patternsSet = new Set();
         const fitsSet = new Set();
