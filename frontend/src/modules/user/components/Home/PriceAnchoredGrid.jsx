@@ -40,10 +40,17 @@ const PriceAnchoredGrid = ({ title, match, limit = 8 }) => {
             if (!name || norm(name) === 'general') continue;
             const price = Number(p.discountedPrice ?? p.price);
             if (!Number.isFinite(price) || price <= 0) continue;
+            // Category names aren't unique across divisions (Men, Women, Boys
+            // and Girls can all have their own "Jeans" as separate DB
+            // documents) - grouping by name alone and later re-resolving that
+            // name server-side picked whichever "Jeans" came back first,
+            // which was often the wrong division's and filtered to 0 results.
+            // Keying by the product's actual categoryId sidesteps that.
+            const catId = String(p.categoryId?._id || p.categoryId?.id || p.categoryId || '');
 
             const existing = byCategory.get(norm(name));
             if (!existing) {
-                byCategory.set(norm(name), { key: norm(name), name, image: p.image, from: price, count: 1 });
+                byCategory.set(norm(name), { key: norm(name), name, image: p.image, from: price, count: 1, categoryId: catId });
             } else {
                 existing.count += 1;
                 if (price < existing.from) existing.from = price;
@@ -65,7 +72,9 @@ const PriceAnchoredGrid = ({ title, match, limit = 8 }) => {
                     <button
                         key={g.key}
                         onClick={() => {
-                            const params = new URLSearchParams({ category: g.name });
+                            const params = g.categoryId
+                                ? new URLSearchParams({ cid: g.categoryId, category: g.name })
+                                : new URLSearchParams({ category: g.name });
                             if (divisionName) params.set('division', divisionName);
                             navigate(`/products?${params.toString()}`);
                         }}
