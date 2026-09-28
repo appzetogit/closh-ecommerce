@@ -369,6 +369,11 @@ const CheckoutPage = () => {
                                         <h3 className="text-sm font-bold text-gray-800 line-clamp-1 mb-2">
                                             {item.name}
                                         </h3>
+                                        {noTryAndBuyItems.includes(item.name) && (
+                                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5 -mt-1 mb-2">
+                                                Not eligible for Try & Buy
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Selection Controls */}
