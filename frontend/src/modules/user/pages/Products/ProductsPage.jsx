@@ -543,18 +543,17 @@ const ProductsPage = () => {
                         <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500 uppercase ">
                             <Link to="/" className="hover:text-black transition-colors cursor-pointer">Home</Link> 
                             <span className="scale-75 text-white/20">›</span> 
-                            <Link 
-                                to={`/products${selectedBrands[0] ? `?brand=${selectedBrands[0]}` : division ? `?division=${division}` : ''}`}
+                            <span
                                 className="hover:text-black transition-colors cursor-pointer"
                                 onClick={() => {
                                     const params = new URLSearchParams(searchParams);
                                     params.delete('category');
                                     params.delete('subCategory');
-                                    setSearchParams(params);
+                                    setSearchParams(params, { replace: true });
                                 }}
                             >
                                 {selectedBrands[0] || division || 'Shop'}
-                            </Link> 
+                            </span>
                             <span className="scale-75 text-white/20">›</span> 
                             <span 
                                 className="text-gray-900 hover:text-black transition-colors cursor-pointer"
@@ -572,7 +571,7 @@ const ProductsPage = () => {
                                     if (selectedBrands[0]) params.set('brand', selectedBrands[0]);
                                     if (division) params.set('division', division);
                                     if (category) params.set('category', category);
-                                    setSearchParams(params);
+                                    setSearchParams(params, { replace: true });
 
                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                 }}
