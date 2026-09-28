@@ -129,15 +129,25 @@ const MobileCategories = () => {
   }, [selectedSubId, allCategories]);
 
   // Handlers
+  // Both handlers below sync the URL (via replace, so this tab-switch isn't
+  // its own back-stop) alongside the local state. Without it, the sidebar
+  // selection lived only in this component's React state - so navigating to
+  // a product and pressing back remounted this page fresh from whatever the
+  // URL still said (unchanged since sidebar clicks never touched it), always
+  // landing back on the auto-selected FIRST tab instead of the one actually
+  // being browsed (e.g. picking Girls, then Dress, then a product, then
+  // back landed on Boys - the first tab - not Girls).
   const handleRootSelect = (cat) => {
     setSelectedRootId(cat.normId);
     setSelectedSubId(null);
     setActiveCategory(cat.name);
+    navigate(`/category/${cat.normId}`, { replace: true });
   };
 
   const handleSubSelect = (id) => {
     setSelectedSubId(id);
     if (gridRef.current) gridRef.current.scrollTop = 0;
+    navigate(`/category/${id}`, { replace: true });
     goToProductsIfLeaf(id, selectedRootId);
   };
 
