@@ -220,7 +220,17 @@ const listProducts = asyncHandler(async (req, res) => {
         };
 
         const categoryIds = Array.from(new Set(getDescendantIds(finalCategoryId)));
-        filter.categoryId = { $in: categoryIds };
+        // A Unisex product's secondaryCategoryId mirrors its categoryId under
+        // the opposite Men/Women root (see utils/categoryMirror.js) - match
+        // either field so it also turns up when someone browses that same
+        // category on the other side, not just via the Division filter.
+        const categoryCondition = {
+            $or: [
+                { categoryId: { $in: categoryIds } },
+                { secondaryCategoryId: { $in: categoryIds } },
+            ],
+        };
+        filter.$and = filter.$and ? [...filter.$and, categoryCondition] : [categoryCondition];
     }
 
     // Smart Brand Resolution: Resolve name to ID if needed

@@ -9,6 +9,7 @@ import { emitEvent } from '../../../services/socket.service.js';
 import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
 import { invalidateCategoryFeatureCache } from '../../../utils/categoryFeatures.js';
+import { resolveSecondaryCategoryId } from '../../../utils/categoryMirror.js';
 
 const sanitizeFaqs = (faqs) => {
     if (!Array.isArray(faqs)) return [];
@@ -348,12 +349,18 @@ export const createProduct = asyncHandler(async (req, res) => {
             ? 'low_stock'
             : 'in_stock');
 
+    const secondaryCategoryId = await resolveSecondaryCategoryId({
+        categoryId: rest.categoryId,
+        division: rest.division,
+    });
+
     const product = await Product.create({
         name,
         slug,
         stock: normalizedStock,
         stockQuantity: finalStockQuantity,
         ...rest,
+        secondaryCategoryId,
         variants: normalizedVariants,
         faqs: sanitizeFaqs(rest.faqs),
     });
@@ -373,7 +380,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
 
     // Centralized Stock: Admin cannot edit stock for vendor products
-    const existingProduct = await Product.findById(req.params.id).select('vendorId stockQuantity variants.stockMap stock').lean();
+    const existingProduct = await Product.findById(req.params.id).select('vendorId stockQuantity variants.stockMap stock categoryId division').lean();
     const isVendorProduct = existingProduct && existingProduct.vendorId;
 
     if (isVendorProduct) {
@@ -436,6 +443,13 @@ export const updateProduct = asyncHandler(async (req, res) => {
             payload.stockQuantity = existingProduct.stockQuantity;
             payload.stock = existingProduct.stock;
         }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'categoryId') || Object.prototype.hasOwnProperty.call(payload, 'division')) {
+        payload.secondaryCategoryId = await resolveSecondaryCategoryId({
+            categoryId: payload.categoryId ?? existingProduct?.categoryId,
+            division: payload.division ?? existingProduct?.division,
+        });
     }
 
     payload.pendingUpdates = undefined;

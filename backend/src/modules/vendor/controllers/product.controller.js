@@ -7,6 +7,7 @@ import { createNotification } from '../../../services/notification.service.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
+import { resolveSecondaryCategoryId } from '../../../utils/categoryMirror.js';
 
 const deriveStockStatus = (stockQuantity = 0, lowStockThreshold = 10) => {
     if (stockQuantity <= 0) return 'out_of_stock';
@@ -293,12 +294,17 @@ export const createProduct = asyncHandler(async (req, res) => {
         ? variantAggregateStock
         : stockQuantity;
     const stock = deriveStockStatus(finalStockQuantity, lowStockThreshold);
+    const secondaryCategoryId = await resolveSecondaryCategoryId({
+        categoryId: rest.categoryId,
+        division: rest.division,
+    });
 
     const product = await Product.create({
         name,
         slug,
         vendorId: req.user.id,
         ...rest,
+        secondaryCategoryId,
         vendorPrice: vendorPrice,
         originalPrice: Number(rest.originalPrice ?? 0),
         price: 0,
@@ -374,6 +380,12 @@ export const updateProduct = asyncHandler(async (req, res) => {
         }
         if (Object.prototype.hasOwnProperty.call(updates, 'faqs')) {
             updates.faqs = sanitizeFaqs(updates.faqs);
+        }
+        if (Object.prototype.hasOwnProperty.call(updates, 'categoryId') || Object.prototype.hasOwnProperty.call(updates, 'division')) {
+            updates.secondaryCategoryId = await resolveSecondaryCategoryId({
+                categoryId: updates.categoryId ?? product.categoryId,
+                division: updates.division ?? product.division,
+            });
         }
 
         // Applied live, like stock — see NON_CONTENT_FIELDS.
@@ -458,6 +470,12 @@ export const updateProduct = asyncHandler(async (req, res) => {
     Object.assign(product, req.body);
     if (Object.prototype.hasOwnProperty.call(req.body, 'faqs')) {
         product.faqs = sanitizeFaqs(req.body.faqs);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'categoryId') || Object.prototype.hasOwnProperty.call(req.body, 'division')) {
+        product.secondaryCategoryId = await resolveSecondaryCategoryId({
+            categoryId: product.categoryId,
+            division: product.division,
+        });
     }
     if (typeof req.body.stockQuantity !== 'undefined' || typeof req.body.lowStockThreshold !== 'undefined') {
         const stockQuantity = Number(product.stockQuantity ?? 0);

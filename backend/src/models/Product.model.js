@@ -14,6 +14,12 @@ const productSchema = new mongoose.Schema(
         images: [{ type: String }],
         image: { type: String }, // primary image
         categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true, index: true },
+        // Auto-filled for Unisex products only: the same-named category under
+        // the opposite Men/Women root (e.g. categoryId = Men > Topwear > Shirt
+        // -> secondaryCategoryId = Women > Topwear > Shirt), so the product
+        // also turns up when someone browses that category under the other
+        // gender, not just via the Division filter. See utils/categoryMirror.js.
+        secondaryCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null, index: true },
         // 'Unisex' is ADULT unisex - browsing Men or Women includes it.
         // 'Kids' is the kids-unisex catch-all - browsing Boys or Girls
         // includes it, while adult Unisex is deliberately excluded there.
