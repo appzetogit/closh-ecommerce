@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { useCategoryStore } from "../../../shared/store/categoryStore";
 import PageTransition from "../../../shared/components/PageTransition";
 import { useCategory } from "../../user/context/CategoryContext";
@@ -195,9 +196,18 @@ const MobileCategories = () => {
                 exit={{ opacity: 0, y: -10 }}
               >
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-[12px] font-black text-gray-900 uppercase tracking-wider">
-                    Shop for {subcategories.find(s => s.normId === selectedSubId)?.name || allCategories.find(c => c.normId === selectedRootId)?.name}
-                  </h2>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      onClick={() => navigate(-1)}
+                      className="w-7 h-7 shrink-0 rounded-full bg-[#F8F9FA] border border-black/5 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                      aria-label="Go back"
+                    >
+                      <ArrowLeft size={14} className="text-gray-900" />
+                    </button>
+                    <h2 className="text-[12px] font-black text-gray-900 uppercase tracking-wider truncate">
+                      Shop for {subcategories.find(s => s.normId === selectedSubId)?.name || allCategories.find(c => c.normId === selectedRootId)?.name}
+                    </h2>
+                  </div>
                   <button
                     onClick={() => {
                       const activeId = selectedSubId || selectedRootId;
