@@ -529,6 +529,29 @@ const ProductsPage = () => {
                         <ChevronDown size={12} className="text-gray-400 group-hover:text-black transition-colors" />
                     </div>
                 </div>
+
+                {/* Quick Size Filter - Mobile Only. Size was already filterable via
+                    the Filter drawer, but that's a two-tap detour for the single
+                    most common refinement on a listing like this - surface it
+                    directly under the header instead. */}
+                {sizes.length > 0 && (
+                    <div className="border-t border-black/5 bg-gray-50/50 relative z-10 md:hidden">
+                        <div className="container mx-auto px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight shrink-0">
+                                Size:
+                            </span>
+                            {sizes.map(size => (
+                                <button
+                                    key={size}
+                                    onClick={() => handleSelectSize(size)}
+                                    className={`shrink-0 min-w-[30px] px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${selectedSizes.includes(size) ? 'bg-black border-black text-white' : 'border-gray-300 bg-white text-gray-700'}`}
+                                >
+                                    {size}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <LocationModal
