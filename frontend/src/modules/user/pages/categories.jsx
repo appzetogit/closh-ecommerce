@@ -48,8 +48,23 @@ const MobileCategories = () => {
   useEffect(() => {
     if (rootCategories.length > 0) {
       let targetId = null;
+      let targetSubId = null;
       if (paramCategoryId) {
-        targetId = normalizeId(paramCategoryId);
+        const normParamId = normalizeId(paramCategoryId);
+        const targetCat = allCategories.find(c => c.normId === normParamId);
+        if (targetCat && targetCat.normParentId) {
+          // paramCategoryId points at a subcategory (e.g. Boys under Kid),
+          // not a root - land on ITS PARENT root with it pre-selected in
+          // the sidebar, instead of treating the subcategory as if it were
+          // itself a root. Treating it as a root rendered ITS children
+          // (Jeans, Lowers, ...) in the sidebar and immediately auto-picked
+          // the first one, skipping straight to that leaf's products -
+          // the "pick a subcategory" screen never got a chance to show.
+          targetId = targetCat.normParentId;
+          targetSubId = normParamId;
+        } else {
+          targetId = normParamId;
+        }
       } else if (activeCategory && activeCategory !== 'For You' && activeCategory !== 'All') {
         const matched = rootCategories.find(c => c.name.toLowerCase() === activeCategory.toLowerCase());
         if (matched) targetId = matched.normId;
@@ -57,7 +72,7 @@ const MobileCategories = () => {
 
       if (targetId && targetId !== selectedRootId) {
         setSelectedRootId(targetId);
-        setSelectedSubId(null);
+        setSelectedSubId(targetSubId);
       } else if (!selectedRootId && !targetId) {
         setSelectedRootId(rootCategories[0].normId);
         if (activeCategory !== rootCategories[0].name) {
@@ -65,7 +80,7 @@ const MobileCategories = () => {
         }
       }
     }
-  }, [rootCategories, paramCategoryId, activeCategory, selectedRootId, setActiveCategory]);
+  }, [rootCategories, allCategories, paramCategoryId, activeCategory, selectedRootId, setActiveCategory]);
 
   // 4. Subcategories (Level 1) - Linked to selected Root
   const subcategories = useMemo(() => {
