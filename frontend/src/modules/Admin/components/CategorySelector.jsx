@@ -3,10 +3,25 @@ import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCategoryStore } from "../../../shared/store/categoryStore";
 
+// Which root categories a product's Gender/Division should be allowed to
+// pick from. "Footwear" is division-agnostic at the root (its own children
+// carry the gender, e.g. "Mens Footwear"/"Womens Footwear"), so it's always
+// offered regardless of division. Matched case-insensitively against the
+// root category's name, since that's DB data, not a fixed enum.
+const DIVISION_ROOT_NAMES = {
+  Men: ["men"],
+  Women: ["women"],
+  Boys: ["kid"],
+  Girls: ["kid"],
+  Kids: ["kid"],
+  Unisex: ["men", "women"],
+};
+
 const CategorySelector = ({
   value,
   subcategoryId,
   onChange,
+  division,
   required = false,
   className = "",
 }) => {
@@ -38,10 +53,20 @@ const CategorySelector = ({
     };
   }, []);
 
-  // Get root categories (parent categories)
+  // Get root categories (parent categories), narrowed to whatever the
+  // selected division allows (e.g. Unisex -> Men + Women, both included -
+  // previously this list ignored division entirely and always showed
+  // every root, so a Unisex product could accidentally end up filed under
+  // a Kid-only category).
   const rootCategories = useMemo(() => {
-    return getRootCategories().filter((cat) => cat.isActive !== false);
-  }, [categories, getRootCategories]);
+    const all = getRootCategories().filter((cat) => cat.isActive !== false);
+    const allowedNames = DIVISION_ROOT_NAMES[division];
+    if (!allowedNames) return all;
+    return all.filter((cat) => {
+      const name = String(cat.name || "").toLowerCase();
+      return name === "footwear" || allowedNames.includes(name);
+    });
+  }, [categories, getRootCategories, division]);
 
   // Get selected category and subcategory info
   const selectedCategory = value ? getCategoryById(value) : null;

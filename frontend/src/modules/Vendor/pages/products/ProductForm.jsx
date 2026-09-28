@@ -910,6 +910,7 @@ const ProductForm = () => {
               <CategorySelector
                 value={formData.categoryId}
                 subcategoryId={formData.subcategoryId}
+                division={formData.division || "Unisex"}
                 onChange={handleChange}
                 required
               />

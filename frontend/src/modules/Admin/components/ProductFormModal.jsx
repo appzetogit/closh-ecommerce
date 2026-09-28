@@ -1592,6 +1592,7 @@ const ProductFormModal = ({ isOpen, onClose, productId, onSuccess }) => {
                         <CategorySelector
                           value={formData.categoryId}
                           subcategoryId={formData.subcategoryId}
+                          division={formData.division || "Unisex"}
                           onChange={handleChange}
                           required
                         />
