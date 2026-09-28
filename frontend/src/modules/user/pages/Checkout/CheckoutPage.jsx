@@ -86,13 +86,12 @@ const CheckoutPage = () => {
         return () => { cancelled = true; };
     }, [cart]);
 
-    const tryAndBuyBlocked = noTryAndBuyItems.length > 0;
-
-    useEffect(() => {
-        if (tryAndBuyBlocked && deliveryType === 'try_and_buy') {
-            setDeliveryType('check_and_buy');
-        }
-    }, [tryAndBuyBlocked, deliveryType]);
+    // Check & Buy-only items no longer force the whole order into Check &
+    // Buy - both services stay pickable, and this only drives the
+    // informational note below (and the per-item "Not eligible" chip on the
+    // cart line above). The vendor's toggle is purely informational at
+    // order level now, not a hard block.
+    const hasNoTryAndBuyItems = noTryAndBuyItems.length > 0;
 
     // Persist delivery type selection so it survives back-navigation from payment page
     useEffect(() => {
@@ -423,23 +422,20 @@ const CheckoutPage = () => {
                         <div className="flex items-center justify-between">
                             <h3 className="text-[11px] font-bold uppercase  text-gray-400">Choose Service</h3>
                         </div>
-                        {/* Service type options — always show both options */}
+                        {/* Service type options — both always selectable, even when the
+                            cart holds a Check & Buy-only item; see the note below instead. */}
                         <div className="grid grid-cols-2 gap-3">
-                            {/* Try & Buy — unavailable when the cart holds an excluded item */}
-                            <label className={tryAndBuyBlocked ? 'relative cursor-not-allowed' : 'relative cursor-pointer'}>
+                            <label className="relative cursor-pointer">
                                 <input
                                     type="radio"
                                     name="deliveryType"
                                     className="peer hidden"
-                                    disabled={tryAndBuyBlocked}
                                     checked={deliveryType === 'try_and_buy'}
-                                    onChange={() => !tryAndBuyBlocked && setDeliveryType('try_and_buy')}
+                                    onChange={() => setDeliveryType('try_and_buy')}
                                 />
-                                <div className={`p-2 rounded-xl border-2 transition-all h-full text-center ${tryAndBuyBlocked ? 'border-gray-100 bg-gray-50 opacity-50' : 'border-gray-100 peer-checked:border-black peer-checked:bg-white'}`}>
+                                <div className="p-2 rounded-xl border-2 border-gray-100 peer-checked:border-black peer-checked:bg-white transition-all h-full text-center">
                                     <span className="text-[9px] font-bold uppercase block mb-1 text-[#9F1239]">Try &amp; Buy</span>
-                                    <p className="text-[7px] font-bold text-gray-400 leading-tight">
-                                        {tryAndBuyBlocked ? 'Not for these items' : 'Try at door'}
-                                    </p>
+                                    <p className="text-[7px] font-bold text-gray-400 leading-tight">Try at door</p>
                                 </div>
                             </label>
                             {/* Check & Buy — always visible */}
@@ -458,15 +454,15 @@ const CheckoutPage = () => {
                             </label>
                         </div>
 
-                        {tryAndBuyBlocked && (
+                        {hasNoTryAndBuyItems && (
                             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2.5 mt-2">
                                 <ShieldCheck size={15} className="text-amber-600 shrink-0 mt-0.5" />
                                 <div className="text-left">
-                                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-wide">Check &amp; Buy only</p>
+                                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-wide">Heads up</p>
                                     <p className="text-[9px] font-bold text-amber-700 leading-relaxed mt-0.5">
                                         {noTryAndBuyItems.length === 1
-                                            ? `"${noTryAndBuyItems[0]}" cannot be tried at the door, so this order is Check & Buy.`
-                                            : `${noTryAndBuyItems.length} items in your cart cannot be tried at the door, so this order is Check & Buy.`}
+                                            ? `"${noTryAndBuyItems[0]}" cannot be tried at the door and will be billed as Check & Buy either way.`
+                                            : `${noTryAndBuyItems.length} items in your cart cannot be tried at the door and will be billed as Check & Buy either way.`}
                                     </p>
                                 </div>
                             </div>

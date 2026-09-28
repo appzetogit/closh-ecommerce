@@ -23,7 +23,6 @@ import Vendor from '../../../models/Vendor.model.js';
 import { OrderNotificationService } from '../../../services/orderNotification.service.js';
 import { geocodeAddress, getDistanceMatrix, getRouteDistance } from '../../../services/googleMaps.service.js';
 import { applyActiveCampaigns } from '../../../utils/productUtils.js';
-import { resolveTryAndBuyEligibility } from '../../../utils/categoryFeatures.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { validateCoupon } from '../../../services/coupon.service.js';
 import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
@@ -295,14 +294,10 @@ export const placeOrder = asyncHandler(async (req, res) => {
         // Some products cannot be tried at the door (innerwear and the like);
         // the vendor marks those Check & Buy only, or a whole category (e.g.
         // Undergarments) is banned from Try & Buy regardless of what any one
-        // vendor set on their product. The UI hides Try & Buy for them, but the
-        // order is where it actually has to hold.
-        if (orderType === 'try_and_buy' && !(await resolveTryAndBuyEligibility(productDoc))) {
-            throw new ApiError(
-                400,
-                `"${productDoc.name}" is not available for Try & Buy. Please switch to Check & Buy or remove it from your cart.`
-            );
-        }
+        // vendor set on their product. This no longer blocks placing a
+        // try_and_buy order - the checkout UI already tells the shopper
+        // which item(s) this applies to; it's informational only, not a
+        // hard stop, so no need to re-derive/store per-item eligibility here.
 
         // Check if store is offline
         if (productDoc.vendorId && productDoc.vendorId.isOnline === false) {
