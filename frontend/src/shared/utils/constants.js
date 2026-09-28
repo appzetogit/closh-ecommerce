@@ -62,6 +62,18 @@ export const KIDS_SHOE_SIZES = [
   "UK 12 (Kids)", "UK 13 (Kids)",
 ];
 
+// Bras run on band number + cup letter, not the S/M/L chart - for Girls and
+// Women's innerwear.
+export const BRA_SIZES = [
+  "28A", "28B", "28C",
+  "30A", "30B", "30C", "30D",
+  "32A", "32B", "32C", "32D",
+  "34A", "34B", "34C", "34D",
+  "36A", "36B", "36C", "36D",
+  "38B", "38C", "38D",
+  "40B", "40C", "40D",
+];
+
 // Product Sizes
 export const PRODUCT_SIZES = [
   "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL",
@@ -72,4 +84,5 @@ export const PRODUCT_SIZES = [
   "EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45",
   ...KIDS_SIZES,
   ...KIDS_SHOE_SIZES,
+  ...BRA_SIZES,
 ];
