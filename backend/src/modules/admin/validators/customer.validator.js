@@ -3,7 +3,7 @@ import Joi from 'joi';
 const objectId = Joi.string().trim().hex().length(24);
 
 export const customerListQuerySchema = Joi.object({
-    status: Joi.string().valid('active', 'blocked').optional(),
+    status: Joi.string().valid('active', 'blocked', 'inactive', 'deleted').optional(),
     search: Joi.string().trim().allow('').optional(),
     page: Joi.number().integer().min(1).optional(),
     limit: Joi.number().integer().min(1).max(200).optional(),
