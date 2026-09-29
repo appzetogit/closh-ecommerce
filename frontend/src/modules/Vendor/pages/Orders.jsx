@@ -56,7 +56,12 @@ const Orders = () => {
       const vendorItem = order.vendorItems?.find(
         (vi) => vi.vendorId?.toString() === vendorId?.toString()
       );
-      const status = (vendorItem?.status ?? order.status ?? '').toLowerCase();
+      const globalStatus = String(order.status || '').toLowerCase();
+      // Terminal order-level status wins - vendorItem.status is never
+      // updated on return/cancel and would otherwise stay "delivered".
+      const status = ['returned', 'return requested', 'cancelled', 'canceled'].includes(globalStatus)
+        ? globalStatus
+        : (vendorItem?.status ?? order.status ?? '').toLowerCase();
 
       if (status === 'pending') stats.pending++;
       else if (status === 'processing') stats.processing++;

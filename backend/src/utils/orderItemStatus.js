@@ -23,8 +23,13 @@ export const buildItemStatusResolver = (order) => {
 
     return (item, groupStatus) => {
         const fallback = groupStatus || order?.status;
-        // A cancelled order overrides any earlier per-item decision.
-        if (String(fallback) === 'cancelled') return 'cancelled';
+        // A cancelled order, or a return raised after delivery (so after the
+        // try&buy accept/reject decision was already made), overrides any
+        // earlier per-item decision - otherwise an item accepted at delivery
+        // stays stuck showing "delivered" forever even once it's returned.
+        if (['cancelled', 'returned', 'return requested', 'returning_unselected_items', 'returned_to_vendor'].includes(String(fallback))) {
+            return fallback;
+        }
         if (decisions.size === 0) return fallback;
 
         const decision = decisions.get(keyOf(item));

@@ -396,8 +396,15 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
             if (order && order.isDeleted !== true) {
                 if (status === 'approved' && !['cancelled', 'returned'].includes(order.status)) {
                     order.status = 'returned';
+                    // Keep the per-vendor group in sync too - vendor panel reads
+                    // vendorItems[].status directly and was otherwise left
+                    // stuck on whatever it was before (e.g. 'delivered').
+                    const vendorGroup = (order.vendorItems || []).find(
+                        (group) => String(group.vendorId) === String(request.vendorId)
+                    );
+                    if (vendorGroup) vendorGroup.status = 'returned';
                     await order.save();
-                    
+
                     if (order.deliveryBoyId) {
                         try {
                             const { emitEvent } = await import('../../../services/socket.service.js');
@@ -426,6 +433,20 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     // Stamp returned quantities/amount onto the order so invoices
                     // (admin/user/vendor) show the actual amount payable after this return.
                     applyReturnToOrder(order, request);
+
+                    // Belt-and-braces: cover the case where completion is
+                    // reached without going through the 'approved' branch
+                    // above (e.g. status set straight to 'completed').
+                    if (!['cancelled', 'returned'].includes(order.status)) {
+                        order.status = 'returned';
+                    }
+                    const vendorGroup = (order.vendorItems || []).find(
+                        (group) => String(group.vendorId) === String(request.vendorId)
+                    );
+                    if (vendorGroup && vendorGroup.status !== 'returned') {
+                        vendorGroup.status = 'returned';
+                    }
+
                     await order.save();
                 }
             }

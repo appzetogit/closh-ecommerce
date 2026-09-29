@@ -39,7 +39,14 @@ const SwipeOrderCard = ({ order, onStatusUpdate }) => {
         return vId?.toString() === currentVendorId;
     });
 
-    const currentStatus = (vendorItem?.status ?? order.status ?? 'pending').toLowerCase();
+    let currentStatus = (vendorItem?.status ?? order.status ?? 'pending').toLowerCase();
+    // The order-level status is the source of truth once an order reaches a
+    // terminal state - vendorItem.status is never updated on return/cancel
+    // and would otherwise keep showing its last in-progress value (e.g. "delivered").
+    const globalStatus = String(order.status || '').toLowerCase();
+    if (['returned', 'return requested', 'cancelled', 'canceled'].includes(globalStatus)) {
+        currentStatus = globalStatus;
+    }
     const displayAmount = vendorItem?.basePrice ?? 
                          vendorItem?.items?.reduce((sum, it) => sum + (it.vendorPrice ?? it.price ?? 0) * (it.quantity ?? 1), 0) ??
                          vendorItem?.subtotal ?? 0;

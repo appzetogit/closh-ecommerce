@@ -938,7 +938,7 @@ const handleViewVendorInvoice = () => {
                         <div className="divide-y divide-gray-200">
                             {vendorItems.length > 0 ? (
                                 vendorItems.map((item, index) => {
-                                  const itemBadge = getItemStatusBadge(item.itemStatus, vendorItem?.status || order.status);
+                                  const itemBadge = getItemStatusBadge(item.itemStatus, currentStatus);
                                   const isVoided = ['Returned', 'Cancelled'].includes(itemBadge?.label);
                                   return (
                                     <div key={index} className="p-4 flex gap-4">

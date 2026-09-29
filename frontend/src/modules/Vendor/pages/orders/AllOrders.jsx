@@ -182,7 +182,7 @@ const AllOrders = () => {
         return (
           <div className="flex flex-col gap-1 py-1 min-w-[140px]">
             {items.map((item, idx) => {
-              const itemBadge = getItemStatusBadge(item.itemStatus, vendorItem?.status || row.status);
+              const itemBadge = getItemStatusBadge(item.itemStatus, getOrderStatus(row));
               return (
                 <div key={idx} className="flex flex-col">
                   <span className="text-[13px] font-semibold text-gray-800 leading-tight">
