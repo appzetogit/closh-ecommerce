@@ -31,6 +31,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
     isActive: true,
     order: "",
     tryAndBuyEnabled: null,
+    isUnisex: false,
   });
 
   // The tri-state flag needs an explicit mapping since null (inherit), true
@@ -50,6 +51,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
         isActive: category.isActive !== undefined ? category.isActive : true,
         order: category.order ?? "",
         tryAndBuyEnabled: tryAndBuySelectValue(category.tryAndBuyEnabled),
+        isUnisex: category.isUnisex || false,
       });
     } else if (parentId !== null) {
       setFormData({
@@ -60,6 +62,7 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
         isActive: true,
         order: "",
         tryAndBuyEnabled: null,
+        isUnisex: false,
       });
     }
   }, [category, parentId]);
@@ -409,6 +412,38 @@ const CategoryForm = ({ category, parentId, onClose, onSave }) => {
                       Active
                     </span>
                   </label>
+
+                  <div className="flex items-center justify-between gap-4 py-1">
+                    <div>
+                      <span className="text-sm font-semibold text-gray-700 block">
+                        Unisex (Men + Women)
+                      </span>
+                      <p className="text-xs text-gray-500 mt-0.5 max-w-sm">
+                        Keeps this category in sync with its opposite-gender
+                        sibling (e.g. "Crocs" under Mens Footwear stays linked
+                        to "Crocs" under Womens Footwear) - creating it on one
+                        side auto-creates/links it on the other, and edits to
+                        either side apply to both.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={formData.isUnisex}
+                      onClick={() =>
+                        setFormData((prev) => ({ ...prev, isUnisex: !prev.isUnisex }))
+                      }
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        formData.isUnisex ? "bg-primary-600" : "bg-gray-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          formData.isUnisex ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">

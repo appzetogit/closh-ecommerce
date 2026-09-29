@@ -9,7 +9,7 @@ import { emitEvent } from '../../../services/socket.service.js';
 import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
 import { invalidateCategoryFeatureCache } from '../../../utils/categoryFeatures.js';
-import { resolveSecondaryCategoryId } from '../../../utils/categoryMirror.js';
+import { resolveSecondaryCategoryId, findMirrorSiblingId } from '../../../utils/categoryMirror.js';
 
 const sanitizeFaqs = (faqs) => {
     if (!Array.isArray(faqs)) return [];
@@ -241,7 +241,7 @@ const calculateVariantAggregateStock = (variants = {}) => {
 };
 
 const sanitizeCategoryPayload = (payload = {}) => {
-    const allowed = ['name', 'description', 'image', 'icon', 'parentId', 'order', 'isActive', 'tryAndBuyEnabled'];
+    const allowed = ['name', 'description', 'image', 'icon', 'parentId', 'order', 'isActive', 'tryAndBuyEnabled', 'isUnisex'];
     const sanitized = {};
     for (const key of allowed) {
         if (Object.prototype.hasOwnProperty.call(payload, key)) {
@@ -604,6 +604,60 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, categories, 'Categories fetched.'));
 });
 
+// Keeps a Unisex category's Men/Women twin in sync. Called after create and
+// after any update to a category that is (or just became) Unisex:
+//   - Already linked -> pushes this category's shared fields onto its twin.
+//   - Not yet linked -> finds the gender-opposite sibling of this category's
+//     PARENT (e.g. "Mens Footwear" -> "Womens Footwear"), then reuses an
+//     existing same-named category under it if one exists, or creates one -
+//     and links both sides to each other.
+//   - No opposite-gender parent found (e.g. this category isn't under a
+//     Men/Women-named branch at all) -> no-op, Unisex just has nothing to
+//     mirror against here.
+const syncUnisexTwin = async (category) => {
+    const sharedFields = {
+        name: category.name,
+        description: category.description,
+        image: category.image,
+        icon: category.icon,
+        order: category.order,
+        isActive: category.isActive,
+        tryAndBuyEnabled: category.tryAndBuyEnabled,
+        isUnisex: true,
+    };
+
+    if (category.linkedCategoryId) {
+        await Category.findByIdAndUpdate(category.linkedCategoryId, sharedFields);
+        return;
+    }
+
+    const mirrorParentId = await findMirrorSiblingId(category.parentId);
+    if (!mirrorParentId) return;
+
+    let twin = await Category.findOne({
+        parentId: mirrorParentId,
+        _id: { $ne: category._id },
+        name: { $regex: new RegExp(`^${category.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
+
+    if (twin) {
+        Object.assign(twin, sharedFields);
+        twin.linkedCategoryId = category._id;
+        await twin.save();
+    } else {
+        const twinSlug = await generateUniqueCategorySlug(category.name);
+        twin = await Category.create({
+            ...sharedFields,
+            slug: twinSlug,
+            parentId: mirrorParentId,
+            linkedCategoryId: category._id,
+        });
+    }
+
+    category.linkedCategoryId = twin._id;
+    await category.save();
+};
+
 // POST /api/admin/categories
 export const createCategory = asyncHandler(async (req, res) => {
     const payload = sanitizeCategoryPayload(req.body);
@@ -611,6 +665,10 @@ export const createCategory = asyncHandler(async (req, res) => {
     await assertValidCategoryParent({ parentId: rest.parentId });
     const slug = await generateUniqueCategorySlug(name);
     const category = await Category.create({ name, slug, ...rest });
+
+    if (category.isUnisex) {
+        await syncUnisexTwin(category);
+    }
 
     await deleteCache('categories:all');
     invalidateCategoryFeatureCache();
@@ -633,11 +691,25 @@ export const updateCategory = asyncHandler(async (req, res) => {
         payload.slug = await generateUniqueCategorySlug(payload.name, existingCategory._id);
     }
 
+    const wasLinkedId = existingCategory.linkedCategoryId;
+
     const category = await Category.findByIdAndUpdate(req.params.id, payload, {
         new: true,
         runValidators: true,
     });
     if (!category) throw new ApiError(404, 'Category not found.');
+
+    if (category.isUnisex) {
+        // Covers both "just turned Unisex on" and "already synced, a shared
+        // field changed" - syncUnisexTwin figures out which from linkedCategoryId.
+        await syncUnisexTwin(category);
+    } else if (wasLinkedId) {
+        // Unisex just turned off - unlink both sides, but leave the twin as
+        // its own independent category rather than deleting it.
+        await Category.findByIdAndUpdate(wasLinkedId, { isUnisex: false, linkedCategoryId: null });
+        category.linkedCategoryId = null;
+        await category.save();
+    }
 
     await deleteCache('categories:all');
     invalidateCategoryFeatureCache();
@@ -647,7 +719,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
 
 // DELETE /api/admin/categories/:id
 export const deleteCategory = asyncHandler(async (req, res) => {
-    const category = await Category.findById(req.params.id).select('_id');
+    const category = await Category.findById(req.params.id).select('_id linkedCategoryId');
     if (!category) {
         throw new ApiError(404, 'Category not found.');
     }
@@ -665,6 +737,10 @@ export const deleteCategory = asyncHandler(async (req, res) => {
     }
 
     await Category.findByIdAndDelete(req.params.id);
+    if (category.linkedCategoryId) {
+        // Don't leave the twin pointing at a category that no longer exists.
+        await Category.findByIdAndUpdate(category.linkedCategoryId, { isUnisex: false, linkedCategoryId: null });
+    }
     await deleteCache('categories:all');
     res.status(200).json(new ApiResponse(200, null, 'Category deleted.'));
 });

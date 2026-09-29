@@ -18,6 +18,14 @@ const categorySchema = new mongoose.Schema(
         // Undergarments" has to hold regardless of what an individual vendor sets
         // on their product.
         tryAndBuyEnabled: { type: Boolean, default: null },
+        // When true, this category is kept in sync with its Men/Women
+        // opposite-gender sibling (e.g. "Crocs" under "Mens Footwear" <->
+        // "Crocs" under "Womens Footwear") - see utils/categoryMirror.js and
+        // the create/update handlers in admin/catalog.controller.js.
+        isUnisex: { type: Boolean, default: false },
+        // The paired category on the opposite side, only set when isUnisex
+        // is true. Both categories point at each other.
+        linkedCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
     },
     { timestamps: true }
 );

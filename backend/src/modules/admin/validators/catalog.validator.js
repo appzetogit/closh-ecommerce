@@ -116,6 +116,8 @@ export const createCategorySchema = Joi.object({
     isActive: Joi.boolean().optional(),
     // null/'' = inherit from ancestor (or default-enabled); true/false = explicit override.
     tryAndBuyEnabled: Joi.boolean().allow(null, '').optional(),
+    // Keeps this category synced with its Men/Women opposite-gender sibling.
+    isUnisex: Joi.boolean().optional(),
 });
 
 export const updateCategorySchema = Joi.object({
@@ -127,6 +129,7 @@ export const updateCategorySchema = Joi.object({
     order: Joi.number().integer().min(0).optional(),
     isActive: Joi.boolean().optional(),
     tryAndBuyEnabled: Joi.boolean().allow(null, '').optional(),
+    isUnisex: Joi.boolean().optional(),
 }).min(1);
 
 export const reorderCategoriesSchema = Joi.object({
