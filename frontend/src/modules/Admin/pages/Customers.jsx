@@ -92,7 +92,9 @@ const Customers = () => {
         <span
           className={`px-2 py-1 rounded text-xs font-semibold ${value === 'active'
             ? 'bg-green-100 text-green-800'
-            : 'bg-red-100 text-red-800'
+            : value === 'deleted'
+              ? 'bg-gray-200 text-gray-600'
+              : 'bg-red-100 text-red-800'
             }`}
         >
           {value}
@@ -151,6 +153,7 @@ const Customers = () => {
               { value: 'all', label: 'All Status' },
               { value: 'active', label: 'Active' },
               { value: 'blocked', label: 'Blocked' },
+              { value: 'deleted', label: 'Deleted' },
             ]}
             className="min-w-[140px]"
           />
