@@ -7,7 +7,7 @@ import { createNotification } from '../../../services/notification.service.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { ApiResponse } from '../../../utils/ApiResponse.js';
 import { asyncHandler } from '../../../utils/asyncHandler.js';
-import { refundPayment } from '../../../services/razorpay.service.js';
+import { refundPayment, payoutToUpi } from '../../../services/razorpay.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
 import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
 import { restockItems } from '../../../utils/stockRestore.js';
@@ -263,7 +263,51 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     throw new ApiError(500, `Automated refund failed: ${error.message}. Please handle manually.`);
                 }
             } else if (order.paymentMethod === 'cod') {
-                 request.refundNotes = `Manual refund processed for COD order. ` + (adminNote || '');
+                // COD has no payment-gateway transaction to reverse, so there's
+                // nothing to "refund" in the online sense — instead, send the
+                // money to the UPI ID the customer already submitted
+                // (submitReturnUPI), via the same RazorpayX payout pipeline
+                // already used for vendor/delivery settlements
+                // (adminWithdrawal.controller.js), just with a 'customer'
+                // contact type and 'refund' purpose instead of 'vendor'/'payout'.
+                const razorpayXConfigured = Boolean(
+                    process.env.RAZORPAY_KEY_ID &&
+                    process.env.RAZORPAY_KEY_ID !== 'your_key_id' &&
+                    process.env.RAZORPAY_KEY_SECRET &&
+                    process.env.RAZORPAYX_ACCOUNT_NUMBER &&
+                    !String(process.env.RAZORPAYX_ACCOUNT_NUMBER).toLowerCase().startsWith('your')
+                );
+
+                if (request.upiId && razorpayXConfigured) {
+                    try {
+                        const payout = await payoutToUpi({
+                            name: request.userId?.name || 'Customer',
+                            email: request.userId?.email,
+                            phone: request.userId?.phone,
+                            upiId: request.upiId,
+                            amount: request.refundAmount || 0,
+                            requestId: String(request._id),
+                            contactType: 'customer',
+                            purpose: 'refund',
+                        });
+                        request.refundId = payout.id;
+                        request.refundNotes = `Automated UPI payout sent. Razorpay Payout ID: ${payout.id}. ` + (adminNote || '');
+                    } catch (error) {
+                        console.error('[COD Refund Payout] Automated payout failed:', error.message);
+                        // Don't silently mark this as processed when the money
+                        // never actually moved — surface the failure so the
+                        // admin fixes the UPI ID / retries, or pays manually
+                        // and sets refundStatus directly if they choose to.
+                        throw new ApiError(500, `Automated UPI payout failed: ${error.message}. Refund status was not changed — fix the issue and retry, or pay manually and mark this processed once done.`);
+                    }
+                } else {
+                    // Not eligible for auto-pay — either RazorpayX isn't
+                    // configured (e.g. this dev environment) or the customer
+                    // hasn't submitted a UPI ID yet. Same manual fallback as
+                    // before this automation existed; never block the admin
+                    // from recording a refund they paid outside the system.
+                    request.refundNotes = `Manual refund processed for COD order. ` + (adminNote || '');
+                }
             } else {
                  throw new ApiError(400, "Online payment record (razorpayPaymentId) not found. Manual refund required.");
             }

@@ -18,13 +18,13 @@ const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64');
 /**
  * Step 1: Create a Contact in RazorpayX
  */
-export const createContact = async ({ name, email, phone, reference_id }) => {
+export const createContact = async ({ name, email, phone, reference_id, type = 'vendor' }) => {
     try {
         const response = await axios.post('https://api.razorpay.com/v1/contacts', {
             name,
             email,
             contact: phone,
-            type: 'vendor', // or 'delivery'
+            type, // 'vendor' | 'customer' | 'employee' | 'self' — RazorpayX-recognized contact types
             reference_id
         }, {
             headers: { 'Authorization': `Basic ${auth}` }
@@ -67,9 +67,16 @@ export const createPayout = async ({ amount, fund_account_id, reference_id, purp
             currency: 'INR',
             mode: 'UPI',
             purpose,
-            reference_id
+            reference_id,
+            queue_if_low_balance: true,
         }, {
-            headers: { 'Authorization': `Basic ${auth}` }
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                // Lets a retried call (e.g. a flaky network response after the
+                // payout actually went through) safely resolve to the same
+                // payout instead of firing money twice for the same reference.
+                'X-Payout-Idempotency': reference_id,
+            }
         });
         return response.data;
     } catch (error) {
@@ -80,21 +87,24 @@ export const createPayout = async ({ amount, fund_account_id, reference_id, purp
 };
 
 /**
- * Combined function to payout to a UPI ID
+ * Combined function to payout to a UPI ID.
+ * `contactType`/`purpose` let callers reuse this for different payout kinds
+ * (vendor/delivery settlements vs. customer refunds) instead of hardcoding
+ * 'vendor'/'payout' for everything.
  */
-export const payoutToUpi = async ({ name, upiId, amount, requestId }) => {
+export const payoutToUpi = async ({ name, email, phone, upiId, amount, requestId, contactType = 'vendor', purpose = 'payout' }) => {
     if (!KEY_ID || !KEY_SECRET || !ACCOUNT_NUMBER) {
         throw new ApiError(400, 'Razorpay configuration is missing in environment variables.');
     }
 
     // 1. Create/Get Contact (In real app, you might want to store contact_id in DB)
-    const contact = await createContact({ name, reference_id: requestId });
-    
+    const contact = await createContact({ name, email, phone, reference_id: requestId, type: contactType });
+
     // 2. Create Fund Account
     const fundAccount = await createFundAccount({ contact_id: contact.id, upi_vpa: upiId });
 
     // 3. Process Payout
-    return await createPayout({ amount, fund_account_id: fundAccount.id, reference_id: requestId });
+    return await createPayout({ amount, fund_account_id: fundAccount.id, reference_id: requestId, purpose });
 };
 
 /**
