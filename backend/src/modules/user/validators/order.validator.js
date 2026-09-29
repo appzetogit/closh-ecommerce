@@ -12,7 +12,14 @@ export const placeOrderSchema = Joi.object({
     shippingAddress: Joi.object({
         name: Joi.string().required(),
         email: Joi.string().email().required(),
-        phone: Joi.string().required(),
+        // Same 10-digit pattern already enforced at signup (auth.validator.js)
+        // and for saved addresses (address.validator.js) - this field had no
+        // format check at all, so checkout accepted literally any string as a
+        // "delivery contact number" (spotted via an order whose shipping
+        // phone turned out to be unrelated to the account that placed it).
+        phone: Joi.string().pattern(/^[0-9]{10}$/).required().messages({
+            'string.pattern.base': 'Please enter a valid 10-digit phone number.',
+        }),
         address: Joi.string().required(),
         city: Joi.string().required(),
         state: Joi.string().required(),
