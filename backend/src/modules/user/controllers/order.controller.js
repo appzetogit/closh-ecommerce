@@ -29,11 +29,10 @@ import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import { QueueService } from '../../../services/queue.service.js';
 import {
-    normalizeVariantPart,
-    createDynamicVariantKey,
     toVariantPriceEntries,
     toVariantStockEntries,
     resolveOrderItemVariantKey,
+    resolveVariantKeyFromKeys,
 } from '../../../utils/variantKey.js';
 import { restockItems } from '../../../utils/stockRestore.js';
 

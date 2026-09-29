@@ -35,7 +35,7 @@ export const toVariantStockEntries = (stockMap) => {
     return [];
 };
 
-const resolveVariantKeyFromKeys = (keys = [], variant = {}) => {
+export const resolveVariantKeyFromKeys = (keys = [], variant = {}) => {
     if (!keys || !keys.length) return null;
 
     const size = normalizeVariantPart(variant?.size || variant?.Size || '');
