@@ -18,6 +18,11 @@ const vendorDropoffSchema = new mongoose.Schema({
             quantity: Number,
             variant: mongoose.Schema.Types.Mixed,
             selectedSize: String,
+            // The exact stockMap key that was decremented at order time (e.g.
+            // "size=m|color=red") - needed to restock the same variant bucket
+            // instead of just the flat stockQuantity. See utils/orderVariant.js.
+            variantKey: String,
+            hasSpecificVariantStock: { type: Boolean, default: false },
         }
     ],
     status: {
@@ -29,6 +34,10 @@ const vendorDropoffSchema = new mongoose.Schema({
     dropoffOtpDebug: { type: String },
     proofPhoto: String,
     droppedOffAt: Date,
+    // Atomic idempotency claim - restock this vendor's items exactly once.
+    // Set via ReturnRequest.updateOne with a $exists:false guard, never via a
+    // plain in-memory status check, so two concurrent requests can't both win.
+    restockedAt: Date,
 }, { _id: false });
 
 const returnRequestSchema = new mongoose.Schema(
@@ -50,6 +59,8 @@ const returnRequestSchema = new mongoose.Schema(
                 reason: String,
                 variant: mongoose.Schema.Types.Mixed,
                 selectedSize: String,
+                variantKey: String,
+                hasSpecificVariantStock: { type: Boolean, default: false },
             },
         ],
         reason: { type: String, required: true },
@@ -88,6 +99,9 @@ const returnRequestSchema = new mongoose.Schema(
         deliveryOtpExpiry: { type: Date },
         deliveryDistance: { type: Number, default: 0 },
         deliveryEarnings: { type: Number, default: 0 },
+        // Atomic idempotency claim for the single-vendor restock path - same
+        // purpose as vendorDropoffSchema.restockedAt above.
+        restockedAt: Date,
     },
     { timestamps: true }
 );

@@ -28,6 +28,14 @@ import { validateCoupon } from '../../../services/coupon.service.js';
 import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import { QueueService } from '../../../services/queue.service.js';
+import {
+    normalizeVariantPart,
+    createDynamicVariantKey,
+    toVariantPriceEntries,
+    toVariantStockEntries,
+    resolveOrderItemVariantKey,
+} from '../../../utils/variantKey.js';
+import { restockItems } from '../../../utils/stockRestore.js';
 
 const getRazorpayInstance = () => {
     const key_id = process.env.RAZORPAY_KEY_ID;
@@ -41,34 +49,6 @@ const getRazorpayInstance = () => {
     return new Razorpay({ key_id, key_secret });
 };
 
-
-const normalizeVariantPart = (value) => String(value || '').trim().toLowerCase();
-const normalizeAxisName = (value) =>
-    String(value || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, '_');
-const createDynamicVariantKey = (selection = {}) =>
-    Object.entries(selection || {})
-        .map(([axis, value]) => [normalizeAxisName(axis), normalizeVariantPart(value)])
-        .filter(([axis, value]) => axis && value)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([axis, value]) => `${axis}=${value}`)
-        .join('|');
-
-const toVariantPriceEntries = (variantPrices) => {
-    if (!variantPrices) return [];
-    if (variantPrices instanceof Map) return Array.from(variantPrices.entries());
-    if (typeof variantPrices === 'object') return Object.entries(variantPrices);
-    return [];
-};
-
-const toVariantStockEntries = (stockMap) => {
-    if (!stockMap) return [];
-    if (stockMap instanceof Map) return Array.from(stockMap.entries());
-    if (typeof stockMap === 'object') return Object.entries(stockMap);
-    return [];
-};
 
 const resolveVariantSelection = (product, selectedVariant) => {
     const basePrice = Number(product?.price);
@@ -101,62 +81,6 @@ const resolveVariantSelection = (product, selectedVariant) => {
 
     // Fallback if no variant key resolved but product has variant axes
     return { price: basePrice, variantKey: null, hasVariantAxes };
-};
-
-const resolveVariantKeyFromKeys = (keys = [], variant = {}) => {
-    if (!keys || !keys.length) return null;
-
-    const size = normalizeVariantPart(variant?.size || variant?.Size || '');
-    const color = normalizeVariantPart(variant?.color || variant?.Color || '');
-    if (!size && !color) return null;
-
-    const candidates = [
-        [size && `size=${size}`, color && `color=${color}`].filter(Boolean).sort().join('|'),
-        `${size}|${color}`,
-        `${size}|`,
-        `|${color}`,
-        `${size}-${color}`,
-        `${size}_${color}`,
-        `${size}:${color}`,
-        size && !color ? size : null,
-        color && !size ? color : null,
-    ].filter(Boolean);
-
-    for (const candidate of candidates) {
-        const exact = keys.find((key) => key === candidate);
-        if (exact) return exact;
-        const normalized = keys.find((key) => normalizeVariantPart(key) === normalizeVariantPart(candidate));
-        if (normalized) return normalized;
-    }
-    return null;
-};
-
-const resolveOrderItemVariantKey = (product, orderItem) => {
-    const explicitKey = String(orderItem?.variantKey || '').trim();
-    if (explicitKey) return explicitKey;
-
-    const stockEntries = toVariantStockEntries(product?.variants?.stockMap).map(([k]) => String(k).trim());
-    const priceEntries = toVariantPriceEntries(product?.variants?.prices).map(([k]) => String(k).trim());
-    const existingKeys = [...new Set([...stockEntries, ...priceEntries])];
-    if (!existingKeys.length) return null;
-
-    const dynamicSelection = Object.entries(orderItem?.variant || {}).reduce((acc, [axis, value]) => {
-        const axisKey = normalizeAxisName(axis);
-        const selectedValue = String(value || '').trim();
-        if (axisKey && selectedValue) acc[axisKey] = selectedValue;
-        return acc;
-    }, {});
-    const dynamicKey = createDynamicVariantKey(dynamicSelection);
-    if (dynamicKey) {
-        const exactDynamic = existingKeys.find((key) => key === dynamicKey);
-        if (exactDynamic) return exactDynamic;
-        const normalizedDynamic = existingKeys.find(
-            (key) => normalizeVariantPart(key) === normalizeVariantPart(dynamicKey)
-        );
-        if (normalizedDynamic) return normalizedDynamic;
-    }
-
-    return resolveVariantKeyFromKeys(existingKeys, orderItem?.variant);
 };
 
 // POST /api/user/orders
@@ -1210,6 +1134,12 @@ export const createReturnRequest = asyncHandler(async (req, res) => {
             price: orderItem.price || 0,
             quantity: requestedQty,
             reason: String(inputItem?.reason || req.body.reason || '').trim(),
+            variant: orderItem.variant,
+            selectedSize: orderItem.selectedSize,
+            // Carried over from the order item so the eventual restock hits
+            // the exact stockMap bucket that was decremented at order time.
+            variantKey: orderItem.variantKey,
+            hasSpecificVariantStock: orderItem.hasSpecificVariantStock,
         };
         normalizedItems.push(itemObj);
 
@@ -1561,6 +1491,10 @@ export const createTryBuyReturnRequest = asyncHandler(async (req, res) => {
             reason: inputItem.reason || reason,
             variant: foundOrderItem.variant,
             selectedSize: foundOrderItem.selectedSize,
+            // Carried over so the eventual restock hits the exact stockMap
+            // bucket that was decremented at order time.
+            variantKey: foundOrderItem.variantKey,
+            hasSpecificVariantStock: foundOrderItem.hasSpecificVariantStock,
         };
 
         processedItems.push(returnItemData);

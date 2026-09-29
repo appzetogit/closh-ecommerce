@@ -3,7 +3,6 @@ import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import ReturnRequest from '../../../models/ReturnRequest.model.js';
 import Order from '../../../models/Order.model.js';
-import Product from '../../../models/Product.model.js';
 import Commission from '../../../models/Commission.model.js';
 import User from '../../../models/User.model.js';
 import Admin from '../../../models/Admin.model.js';
@@ -14,6 +13,7 @@ import Address from '../../../models/Address.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
 import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
+import { restockItems } from '../../../utils/stockRestore.js';
 
 const enrichReturnItems = (request) => {
     const orderItems = Array.isArray(request?.orderId?.items) ? request.orderId.items : [];
@@ -300,28 +300,16 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                 // It will be set when the return is actually 'completed'
 
                 if (status === 'completed' && previousStatus !== 'completed') {
-                    const stockRestores = (request.items || []).map(async (item) => {
-                        const qty = Number(item?.quantity || 0);
-                        const variantKey = item?.selectedSize || item?.variant?.size || item?.variantKey || (item?.variant && Object.values(item.variant)[0]);
-                        if (!item?.productId || qty <= 0) return;
-
-                        const incUpdate = { stockQuantity: qty };
-                        if (variantKey) {
-                            incUpdate[`variants.stockMap.${variantKey}`] = qty;
-                        }
-
-                        const updatedProduct = await Product.findByIdAndUpdate(
-                            item.productId,
-                            { $inc: incUpdate },
-                            { new: true }
-                        );
-
-                        if (updatedProduct) {
-                            const nextStockState = updatedProduct.stockQuantity <= 0 ? 'out_of_stock' : (updatedProduct.stockQuantity <= (updatedProduct.lowStockThreshold || 10) ? 'low_stock' : 'in_stock');
-                            await Product.updateOne({ _id: updatedProduct._id }, { $set: { stock: nextStockState } });
-                        }
-                    });
-                    await Promise.all(stockRestores);
+                    // Atomic claim so a concurrent request (or this same status
+                    // change firing twice) can't restock the same items twice -
+                    // in-memory previousStatus checks alone aren't race-proof.
+                    const claim = await ReturnRequest.updateOne(
+                        { _id: request._id, restockedAt: { $exists: false } },
+                        { $set: { restockedAt: new Date() } }
+                    );
+                    if (claim.modifiedCount > 0) {
+                        await restockItems(request.items || []);
+                    }
 
                     // Reverse vendor earnings and commission
                     await WalletService.processOrderReturn(request);

@@ -13,6 +13,7 @@ import { emitEvent } from '../../../services/socket.service.js';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import ReturnRequest from '../../../models/ReturnRequest.model.js';
 import Product from '../../../models/Product.model.js';
+import { restockItems } from '../../../utils/stockRestore.js';
 import { OrderWorkflowService } from '../../../services/orderWorkflow.service.js';
 import { OrderNotificationService } from '../../../services/orderNotification.service.js';
 import { sendDeliveryOtpSms } from '../../../services/sms.service.js';
@@ -1534,6 +1535,7 @@ export const handleArrivedAtCustomer = asyncHandler(async (req, res) => {
             quantity: item.quantity,
             variant: item.variant,
             variantKey: item.variantKey,
+            hasSpecificVariantStock: item.hasSpecificVariantStock,
             decision: 'pending',
         }));
     }
@@ -1832,7 +1834,10 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
             image: item.image || '',
             price: item.price || item.originalPrice || 0,
             quantity: item.quantity || 1,
-            reason: 'Try & Buy Rejected'
+            reason: 'Try & Buy Rejected',
+            variant: item.variant,
+            variantKey: item.variantKey,
+            hasSpecificVariantStock: item.hasSpecificVariantStock,
         });
     }
 
@@ -1906,7 +1911,10 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
             image: i.image || '',
             price: i.price || i.originalPrice || 0,
             quantity: i.quantity || 1,
-            reason: 'Try & Buy Rejected'
+            reason: 'Try & Buy Rejected',
+            variant: i.variant,
+            variantKey: i.variantKey,
+            hasSpecificVariantStock: i.hasSpecificVariantStock,
         })),
         reason: 'Try & Buy Auto-Return',
         status: 'processing', // Already approved and assigned
@@ -2309,26 +2317,7 @@ export const markTryBuyVendorReturned = asyncHandler(async (req, res) => {
         return vi && vi.items.some(item => String(item.productId) === String(i.productId));
     });
 
-    for (const item of vendorRejectedItems) {
-        const qty = Number(item.quantity || 1);
-        const variantKey = item.variantKey;
-
-        const incUpdate = { stockQuantity: qty };
-        if (variantKey) {
-            incUpdate[`variants.stockMap.${variantKey}`] = qty;
-        }
-
-        const updatedProduct = await Product.findByIdAndUpdate(
-            item.productId,
-            { $inc: incUpdate },
-            { new: true }
-        );
-
-        if (updatedProduct) {
-            const nextStockState = updatedProduct.stockQuantity <= 0 ? 'out_of_stock' : (updatedProduct.stockQuantity <= (updatedProduct.lowStockThreshold || 10) ? 'low_stock' : 'in_stock');
-            await Product.updateOne({ _id: updatedProduct._id }, { $set: { stock: nextStockState } });
-        }
-    }
+    await restockItems(vendorRejectedItems);
 
     vendorStop.status = 'returned';
     vendorStop.returnedAt = new Date();
@@ -2598,6 +2587,13 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
         emitEvent(`user_${returnReq.userId?._id}`, 'return_picked_up', { returnId: returnReq._id });
         emitEvent(`vendor_${returnReq.vendorId}`, 'return_picked_up', { returnId: returnReq._id });
     } else if (status === 'completed') {
+        // Unlike the admin/vendor paths, this one had no guard against being
+        // called twice - every call re-ran the earnings/stock/notification
+        // side effects regardless of current status.
+        if (returnReq.status === 'completed') {
+            throw new ApiError(400, 'This return has already been completed.');
+        }
+
         const normalizedOtp = String(otp || '').trim();
         const otpHash = DeliveryOtpService.hashOtp(normalizedOtp);
 
@@ -2663,28 +2659,16 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
             await order.save();
         }
 
-        // Restore stock for returned items
-        const stockRestores = (returnReq.items || []).map(async (item) => {
-            const qty = Number(item?.quantity || 0);
-            if (!item?.productId || qty <= 0) return;
-            const product = await Product.findById(item.productId);
-            if (!product) return;
-
-            product.stockQuantity += qty;
-            
-            // Handle variant stock
-            const size = item.selectedSize || item.variant?.size || (item.variant && Object.values(item.variant)[0]);
-            if (size && product.variants?.stockMap && product.variants.stockMap.has(size)) {
-                const currentVarStock = product.variants.stockMap.get(size) || 0;
-                product.variants.stockMap.set(size, currentVarStock + qty);
-            }
-
-            if (product.stockQuantity <= 0) product.stock = 'out_of_stock';
-            else if (product.stockQuantity <= product.lowStockThreshold) product.stock = 'low_stock';
-            else product.stock = 'in_stock';
-            await product.save();
-        });
-        await Promise.all(stockRestores);
+        // Restore stock for returned items. Atomic claim so a repeat call
+        // (belt-and-braces alongside the status guard above) can't double-
+        // restock the same items.
+        const restockClaim = await ReturnRequest.updateOne(
+            { _id: returnReq._id, restockedAt: { $exists: false } },
+            { $set: { restockedAt: new Date() } }
+        );
+        if (restockClaim.modifiedCount > 0) {
+            await restockItems(returnReq.items || []);
+        }
 
         // Notify user to submit UPI ID
         await createNotification({
@@ -2805,6 +2789,11 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
     const normalizedOtp = String(otp || '').trim();
     const otpHash = DeliveryOtpService.hashOtp(normalizedOtp);
 
+    // Items to restock once this dropoff is confirmed below - multi-vendor
+    // restocks only THIS vendor's items (other vendors' items may still be
+    // in transit), single-vendor restocks the whole request's items.
+    let itemsToRestock = [];
+
     if (returnReq.isMultiVendor) {
         if (!vendorId) throw new ApiError(400, 'vendorId is required for multi-vendor return dropoffs.');
 
@@ -2818,6 +2807,8 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         dropoff.status = 'dropped_off';
         dropoff.proofPhoto = deliveryPhoto;
         dropoff.droppedOffAt = new Date();
+        dropoff.restockedAt = new Date();
+        itemsToRestock = dropoff.items || [];
 
         // Check if all vendors are dropped off
         const allDropped = returnReq.vendorDropoffs.every(d => d.status === 'dropped_off');
@@ -2832,9 +2823,17 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         returnReq.deliveryPhoto = deliveryPhoto;
         returnReq.status = 'completed';
         returnReq.isUpiRequested = true;
+        returnReq.restockedAt = new Date();
+        itemsToRestock = returnReq.items || [];
     }
 
     await returnReq.save();
+
+    // This was the return flow that never restocked anything - the guards
+    // above (dropoff.status/'dropped_off' check, returnReq.status/'processing'
+    // check) already prevent this route from double-firing for the same
+    // vendor/request, so a plain call here (no extra atomic claim) is safe.
+    await restockItems(itemsToRestock);
 
     emitEvent(`vendor_${vendorId || returnReq.vendorId}`, 'return_dropped_off', { returnId: returnReq._id });
 

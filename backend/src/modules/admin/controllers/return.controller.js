@@ -1,7 +1,6 @@
 import ReturnRequest from '../../../models/ReturnRequest.model.js';
 import Order from '../../../models/Order.model.js';
 import User from '../../../models/User.model.js';
-import Product from '../../../models/Product.model.js';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import Vendor from '../../../models/Vendor.model.js';
 import { createNotification } from '../../../services/notification.service.js';
@@ -11,6 +10,7 @@ import { asyncHandler } from '../../../utils/asyncHandler.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
 import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
+import { restockItems } from '../../../utils/stockRestore.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import { assertRiderIsFree, markRiderBusy } from '../../../services/deliveryAvailability.service.js';
 import { emitEvent } from '../../../services/socket.service.js';
@@ -365,27 +365,16 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                 }
 
                 if (status === 'completed' && currentStatus !== 'completed') {
-                    const stockRestores = (request.items || []).map(async (item) => {
-                        const qty = Number(item?.quantity || 0);
-                        if (!item?.productId || qty <= 0) return;
-                        const product = await Product.findById(item.productId);
-                        if (!product) return;
-
-                        product.stockQuantity += qty;
-
-                        // Handle variant stock
-                        const size = item.selectedSize || item.variant?.size || (item.variant && Object.values(item.variant)[0]);
-                        if (size && product.variants?.stockMap && product.variants.stockMap.has(size)) {
-                            const currentVarStock = product.variants.stockMap.get(size) || 0;
-                            product.variants.stockMap.set(size, currentVarStock + qty);
-                        }
-
-                        if (product.stockQuantity <= 0) product.stock = 'out_of_stock';
-                        else if (product.stockQuantity <= product.lowStockThreshold) product.stock = 'low_stock';
-                        else product.stock = 'in_stock';
-                        await product.save();
-                    });
-                    await Promise.all(stockRestores);
+                    // Atomic claim so a concurrent request (or this same status
+                    // change firing twice) can't restock the same items twice -
+                    // in-memory currentStatus checks alone aren't race-proof.
+                    const claim = await ReturnRequest.updateOne(
+                        { _id: request._id, restockedAt: { $exists: false } },
+                        { $set: { restockedAt: new Date() } }
+                    );
+                    if (claim.modifiedCount > 0) {
+                        await restockItems(request.items || []);
+                    }
 
                     // Reverse vendor earnings and commission
                     await WalletService.processOrderReturn(request);
