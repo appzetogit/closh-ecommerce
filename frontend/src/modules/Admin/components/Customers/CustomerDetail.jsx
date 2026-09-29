@@ -148,7 +148,15 @@ const CustomerDetail = ({ customer, onClose, onUpdate, startEditing = false }) =
                 ) : (
                   <h3 className="text-2xl font-bold text-gray-800 mb-2">{customer.name}</h3>
                 )}
-                <Badge variant={customer.status === 'active' ? 'success' : 'error'}>
+                <Badge
+                  variant={
+                    customer.status === 'active'
+                      ? 'success'
+                      : customer.status === 'deleted'
+                        ? 'pending'
+                        : 'error'
+                  }
+                >
                   {customer.status}
                 </Badge>
               </div>
@@ -177,20 +185,23 @@ const CustomerDetail = ({ customer, onClose, onUpdate, startEditing = false }) =
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={handleStatusToggle}
-                      disabled={isSubmitting}
-                      className={`px-4 py-2 rounded-lg transition-colors font-semibold text-sm ${
-                        customer.status === 'active'
-                          ? 'bg-red-600 text-white hover:bg-red-700'
-                          : 'bg-green-600 text-white hover:bg-green-700'
-                      }`}
-                    >
-                      {customer.status === 'active' ? 'Block' : 'Unblock'}
-                    </button>
+                    {customer.status !== 'deleted' && (
+                      <button
+                        onClick={handleStatusToggle}
+                        disabled={isSubmitting}
+                        className={`px-4 py-2 rounded-lg transition-colors font-semibold text-sm ${
+                          customer.status === 'active'
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {customer.status === 'active' ? 'Block' : 'Unblock'}
+                      </button>
+                    )}
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-semibold text-sm flex items-center gap-2"
+                      disabled={customer.status === 'deleted'}
+                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-semibold text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FiEdit />
                       Edit

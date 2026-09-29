@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema(
         role: { type: String, enum: ['customer', 'delivery'], default: 'customer' },
         isVerified: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },
+        // Soft delete: set when the user deletes their own account, so admin
+        // can still see the account/order history instead of it vanishing.
+        isDeleted: { type: Boolean, default: false },
+        deletedAt: { type: Date, default: null },
         otp: { type: String, select: false },
         otpExpiry: { type: Date, select: false },
         resetOtp: { type: String, select: false },

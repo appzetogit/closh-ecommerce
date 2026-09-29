@@ -508,23 +508,20 @@ export const uploadProfileAvatar = asyncHandler(async (req, res) => {
     }
 });
 // DELETE /api/user/auth/profile
+// Soft delete: the account is flagged, not erased, so admin can still see it
+// (and the order/return history attached to it) instead of it vanishing.
 export const deleteAccount = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user.id).select('avatar');
-    if (!user) throw new ApiError(404, 'User not found.');
+    const user = await User.findById(req.user.id).select('isDeleted refreshTokens');
+    if (!user || user.isDeleted) throw new ApiError(404, 'User not found.');
 
-    // Cleanup avatar if exists on Cloudinary
-    const publicId = extractCloudinaryPublicId(user.avatar);
-    if (publicId) {
-        await deleteFromCloudinary(publicId).catch((err) => {
-            console.error(`[DeleteAccount] Cloudinary cleanup failed for ${publicId}:`, err.message);
-        });
-    }
-
-    // Delete associated addresses
-    await Address.deleteMany({ userId: user._id });
-
-    // Delete the user record
-    await User.findByIdAndDelete(user._id);
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    user.isActive = false;
+    // Invalidate all sessions on this account.
+    user.refreshTokens = [];
+    user.refreshTokenHash = undefined;
+    user.refreshTokenExpiresAt = undefined;
+    await user.save({ validateBeforeSave: false });
 
     res.status(200).json(new ApiResponse(200, null, 'Account deleted successfully.'));
 });

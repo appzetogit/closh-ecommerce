@@ -27,7 +27,7 @@ export const useCustomerStore = create(
           const normalizedCustomers = customers.map(c => ({
             ...c,
             id: c._id,
-            status: c.isActive ? 'active' : 'blocked'
+            status: c.isDeleted ? 'deleted' : (c.isActive ? 'active' : 'blocked')
           }));
 
           set({
@@ -51,7 +51,7 @@ export const useCustomerStore = create(
           const normalizedCustomer = {
             ...customer,
             id: customer._id,
-            status: customer.isActive ? 'active' : 'blocked'
+            status: customer.isDeleted ? 'deleted' : (customer.isActive ? 'active' : 'blocked')
           };
 
           set({ selectedCustomer: normalizedCustomer, isLoading: false });
@@ -72,7 +72,7 @@ export const useCustomerStore = create(
           set((state) => ({
             customers: state.customers.map(c =>
               String(c.id) === String(id)
-                ? { ...c, ...updatedCustomer, id: updatedCustomer._id, status: updatedCustomer.isActive ? 'active' : 'blocked' }
+                ? { ...c, ...updatedCustomer, id: updatedCustomer._id, status: updatedCustomer.isDeleted ? 'deleted' : (updatedCustomer.isActive ? 'active' : 'blocked') }
                 : c
             ),
             isLoading: false
@@ -82,7 +82,7 @@ export const useCustomerStore = create(
           return {
             ...updatedCustomer,
             id: updatedCustomer._id,
-            status: updatedCustomer.isActive ? 'active' : 'blocked'
+            status: updatedCustomer.isDeleted ? 'deleted' : (updatedCustomer.isActive ? 'active' : 'blocked')
           };
         } catch (error) {
           set({ isLoading: false });
@@ -111,7 +111,7 @@ export const useCustomerStore = create(
           set((state) => ({
             customers: state.customers.map(c =>
               String(c.id) === String(id)
-                ? { ...c, isActive: updatedCustomer.isActive, status: updatedCustomer.isActive ? 'active' : 'blocked' }
+                ? { ...c, isActive: updatedCustomer.isActive, status: updatedCustomer.isDeleted ? 'deleted' : (updatedCustomer.isActive ? 'active' : 'blocked') }
                 : c
             ),
             isLoading: false
@@ -121,7 +121,7 @@ export const useCustomerStore = create(
           return {
             ...updatedCustomer,
             id: updatedCustomer._id,
-            status: updatedCustomer.isActive ? 'active' : 'blocked'
+            status: updatedCustomer.isDeleted ? 'deleted' : (updatedCustomer.isActive ? 'active' : 'blocked')
           };
         } catch (error) {
           set({ isLoading: false });

@@ -107,7 +107,9 @@ const ViewCustomers = () => {
         <span
           className={`px-2 py-1 rounded text-xs font-semibold ${value === 'active'
             ? 'bg-green-100 text-green-800'
-            : 'bg-red-100 text-red-800'
+            : value === 'deleted'
+              ? 'bg-gray-200 text-gray-600'
+              : 'bg-red-100 text-red-800'
             }`}
         >
           {value}
@@ -162,6 +164,7 @@ const ViewCustomers = () => {
               { value: 'all', label: 'All Status' },
               { value: 'active', label: 'Active' },
               { value: 'blocked', label: 'Blocked' },
+              { value: 'deleted', label: 'Deleted' },
             ]}
             className="w-full sm:w-auto min-w-[140px]"
           />

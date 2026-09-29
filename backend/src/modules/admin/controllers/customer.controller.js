@@ -18,8 +18,16 @@ export const getAllCustomers = asyncHandler(async (req, res) => {
 
     const filter = { role: 'customer' };
 
-    if (status) {
-        filter.isActive = status === 'active';
+    // Deleted accounts are soft-deleted, so they stay visible here by default;
+    // 'active'/'inactive' filters exclude them, and 'deleted' isolates them.
+    if (status === 'deleted') {
+        filter.isDeleted = true;
+    } else if (status === 'active') {
+        filter.isActive = true;
+        filter.isDeleted = { $ne: true };
+    } else if (status === 'blocked' || status === 'inactive') {
+        filter.isActive = false;
+        filter.isDeleted = { $ne: true };
     }
 
     if (search) {
@@ -162,15 +170,19 @@ export const updateCustomerStatus = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'isActive status must be a boolean');
     }
 
+    const target = await User.findOne({ _id: req.params.id, role: 'customer' }).select('isDeleted');
+    if (!target) {
+        throw new ApiError(404, 'Customer not found');
+    }
+    if (target.isDeleted) {
+        throw new ApiError(400, 'This account was deleted by the user and cannot be reactivated.');
+    }
+
     const customer = await User.findOneAndUpdate(
         { _id: req.params.id, role: 'customer' },
         { isActive },
         { new: true }
     ).select('-password');
-
-    if (!customer) {
-        throw new ApiError(404, 'Customer not found');
-    }
 
     res.status(200).json(
         new ApiResponse(200, customer, `Customer status updated to ${isActive ? 'active' : 'inactive'}`)

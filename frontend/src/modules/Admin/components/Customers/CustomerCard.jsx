@@ -22,7 +22,15 @@ const CustomerCard = ({ customer, onView }) => {
           )}
         </div>
         <div className="flex-shrink-0">
-          <Badge variant={customer.status === 'active' ? 'success' : 'error'}>
+          <Badge
+            variant={
+              customer.status === 'active'
+                ? 'success'
+                : customer.status === 'deleted'
+                  ? 'pending'
+                  : 'error'
+            }
+          >
             {customer.status}
           </Badge>
         </div>
