@@ -4,13 +4,13 @@
     {
       "name": "frontend",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-Command", "$env:VITE_API_BASE_URL='http://localhost:5050/api'; npm run dev --prefix frontend -- --port 5180 --strictPort"],
-      "port": 5180
+      "runtimeArgs": ["-NoProfile", "-Command", "$env:VITE_API_BASE_URL='http://localhost:5050/api'; npm run dev --prefix frontend -- --port 5182 --strictPort"],
+      "port": 5182
     },
     {
       "name": "backend",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-Command", "$env:PORT='5050'; $env:CLIENT_URL='http://localhost:5180'; npm run dev --prefix backend"],
+      "runtimeArgs": ["-NoProfile", "-Command", "$env:PORT='5050'; $env:CLIENT_URL='http://localhost:5182'; npm run dev --prefix backend"],
       "port": 5050
     }
   ]
