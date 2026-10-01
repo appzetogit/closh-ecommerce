@@ -3,7 +3,7 @@ import redisConnection from '../config/redis.js';
 import Order from '../models/Order.model.js';
 import DeliveryBoy from '../models/DeliveryBoy.model.js';
 import { DeliveryNearbyService } from './nearbyDelivery.service.js';
-import { createNotification } from './notification.service.js';
+import { createNotification, broadcastNotifications } from './notification.service.js';
 import { emitEvent } from './socket.service.js';
 import { calculateDistance } from '../utils/geo.js';
 
@@ -42,6 +42,9 @@ const riderAutoAssignTimeoutQueue = isRedisAvailable ? new Queue('rider-auto-ass
 
 // 5. Rider Auto Assign Retry Queue (Retry auto-assignment if no riders were found)
 const riderAutoAssignRetryQueue = isRedisAvailable ? new Queue('rider-auto-assign-retry-queue', defaultQueueOptions) : new DummyQueue('rider-auto-assign-retry-queue');
+
+// 6. Broadcast Notification Queue (admin "send to all users" — runs off the request thread)
+const broadcastNotificationQueue = isRedisAvailable ? new Queue('broadcast-notification-queue', defaultQueueOptions) : new DummyQueue('broadcast-notification-queue');
 
 
 export const QueueService = {
@@ -110,13 +113,25 @@ export const QueueService = {
             return;
         }
 
-        await riderSearchQueue.add('search-nearby-riders', 
-            { orderId, radius, attempt }, 
-            { 
+        await riderSearchQueue.add('search-nearby-riders',
+            { orderId, radius, attempt },
+            {
                // Recursive delay: 5km (now), 10km (in 2m), 15km (in 4m)
-               delay: attempt === 1 ? 0 : 2 * 60 * 1000 
+               delay: attempt === 1 ? 0 : 2 * 60 * 1000
             }
         );
+    },
+
+    /**
+     * Queue an admin broadcast notification (potentially thousands of
+     * recipients) so the admin's request returns immediately instead of
+     * blocking on every recipient's DB write + push send.
+     * @param {Object} payload - { roles, title, message, type, data }
+     */
+    async scheduleBroadcastNotification(payload) {
+        const job = await broadcastNotificationQueue.add('send-broadcast', payload);
+        console.log(`[Queue] Broadcast notification queued (jobId: ${job?.id ?? 'n/a'}) for roles: ${payload.roles?.join(', ')}`);
+        return job;
     }
 };
 
@@ -378,6 +393,22 @@ if (isRedisAvailable) {
                 console.error("[Worker] AutoAssign retry trigger failed:", err);
             });
         }
+    }, { connection: redisConnection, removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } });
+}
+
+/**
+ * Worker Logic: Admin Broadcast Notification
+ * Runs the actual batched DB-write + chunked FCM send off the request
+ * thread, so POST /admin/notifications/broadcast returns instantly even for
+ * a "send to all" broadcast with thousands of recipients.
+ */
+if (isRedisAvailable) {
+    new Worker('broadcast-notification-queue', async job => {
+        const { roles, title, message, type, data } = job.data;
+        console.log(`[Worker] 📣 Processing broadcast "${title}" for roles: ${roles.join(', ')}`);
+        const result = await broadcastNotifications({ roles, title, message, type, data });
+        console.log(`[Worker] ✅ Broadcast "${title}" done — ${result.recipientCount} recipients, ${result.pushSuccessCount} pushes sent, ${result.pushFailureCount} failed.`);
+        return result;
     }, { connection: redisConnection, removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } });
 }
 

@@ -5,6 +5,7 @@ import Notification from '../../../models/Notification.model.js';
 import Admin from '../../../models/Admin.model.js';
 import User from '../../../models/User.model.js';
 import { createNotification, broadcastNotifications } from '../../../services/notification.service.js';
+import { QueueService } from '../../../services/queue.service.js';
 
 // GET /api/admin/notifications
 export const getAdminNotifications = asyncHandler(async (req, res) => {
@@ -156,13 +157,26 @@ export const globalBroadcast = asyncHandler(async (req, res) => {
     else if (target === 'delivery-boy') roles = ['delivery'];
     else roles = [target]; // specific role if passed
 
-    const result = await broadcastNotifications({
+    const payload = {
         roles,
         title,
         message,
         type: 'broadcast',
         data: { sender: 'Admin Dashboard' }
-    });
+    };
 
-    res.status(200).json(new ApiResponse(200, result, 'Broadcast initiated successfully.'));
+    // A "send to all" broadcast can mean thousands of DB writes + FCM calls -
+    // hand it to the background worker so this request returns instantly
+    // instead of the admin's browser hanging on the response.
+    try {
+        await QueueService.scheduleBroadcastNotification(payload);
+        return res.status(202).json(new ApiResponse(202, { queued: true }, 'Broadcast queued and will be sent shortly.'));
+    } catch (err) {
+        // No queue backend available (e.g. local dev without Redis running) -
+        // fall back to sending inline so the feature still works, just
+        // without the background-job benefit.
+        console.warn('[Broadcast] Queue unavailable, sending inline:', err.message);
+        const result = await broadcastNotifications(payload);
+        return res.status(200).json(new ApiResponse(200, result, 'Broadcast sent.'));
+    }
 });

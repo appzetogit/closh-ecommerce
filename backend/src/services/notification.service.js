@@ -89,8 +89,10 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
         }
 
         console.log(`✅ Push sent: ${response.successCount} success, ${response.failureCount} failed.`);
+        return response;
     } catch (error) {
         console.error('❌ FCM Error:', error.message);
+        return null;
     }
 };
 
@@ -171,53 +173,98 @@ export const markAllAsRead = async (recipientId, recipientType) => {
     return Notification.updateMany({ recipientId, recipientType, isRead: false }, { isRead: true });
 };
 
+// FCM's sendEachForMulticast accepts at most 500 tokens per call.
+const FCM_BATCH_SIZE = 500;
+const chunk = (arr, size) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+};
+
 /**
- * Send a notification to multiple roles/users (Broadcast)
+ * Send a notification to multiple roles/users (Broadcast).
+ *
+ * Unlike createNotification (one recipient), this is built for thousands of
+ * recipients at once: one Notification.insertMany per role instead of one
+ * Notification.create() per user, and FCM tokens collected across the whole
+ * role and sent in batches of up to 500 instead of one sendEachForMulticast
+ * call per user. Intended to run inside the broadcast-notification-queue
+ * worker (see queue.service.js), not on the request thread.
  */
 export const broadcastNotifications = async ({ roles, title, message, type = 'broadcast', data = {} }) => {
     const results = {
-        successCount: 0,
-        failureCount: 0,
+        recipientCount: 0,
+        pushSuccessCount: 0,
+        pushFailureCount: 0,
         errors: []
     };
 
-    try {
-        const roleModels = {
-            'user': User,
-            'customer': User,
-            'vendor': Vendor,
-            'delivery': DeliveryBoy,
-            'admin': Admin
-        };
+    const roleModels = {
+        'user': User,
+        'customer': User,
+        'vendor': Vendor,
+        'delivery': DeliveryBoy,
+        'admin': Admin
+    };
 
-        for (const role of roles) {
-            const Model = roleModels[role.toLowerCase()];
-            if (!Model) continue;
+    const stringifiedData = {};
+    Object.entries(data).forEach(([key, value]) => { stringifiedData[key] = String(value); });
 
-            // Fetch all users of this role
-            // Note: For large datasets, this should be chunked or handled by a background job
-            const users = await Model.find({}).select('_id').lean();
+    for (const role of roles) {
+        const Model = roleModels[role.toLowerCase()];
+        if (!Model) continue;
+        const recipientType = (role === 'user' || role === 'customer') ? 'user' : role;
 
-            for (const user of users) {
+        try {
+            const recipients = await Model.find({}).select('_id fcmTokens').lean();
+            if (recipients.length === 0) continue;
+
+            // One bulk insert for every recipient's in-app notification record,
+            // instead of a Notification.create() round-trip per recipient.
+            const now = new Date();
+            const docs = recipients.map((recipient) => ({
+                recipientId: recipient._id,
+                recipientType,
+                title,
+                message,
+                type,
+                data: stringifiedData,
+                createdAt: now,
+                updatedAt: now,
+            }));
+            const inserted = await Notification.insertMany(docs, { ordered: false });
+            results.recipientCount += inserted.length;
+
+            // Real-time update for anyone with an open tab right now.
+            inserted.forEach((notification) => {
+                const room = recipientType === 'admin' ? `admin_${notification.recipientId}` : `${recipientType}_${notification.recipientId}`;
+                emitEvent(room, 'new_notification', notification);
+            });
+
+            // Collect every FCM token across the whole role and send in
+            // batches of 500, instead of one API call per recipient.
+            const allTokens = recipients.flatMap((recipient) =>
+                (recipient.fcmTokens || []).map((t) => (typeof t === 'string' ? t : t.token)).filter(Boolean)
+            );
+            for (const tokenBatch of chunk(allTokens, FCM_BATCH_SIZE)) {
                 try {
-                    await createNotification({
-                        recipientId: user._id,
-                        recipientType: role === 'user' || role === 'customer' ? 'user' : role,
+                    const response = await sendPushToTokens(tokenBatch, {
                         title,
-                        message,
-                        type,
-                        data
+                        body: message,
+                        data: { ...stringifiedData, type },
                     });
-                    results.successCount++;
+                    if (response) {
+                        results.pushSuccessCount += response.successCount || 0;
+                        results.pushFailureCount += response.failureCount || 0;
+                    }
                 } catch (err) {
-                    results.failureCount++;
-                    results.errors.push(`Failed for ${role} ${user._id}: ${err.message}`);
+                    results.errors.push(`Push batch failed for role ${role}: ${err.message}`);
                 }
             }
+        } catch (error) {
+            console.error(`❌ Broadcast error for role ${role}:`, error.message);
+            results.errors.push(`Failed for role ${role}: ${error.message}`);
         }
-    } catch (error) {
-        console.error('❌ Global Broadcast Error:', error.message);
-        throw error;
     }
 
     return results;
