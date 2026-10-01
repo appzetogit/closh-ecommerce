@@ -31,9 +31,14 @@ export const restockItems = async (items = [], session) => {
 
         const incUpdate = { stockQuantity: quantity };
         // Only touch stockMap when the original decrement did - restoring a
-        // key that was never decremented (hasSpecificVariantStock false)
-        // would create a stray bucket instead of just growing stockQuantity.
-        if (variantKey && item?.hasSpecificVariantStock) {
+        // key that was never decremented would create a stray bucket instead
+        // of just growing stockQuantity. The decrement touches the bucket
+        // exactly when the product's stockMap has that key, so that's checked
+        // directly too: older return items never stored hasSpecificVariantStock,
+        // and relying on the flag alone left their size stuck at 0 ("OUT")
+        // while only the product total went back up.
+        const mapHasKey = Boolean(variantKey) && productSnapshot?.variants?.stockMap?.[variantKey] !== undefined;
+        if (variantKey && (item?.hasSpecificVariantStock || mapHasKey)) {
             incUpdate[`variants.stockMap.${variantKey}`] = quantity;
         }
 
