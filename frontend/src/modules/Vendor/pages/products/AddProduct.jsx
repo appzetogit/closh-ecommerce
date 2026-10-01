@@ -133,6 +133,13 @@ const AddProduct = () => {
         [name]: type === "checkbox" ? checked : value,
       };
 
+      // The category list is filtered by division, so a category picked under
+      // the old division may not even be selectable under the new one.
+      if (name === "division" && value !== prev.division) {
+        next.categoryId = "";
+        next.subcategoryId = "";
+      }
+
       // Synchronization Logic for Price / Original Price / Discount
       if (name === "price") {
         const sellingPrice = parseFloat(value) || 0;
@@ -757,6 +764,29 @@ const AddProduct = () => {
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Gender / Division <span className="text-red-500">*</span>
+              </label>
+              <AnimatedSelect
+                name="division"
+                value={formData.division || "Unisex"}
+                onChange={handleChange}
+                required
+                options={[
+                  { value: "Men", label: "Men" },
+                  { value: "Women", label: "Women" },
+                  { value: "Boys", label: "Boys" },
+                  { value: "Girls", label: "Girls" },
+                  { value: "Kids", label: "Kids (shows to Boys + Girls)" },
+                  { value: "Unisex", label: "Unisex (shows to Men + Women)" },
+                ]}
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Pehle yeh chuno - Category list isi ke hisaab se badalti hai (Kid category ke liye Boys / Girls / Kids chuno).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Category <span className="text-red-500">*</span>
               </label>
               <CategorySelector
@@ -782,26 +812,6 @@ const AddProduct = () => {
                   ...brands
                     .filter((brand) => brand.isActive !== false)
                     .map((brand) => ({ value: String(brand.id), label: brand.name })),
-                ]}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Gender / Division <span className="text-red-500">*</span>
-              </label>
-              <AnimatedSelect
-                name="division"
-                value={formData.division || "Unisex"}
-                onChange={handleChange}
-                required
-                options={[
-                  { value: "Men", label: "Men" },
-                  { value: "Women", label: "Women" },
-                  { value: "Boys", label: "Boys" },
-                  { value: "Girls", label: "Girls" },
-                  { value: "Kids", label: "Kids (shows to Boys + Girls)" },
-                  { value: "Unisex", label: "Unisex (shows to Men + Women)" },
                 ]}
               />
             </div>
