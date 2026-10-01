@@ -18,13 +18,13 @@ const getMessaging = () => {
 /**
  * Send a push notification using Firebase Messaging
  * @param {Array} tokens - Array of FCM registration tokens
- * @param {Object} payload - { title, body, data, sound }
+ * @param {Object} payload - { title, body, data, sound, imageUrl, actionLink }
  */
-const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'default' }) => {
+const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'default', imageUrl, actionLink }) => {
     if (!tokens || tokens.length === 0) return;
 
     const messaging = getMessaging();
-    
+
     if (!messaging) {
         console.warn('⚠️ FCM messaging service not initialized. Skipping push notification.');
         return;
@@ -34,24 +34,30 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
     Object.entries(data).forEach(([key, value]) => {
         stringifiedData[key] = String(value);
     });
+    // actionLink, when set, is what the client opens on tap - takes priority
+    // over the generic Flutter click_action default.
+    if (actionLink) stringifiedData.actionLink = actionLink;
 
     const message = {
-        notification: { title, body },
-        data: { ...stringifiedData, click_action: stringifiedData.click_action || 'FLUTTER_NOTIFICATION_CLICK' }, // Standard for some frameworks
+        notification: { title, body, ...(imageUrl ? { imageUrl } : {}) },
+        data: { ...stringifiedData, click_action: actionLink || stringifiedData.click_action || 'FLUTTER_NOTIFICATION_CLICK' }, // Standard for some frameworks
         tokens,
         android: {
             priority: 'high',
             notification: {
                 sound: sound === 'default' ? 'default' : sound,
-                channelId: sound === 'default' ? 'default_channel' : 'high_priority_channel'
+                channelId: sound === 'default' ? 'default_channel' : 'high_priority_channel',
+                ...(imageUrl ? { imageUrl } : {}),
             }
         },
         apns: {
             payload: {
                 aps: {
-                    sound: sound === 'default' ? 'default' : sound
+                    sound: sound === 'default' ? 'default' : sound,
+                    'mutable-content': imageUrl ? 1 : 0,
                 }
-            }
+            },
+            ...(imageUrl ? { fcmOptions: { imageUrl } } : {}),
         }
     };
 
@@ -100,11 +106,11 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
  * Create a notification for a user/vendor/delivery/admin and trigger Push/Socket
  * @param {Object} options - { recipientId, recipientType, title, message, type, data, token, tokens }
  */
-export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {}, token, tokens }) => {
+export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {}, token, tokens, imageUrl, actionLink }) => {
     // 1. Persist to DB if recipientId is provided
     let notification = null;
     if (recipientId) {
-        notification = await Notification.create({ recipientId, recipientType, title, message, type, data });
+        notification = await Notification.create({ recipientId, recipientType, title, message, type, data, imageUrl, actionLink });
         console.log(`💾 [DB NOTIFICATION] ID: ${notification._id}, For: ${recipientType}_${recipientId}`);
 
         // 2. Real-time socket updates (for active web clients)
@@ -149,7 +155,7 @@ export const createNotification = async ({ recipientId, recipientType, title, me
                 sound = 'mgs_codec.mp3'; // The custom buzzer sound file name
             }
 
-            await sendPushToTokens(pushTokens, { title, body: message, data: { ...data, type }, sound });
+            await sendPushToTokens(pushTokens, { title, body: message, data: { ...data, type }, sound, imageUrl, actionLink });
         }
     } catch (err) {
         console.error('Failed to trigger push notification:', err.message);
@@ -191,7 +197,7 @@ const chunk = (arr, size) => {
  * call per user. Intended to run inside the broadcast-notification-queue
  * worker (see queue.service.js), not on the request thread.
  */
-export const broadcastNotifications = async ({ roles, title, message, type = 'broadcast', data = {} }) => {
+export const broadcastNotifications = async ({ roles, title, message, type = 'broadcast', data = {}, imageUrl, actionLink }) => {
     const results = {
         recipientCount: 0,
         pushSuccessCount: 0,
@@ -229,6 +235,8 @@ export const broadcastNotifications = async ({ roles, title, message, type = 'br
                 message,
                 type,
                 data: stringifiedData,
+                imageUrl,
+                actionLink,
                 createdAt: now,
                 updatedAt: now,
             }));
@@ -252,6 +260,8 @@ export const broadcastNotifications = async ({ roles, title, message, type = 'br
                         title,
                         body: message,
                         data: { ...stringifiedData, type },
+                        imageUrl,
+                        actionLink,
                     });
                     if (response) {
                         results.pushSuccessCount += response.successCount || 0;

@@ -122,7 +122,7 @@ export const removeAdminFcmToken = asyncHandler(async (req, res) => {
 // POST /api/admin/notifications/push-to-user
 export const pushToUser = asyncHandler(async (req, res) => {
     console.log('PushToUser Payload:', req.body);
-    const { userId, title, message } = req.body;
+    const { userId, title, message, imageUrl, actionLink } = req.body;
     if (!userId || !title || !message) {
         console.warn('❌ PushToUser Validation failed:', { userId, title, message });
         throw new ApiError(400, 'User ID, Title, and Message are required.');
@@ -137,7 +137,9 @@ export const pushToUser = asyncHandler(async (req, res) => {
         title,
         message,
         type: 'broadcast',
-        data: { sender: 'Admin' }
+        data: { sender: 'Admin' },
+        imageUrl: imageUrl || undefined,
+        actionLink: actionLink || undefined,
     });
 
     res.status(200).json(new ApiResponse(200, notification, 'Notification pushed to user.'));
@@ -145,7 +147,7 @@ export const pushToUser = asyncHandler(async (req, res) => {
 
 // POST /api/admin/notifications/broadcast
 export const globalBroadcast = asyncHandler(async (req, res) => {
-    const { target, title, message } = req.body;
+    const { target, title, message, imageUrl, actionLink } = req.body;
     if (!target || !title || !message) {
         throw new ApiError(400, 'Target, Title, and Message are required.');
     }
@@ -162,7 +164,9 @@ export const globalBroadcast = asyncHandler(async (req, res) => {
         title,
         message,
         type: 'broadcast',
-        data: { sender: 'Admin Dashboard' }
+        data: { sender: 'Admin Dashboard' },
+        imageUrl: imageUrl || undefined,
+        actionLink: actionLink || undefined,
     };
 
     // A "send to all" broadcast can mean thousands of DB writes + FCM calls -
