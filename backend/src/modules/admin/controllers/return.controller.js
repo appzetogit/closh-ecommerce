@@ -228,18 +228,27 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
     }
 
     // Refund Transition Validation & Automation
+    let refundAutomationIssue = null;
     if (refundStatus && refundStatus !== currentRefundStatus) {
         const allowedRefundNext = refundTransitions[currentRefundStatus] || [];
         if (!allowedRefundNext.includes(refundStatus)) {
             throw new ApiError(409, `Cannot move refund status from ${currentRefundStatus} to ${refundStatus}.`);
         }
 
-        // Automated refund if status is being set to 'processed'
+        // Automated refund if status is being set to 'processed'.
+        // IMPORTANT: a refund failure here must NEVER throw and abort the
+        // whole request — doing so used to also block `request.status`
+        // from ever being set to 'completed' below (since that assignment
+        // happens after this block), which meant stock restoration was
+        // silently blocked by an unrelated payment-gateway hiccup (stale
+        // test paymentId, RazorpayX misconfigured, etc). Instead we record
+        // the failure and let status/stock-restore proceed regardless; the
+        // admin can retry just the refund afterwards.
         if (refundStatus === 'processed') {
             const order = request.orderId;
-            if (!order) throw new ApiError(400, "Linked order not found for refund.");
-
-            if (order.paymentMethod !== 'cod' && order.razorpayPaymentId) {
+            if (!order) {
+                refundAutomationIssue = 'Linked order not found for refund.';
+            } else if (order.paymentMethod !== 'cod' && order.razorpayPaymentId) {
                 try {
                     const refund = await refundPayment({
                         paymentId: order.razorpayPaymentId,
@@ -251,7 +260,7 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     });
                     request.refundId = refund.id;
                     request.refundNotes = `Automated Razorpay Refund successful. Refund ID: ${refund.id}`;
-                    
+
                     // Fallback for local development where webhook cannot reach
                     if (process.env.NODE_ENV !== 'production' || !process.env.RAZORPAY_WEBHOOK_SECRET) {
                         request.refundStatus = 'processed';
@@ -260,7 +269,7 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     await order.save();
                 } catch (error) {
                     console.error('Automated Refund Error:', error);
-                    throw new ApiError(500, `Automated refund failed: ${error.message}. Please handle manually.`);
+                    refundAutomationIssue = `Automated refund failed: ${error.message}. Please handle manually.`;
                 }
             } else if (order.paymentMethod === 'cod') {
                 // COD has no payment-gateway transaction to reverse, so there's
@@ -298,7 +307,7 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                         // never actually moved — surface the failure so the
                         // admin fixes the UPI ID / retries, or pays manually
                         // and sets refundStatus directly if they choose to.
-                        throw new ApiError(500, `Automated UPI payout failed: ${error.message}. Refund status was not changed — fix the issue and retry, or pay manually and mark this processed once done.`);
+                        refundAutomationIssue = `Automated UPI payout failed: ${error.message}. Refund status was not changed — fix the issue and retry, or pay manually and mark this processed once done.`;
                     }
                 } else {
                     // Not eligible for auto-pay — either RazorpayX isn't
@@ -309,13 +318,21 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                     request.refundNotes = `Manual refund processed for COD order. ` + (adminNote || '');
                 }
             } else {
-                 throw new ApiError(400, "Online payment record (razorpayPaymentId) not found. Manual refund required.");
+                refundAutomationIssue = 'Online payment record (razorpayPaymentId) not found. Manual refund required.';
             }
         }
     }
 
     if (status) request.status = status;
-    if (refundStatus) request.refundStatus = refundStatus;
+    if (refundStatus) {
+        // Don't report 'processed' when the automation above actually
+        // failed to move any money — status/stock still proceed below
+        // regardless, but the refund itself genuinely needs a retry.
+        request.refundStatus = refundAutomationIssue ? 'failed' : refundStatus;
+        if (refundAutomationIssue) {
+            request.refundNotes = refundAutomationIssue;
+        }
+    }
     if (adminNote !== undefined) request.adminNote = adminNote;
 
     // If status is approved, setup the delivery task and notify riders
@@ -498,7 +515,10 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
 
     emitEvent(`return_${request._id}`, 'return_status_updated', request);
 
-    res.status(200).json(new ApiResponse(200, normalized, 'Return request status updated successfully'));
+    const responseMessage = refundAutomationIssue
+        ? `Return status updated to "${request.status}"${request.status === 'completed' ? ' and stock restored' : ''}, but the refund failed: ${refundAutomationIssue}`
+        : 'Return request status updated successfully';
+    res.status(200).json(new ApiResponse(200, normalized, responseMessage));
 });
 
 /**
