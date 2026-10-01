@@ -12,12 +12,30 @@ const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g
  * isn't under a Men/Women root, or when the mirror root has no matching
  * category at some level of the path.
  */
+// Walks `names` downward from `startNode`, matching each level by name
+// (case-insensitive) among active children. Returns the final node's id, or
+// null if any level has no match.
+const resolveNamePathFrom = async (startNode, names) => {
+    let node = startNode;
+    for (const name of names) {
+        const child = await Category.findOne({
+            parentId: node._id,
+            name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+            isActive: true,
+        }).lean();
+        if (!child) return null;
+        node = child;
+    }
+    return String(node._id);
+};
+
 export const findMirrorCategoryId = async (categoryId) => {
     if (!categoryId) return null;
 
     const path = [];
     let current = await Category.findById(categoryId).lean();
     if (!current) return null;
+    const leaf = current;
     path.unshift(current);
     while (current.parentId) {
         current = await Category.findById(current.parentId).lean();
@@ -25,28 +43,46 @@ export const findMirrorCategoryId = async (categoryId) => {
         path.unshift(current);
     }
 
-    const rootName = String(path[0].name || '').trim().toLowerCase();
-    const mirrorRootName = MIRROR_ROOT_NAMES[rootName];
-    if (!mirrorRootName) return null;
-
-    let node = await Category.findOne({
-        parentId: null,
-        name: { $regex: new RegExp(`^${escapeRegex(mirrorRootName)}$`, 'i') },
-        isActive: true,
-    }).lean();
-    if (!node) return null;
-
-    for (let i = 1; i < path.length; i++) {
-        const child = await Category.findOne({
-            parentId: node._id,
-            name: { $regex: new RegExp(`^${escapeRegex(path[i].name)}$`, 'i') },
-            isActive: true,
-        }).lean();
-        if (!child) return null;
-        node = child;
+    // 1. An admin-linked Unisex category (isUnisex + linkedCategoryId, kept in
+    //    sync by admin/catalog.controller.js syncUnisexTwin) is the explicit
+    //    answer - e.g. "Mens Footwear > Crocs" <-> "Womens Footwear > Crocs",
+    //    which sit under a shared "Footwear" root the Men/Women walk below
+    //    can't see.
+    if (leaf.linkedCategoryId) {
+        const linked = await Category.findOne({ _id: leaf.linkedCategoryId, isActive: true }).select('_id').lean();
+        if (linked) return String(linked._id);
     }
 
-    return String(node._id);
+    // 2. Same-named path under the opposite Men/Women root.
+    const rootName = String(path[0].name || '').trim().toLowerCase();
+    const mirrorRootName = MIRROR_ROOT_NAMES[rootName];
+    if (mirrorRootName) {
+        const mirrorRoot = await Category.findOne({
+            parentId: null,
+            name: { $regex: new RegExp(`^${escapeRegex(mirrorRootName)}$`, 'i') },
+            isActive: true,
+        }).lean();
+        if (!mirrorRoot) return null;
+        return resolveNamePathFrom(mirrorRoot, path.slice(1).map((c) => c.name));
+    }
+
+    // 3. A gender word further down the path (e.g. "Footwear > Mens Footwear >
+    //    Clogs"): swap it to find the opposite sibling, then re-resolve the
+    //    rest of the path beneath it.
+    for (let i = 0; i < path.length; i++) {
+        const swappedName = swapGenderWordInName(path[i].name);
+        if (!swappedName) continue;
+        const sibling = await Category.findOne({
+            parentId: path[i].parentId || null,
+            _id: { $ne: path[i]._id },
+            name: { $regex: new RegExp(`^${escapeRegex(swappedName)}$`, 'i') },
+            isActive: true,
+        }).lean();
+        if (!sibling) return null;
+        return resolveNamePathFrom(sibling, path.slice(i + 1).map((c) => c.name));
+    }
+
+    return null;
 };
 
 /**
