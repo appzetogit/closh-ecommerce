@@ -2,7 +2,7 @@
 import logo from "../../../../assets/animations/lottie/logo-removebg.png";
 import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import { FiLogOut, FiTruck, FiPackage, FiHome, FiUser, FiMenu, FiBell, FiAlertCircle, FiTrash2 } from "react-icons/fi";
-import { useDeliveryAuthStore } from "../../store/deliveryStore";
+import { useDeliveryAuthStore, syncServerClock } from "../../store/deliveryStore";
 import { useDeliveryEngineStore } from "../../store/deliveryEngineStore";
 import { useDeliveryNotificationStore } from "../../store/deliveryNotificationStore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -205,7 +205,21 @@ const DeliveryLayout = () => {
       return;
     }
 
-    setIsAcceptingOrder(false); 
+    if (data.serverTime) syncServerClock(data.serverTime);
+
+    // Never re-offer an order this rider has already accepted (the same event can be
+    // delivered again after a reconnect or a re-sent alert); showing Accept/Decline for it
+    // again is what made riders accept the same mission over and over.
+    const incomingIds = [data.orderId, data.id, data._id].filter(Boolean).map(String);
+    const alreadyAccepted = (useDeliveryAuthStore.getState().orders || []).some(
+      o => o.riderAcceptedAt && [o.id, o._id, o.orderId].some(k => k && incomingIds.includes(String(k)))
+    );
+    if (alreadyAccepted) {
+      console.log(`✅ [DELIVERY] Order ${id} already accepted by this partner. Not re-opening the popup.`);
+      return;
+    }
+
+    setIsAcceptingOrder(false);
 
     // BLOCKER: Do not show or alert for new orders if already on a mission
     const store = useDeliveryAuthStore.getState();
@@ -353,6 +367,8 @@ const DeliveryLayout = () => {
       window.dispatchEvent(new CustomEvent('delivery-dashboard-refresh'));
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to accept task');
+      // Let the swipe control know it failed so it can reset and allow another try.
+      throw err;
     } finally {
       setIsAcceptingOrder(false);
     }

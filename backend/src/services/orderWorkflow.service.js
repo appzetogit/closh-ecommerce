@@ -166,7 +166,7 @@ export const OrderWorkflowService = {
         const otp = order.generateDeliveryOtp();
         await order.save();
         
-        emitEvent('delivery_partners', 'order_taken', { orderId: order.orderId || order._id });
+        emitEvent('delivery_partners', 'order_taken', { orderId: order.orderId || order._id, id: order._id, takenBy: String(riderId) });
         await OrderNotificationService.notifyOrderUpdate(order._id, 'assigned');
         
         return order;

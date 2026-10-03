@@ -148,6 +148,10 @@ export const getAssignedOrders = asyncHandler(async (req, res) => {
                     limit: numericLimit,
                     pages: Math.ceil(total / numericLimit) || 1,
                 },
+                // The accept countdown is measured from the server's assignedAt, so the
+                // app needs the server's clock to avoid expiring early/late on a phone
+                // whose own clock is off.
+                serverTime: new Date().toISOString(),
             },
             'Assigned orders fetched.'
         )

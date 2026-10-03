@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi';
 const TrackingMap = lazy(() => import('../../../shared/components/TrackingMap'));
 import PageTransition from '../../../shared/components/PageTransition';
+import FixedBottomBar from '../components/FixedBottomBar';
 import { formatPrice } from '../../../shared/utils/helpers';
 import toast from 'react-hot-toast';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
@@ -488,7 +489,7 @@ const DeliveryReturnDetail = () => {
         </div>
 
         {/* BOTTOM FIXED BUTTON & OTP */}
-        <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-100 z-50 flex flex-col gap-2">
+        <FixedBottomBar className="p-3 bg-white/95 backdrop-blur-md border-t border-slate-100 z-50 flex flex-col gap-2">
           {['customer_pickup', 'vendor_dropoff', 'multi_vendor_dropoff'].includes(currentPhase) && (
             <div className="flex flex-col gap-1.5">
               <div className="relative">
@@ -547,7 +548,7 @@ const DeliveryReturnDetail = () => {
               </p>
             </div>
           )}
-        </div>
+        </FixedBottomBar>
       </div>
     </PageTransition>
   );

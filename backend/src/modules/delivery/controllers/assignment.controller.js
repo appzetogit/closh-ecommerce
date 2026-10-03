@@ -14,6 +14,10 @@ import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendor
 import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
 import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
 
+// The rider app counts 120s down to auto-reject an unaccepted offer. The server never
+// takes an app's word for it: an auto-reject earlier than this is ignored.
+const AUTO_REJECT_MIN_ELAPSED_MS = (120 - 15) * 1000;
+
 
 /**
  * Find nearby delivery boys for an order
@@ -393,7 +397,16 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
     await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'busy', lastAssignedAt: new Date() });
 
     // ── Multi-Vendor Stop Setup & DeliveryBatch creation ──
-    if (order.isMultiVendor || order.vendorPickups?.length > 0 || order.status === 'all_vendors_ready') {
+    // The auto-assigner already creates this order's batch when it offers the order
+    // to the rider, and every extra tap on Accept used to stack ANOTHER active batch
+    // for the same order. Only build one here for claims that never had one (an open
+    // order a rider grabbed themselves).
+    const hasActiveBatch = await DeliveryBatch.exists({
+        orderId: order._id,
+        deliveryBoyId,
+        status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] },
+    });
+    if (!hasActiveBatch && (order.isMultiVendor || order.vendorPickups?.length > 0 || order.status === 'all_vendors_ready')) {
         try {
             // Get rider's current location for nearest-first sorting
             const rider = await DeliveryBoy.findById(deliveryBoyId).select('currentLocation');
@@ -466,21 +479,28 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
         }
     }
 
-    // Unified Notification to all parties
-    await OrderNotificationService.notifyOrderUpdate(order._id, 'assigned', {
-        title: 'Delivery Partner Assigned',
-        message: `A delivery partner has been assigned to order ${order.orderId}.`
-    });
-
-    // Notify other delivery partners that this order is taken (Global broadcast to clear UI)
+    // Notify other delivery partners that this order is taken (Global broadcast to clear UI).
+    // `takenBy` lets the rider who just accepted recognise their OWN event: the room
+    // includes them too, and their order screen used to react to it with "Mission taken
+    // by another partner" and bounce them to the dashboard right after a good accept.
     emitEvent('delivery_partners', 'order_taken', {
         orderId: order.orderId,
-        id: order._id
+        id: order._id,
+        takenBy: String(deliveryBoyId),
     });
 
+    // Cheap, and the app refetches the dashboard the instant it gets the reply below.
     await cacheInvalidate(`dash:${deliveryBoyId}`, `profile:${deliveryBoyId}`);
 
+    // The claim is already committed, so answer now. Waiting for the push/FCM fan-out to
+    // the customer, vendor and admin before replying made Accept feel dead for seconds -
+    // which is exactly when riders tap it again.
     res.status(200).json(new ApiResponse(200, order, 'Order assigned successfully.'));
+
+    OrderNotificationService.notifyOrderUpdate(order._id, 'assigned', {
+        title: 'Delivery Partner Assigned',
+        message: `A delivery partner has been assigned to order ${order.orderId}.`
+    }).catch((err) => console.error(`[AcceptOrder] Post-accept notifications failed for ${order.orderId}:`, err));
 });
 
 /**
@@ -531,6 +551,20 @@ export const rejectOrderAssignment = asyncHandler(async (req, res) => {
             return res.status(200).json(new ApiResponse(200, null, 'Order already accepted; auto-reject ignored.'));
         }
         throw new ApiError(400, 'You already accepted this mission. Use "Customer Refused / Cancel Mission" from the order screen instead.');
+    }
+
+    // The 120s accept window belongs to the server (the rider-auto-assign-timeout worker
+    // reassigns when it really runs out). An app-fired auto-reject only reflects the
+    // PHONE's idea of the countdown - a clock running ahead, a stale timestamp or a
+    // resumed background tab can all end it early and hand the order to someone else
+    // while the rider is still looking at a live Accept button. Trust only auto-rejects
+    // that arrive once the window has genuinely (almost) elapsed.
+    if (req.body?.auto === true && order.assignedAt) {
+        const elapsedMs = Date.now() - new Date(order.assignedAt).getTime();
+        if (elapsedMs < AUTO_REJECT_MIN_ELAPSED_MS) {
+            console.log(`[RejectAssignment] Ignored early auto-reject for ${order.orderId}: only ${Math.round(elapsedMs / 1000)}s into the accept window.`);
+            return res.status(200).json(new ApiResponse(200, null, 'Accept window still open; auto-reject ignored.'));
+        }
     }
 
     // 1. Mark this delivery boy as rejected for this order

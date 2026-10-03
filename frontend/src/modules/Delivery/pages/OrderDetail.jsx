@@ -27,6 +27,7 @@ import { compressImage } from '@shared/utils/imageHelper';
 import CancellationModal from '../components/CancellationModal';
 import TrackingMap from '../../../shared/components/TrackingMap';
 import PageTransition from '../../../shared/components/PageTransition';
+import FixedBottomBar from '../components/FixedBottomBar';
 import { formatPrice } from '../../../shared/utils/helpers';
 import toast from 'react-hot-toast';
 import { useDeliveryAuthStore } from '../store/deliveryStore';
@@ -237,7 +238,10 @@ const DeliveryOrderDetail = () => {
         setSelectedItemIds(new Set(response.items.map((_, idx) => idx)));
       }
     } catch (err) {
-      setOrder(null);
+      // A failed background reload (network blip) must not turn a screen the rider is
+      // actively using into "Order not found" - only a real 404 means it is gone.
+      if (err?.response?.status === 404) setOrder(null);
+      else setOrder(prev => prev || null);
     }
   }, [id, fetchOrderById]);
 
@@ -245,18 +249,31 @@ const DeliveryOrderDetail = () => {
   useEffect(() => {
     loadOrder();
     const handleUpdate = () => loadOrder();
+    const handleTaken = (data) => {
+      if (data.id !== id && data.orderId !== id) return;
+      // `order_taken` goes to EVERY rider, the one who just took the order included -
+      // and it can reach this screen right after the rider's own Accept. Reading that as
+      // "taken by another partner" threw the rider back to the dashboard (the flicker /
+      // white screen after tapping Accept) even though the accept had succeeded.
+      const me = useDeliveryAuthStore.getState().deliveryBoy;
+      const myId = String(me?.id || me?._id || '');
+      if (data.takenBy && myId && String(data.takenBy) === myId) return;
+      const mine = useDeliveryAuthStore.getState().orders.find(
+        o => [o.id, o._id, o.orderId].some(k => k && String(k) === String(id))
+      );
+      if (mine && mine.riderAcceptedAt) return;
+      toast.error('Mission taken by another partner');
+      navigate('/delivery/dashboard');
+    };
     socketService.on('order_status_updated', handleUpdate);
-    socketService.on('order_taken', (data) => {
-      if (data.id === id || data.orderId === id) {
-        toast.error('Mission taken by another partner');
-        navigate('/delivery/dashboard');
-      }
-    });
+    socketService.on('order_taken', handleTaken);
 
     if (id) socketService.joinRoom(`order_${id}`);
     return () => {
-      socketService.off('order_status_updated');
-      socketService.off('order_taken');
+      // Remove only OUR handlers: an argument-less off() strips every listener for the
+      // event app-wide, silently disconnecting the dashboard and layout from it.
+      socketService.off('order_status_updated', handleUpdate);
+      socketService.off('order_taken', handleTaken);
     };
   }, [id, loadOrder, navigate]);
 
@@ -289,6 +306,13 @@ const DeliveryOrderDetail = () => {
     if (hasActiveTask) {
       return toast.error('You must complete your current task first!');
     }
+    // Ignore taps while an accept is already running (also guarded in the store).
+    if (isUpdatingOrderStatus) return;
+    // Show the order as accepted straight away. Waiting for the reply left a gap in which
+    // the store had finished but this screen still held the old copy, so the Accept bar
+    // blinked back for a moment before the real data landed.
+    const orderBeforeAccept = order;
+    setOrder(prev => (prev ? { ...prev, riderAcceptedAt: prev.riderAcceptedAt || new Date().toISOString() } : prev));
     try {
       // Use stable id from useParams
       let updated;
@@ -299,9 +323,17 @@ const DeliveryOrderDetail = () => {
       }
       setOrder(updated);
       toast.success('MISSION ACCEPTED! GET STARTED');
+      // The accept reply is the bare order; pull the full detail (vendor, rider...).
+      loadOrder();
     } catch (err) {
+      setOrder(orderBeforeAccept);
       toast.error(err?.response?.data?.message || 'Failed to accept mission');
-      navigate('/delivery/dashboard');
+      // Only leave when the order is really gone (reassigned / expired). A network blip or
+      // a transient 5xx used to dump the rider on the dashboard with no way to retry.
+      const code = err?.response?.status;
+      if (code === 404 || code === 409) {
+        navigate('/delivery/dashboard');
+      }
     }
   };
 
@@ -687,7 +719,11 @@ const DeliveryOrderDetail = () => {
     setExtra(prev => prev.filter((_, i) => i !== idx));
   };
 
-  if (isLoadingOrder || !isLoaded) {
+  // Spinner only until the first copy of the order arrives. Every socket nudge reloads the
+  // order in the background; blanking the whole screen for each reload is the white flash
+  // riders saw right after tapping Accept (several events fire at once), and it also threw
+  // away whatever the rider had entered on the page.
+  if ((isLoadingOrder && !order) || !isLoaded) {
     return <div className="min-h-screen flex items-center justify-center bg-white"><div className="w-8 h-8 border-3 border-slate-100 border-t-indigo-600 rounded-full animate-spin" /></div>;
   }
 
@@ -995,7 +1031,7 @@ const DeliveryOrderDetail = () => {
               </div>
             )}
 
-            {(!hasArrived && currentPhase === 'delivery') || (currentPhase === 'pickup') ? (
+            {!isAvailableTask && ((!hasArrived && currentPhase === 'delivery') || (currentPhase === 'pickup')) ? (
               <div className="space-y-3">
                 {currentPhase === 'pickup' ? (
                   <div className="flex flex-col gap-3">
@@ -1321,7 +1357,7 @@ const DeliveryOrderDetail = () => {
 
         {/* BOTTOM ACTION BUTTON */}
         {!isOrderFinished && (
-          <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-100 z-50">
+          <FixedBottomBar className="p-3 bg-white/95 backdrop-blur-md border-t border-slate-100 z-50">
             {isAvailableTask ? (
             <div className="flex gap-3">
               <button
@@ -1379,7 +1415,7 @@ const DeliveryOrderDetail = () => {
               <p className="text-[8px] font-bold text-rose-400 uppercase leading-none">This task is assigned to another partner.</p>
             </div>
             )}
-          </div>
+          </FixedBottomBar>
         )}
 
         {/* QR MODAL */}

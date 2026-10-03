@@ -27,7 +27,15 @@ const SwipeToAccept = ({ onAccept, isLoading = false, label = 'Swipe to Accept R
             controls.start({ x: rightConstraint, transition: { type: 'spring', stiffness: 400, damping: 30 } });
             setAccepted(true);
             if (onAccept) {
-                await onAccept();
+                try {
+                    await onAccept();
+                } catch {
+                    // The accept failed (already reassigned, network, ...). `accepted` used to
+                    // stay true forever, leaving the handle stuck at the end where further
+                    // swipes are ignored - the rider could not retry without closing the popup.
+                    setAccepted(false);
+                    controls.start({ x: 0, transition: { type: 'spring', stiffness: 400, damping: 30 } });
+                }
             }
         } else {
             // Snap back if didn't swipe far enough

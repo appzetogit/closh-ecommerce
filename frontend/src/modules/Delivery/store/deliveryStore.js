@@ -44,6 +44,38 @@ const toAddressLine = (shippingAddress = {}) => {
   return parts.join(', ');
 };
 
+// ── Server clock ────────────────────────────────────────────────────────────
+// The accept countdown runs off the server's `assignedAt`, so it has to be measured
+// against the server's clock. A phone whose clock is even slightly ahead used to expire
+// the offer early and auto-reject it while the rider was still looking at Accept.
+let serverClockOffsetMs = 0;
+export const getServerNow = () => Date.now() + serverClockOffsetMs;
+export const syncServerClock = (serverTime) => {
+  const t = new Date(serverTime).getTime();
+  if (Number.isFinite(t)) serverClockOffsetMs = t - Date.now();
+};
+
+const idKeysOf = (o) => [o?.id, o?._id, o?.orderId].filter(Boolean).map(String);
+const sameOrder = (a, b) => {
+  const keys = idKeysOf(b);
+  return idKeysOf(a).some((k) => keys.includes(k));
+};
+
+// Once a rider has accepted an order it cannot go back to "offered" (the server refuses to
+// reject an accepted order). So when a list response lands that was computed BEFORE the
+// accept committed - an in-flight refresh started by the assignment socket events - it
+// must not wipe out the acceptance we already know about, or the order flips back to a
+// live Accept/Decline card and the rider has to accept all over again.
+const keepAcceptance = (incoming, existing = []) =>
+  incoming.map((order) => {
+    if (!order || order.riderAcceptedAt) return order;
+    const known = existing.find((e) => e?.riderAcceptedAt && sameOrder(e, order));
+    return known ? { ...order, riderAcceptedAt: known.riderAcceptedAt } : order;
+  });
+
+let ordersFetchSeq = 0;
+const acceptInFlight = new Map();
+
 const normalizeOrder = (raw) => {
   if (!raw) return null;
   const shippingAddress = raw?.shippingAddress || {};
@@ -412,7 +444,7 @@ export const useDeliveryAuthStore = create(
         try {
           const res = await api.get('/delivery/orders/dashboard-summary');
           const p = res.data || res || {};
-          const recent = (p.recentOrders || []).map(normalizeOrder);
+          const recent = keepAcceptance((p.recentOrders || []).map(normalizeOrder), get().orders);
           const activeReturns = (p.activeReturns || []).map(normalizeReturn);
           // Sync with global store for consistent tracking across pages
           set({ orders: recent, returns: activeReturns });
@@ -423,21 +455,34 @@ export const useDeliveryAuthStore = create(
         set({ isLoadingOrders: true });
         try {
           const res = await api.get('/delivery/orders/available', { params: opt });
-          const list = ((res.data || res)?.orders || []).map(normalizeOrder);
+          const list = keepAcceptance(((res.data || res)?.orders || []).map(normalizeOrder), get().orders);
           set({ orders: list, isLoadingOrders: false }); return list;
         } catch (e) { set({ isLoadingOrders: false }); throw e; }
       },
       fetchOrders: async (opt = {}) => {
-        set({ orders: [], isLoadingOrders: true });
+        // Don't blank the list while refreshing: this runs on every socket nudge, and
+        // emptying it first made the whole Orders screen flash to nothing (and take the
+        // order a rider had just accepted with it) each time one fired.
+        const seq = ++ordersFetchSeq;
+        set({ isLoadingOrders: true });
         try {
           const res = await api.get('/delivery/orders', { params: opt });
           const p = res.data || res;
+          // A newer refresh has already been started - this response is out of date.
+          if (seq !== ordersFetchSeq) return get().orders;
+          if (p?.serverTime) syncServerClock(p.serverTime);
           // Sort by latest update to ensure status changes are seen first
-          const orders = (p?.orders || (Array.isArray(p) ? p : []))
-            .map(normalizeOrder)
-            .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+          const orders = keepAcceptance(
+            (p?.orders || (Array.isArray(p) ? p : []))
+              .map(normalizeOrder)
+              .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)),
+            get().orders
+          );
           set({ orders, isLoadingOrders: false }); return orders;
-        } catch (e) { set({ isLoadingOrders: false }); throw e; }
+        } catch (e) {
+          if (seq === ordersFetchSeq) set({ isLoadingOrders: false });
+          throw e;
+        }
       },
       fetchOrderById: async (id) => {
         set({ isLoadingOrder: true });
@@ -457,31 +502,49 @@ export const useDeliveryAuthStore = create(
         }
       },
       acceptOrder: async (id) => {
-        const currentOrders = get().orders || [];
-        const targetedOrder = currentOrders.find(o => o.id === id);
+        const key = String(id);
+        // A second tap on Accept while the first is still in flight must not fire a second
+        // request (each one re-ran assignment side effects server-side) - share the first.
+        if (acceptInFlight.has(key)) return acceptInFlight.get(key);
 
-        // 🚀 Optimistic Update: Move order to active state immediately if possible
-        if (targetedOrder) {
+        const run = (async () => {
+          const snapshot = get().orders || [];
+
+          // 🚀 Optimistic Update: show the order as accepted immediately. The id the app
+          // holds can be the display orderId (list) OR the Mongo _id (new-order popup), so
+          // match on all of them - matching only `o.id` left the popup's accept without
+          // any optimistic state and left a stale "offered" copy of the order in the list.
+          const acceptedMarker = new Date().toISOString();
           set({
-            orders: currentOrders.map(o => o.id === id ? { ...o, status: 'accepted' } : o)
+            orders: snapshot.map(o => idKeysOf(o).includes(key)
+              ? { ...o, status: 'accepted', riderAcceptedAt: o.riderAcceptedAt || acceptedMarker }
+              : o),
+            isUpdatingOrderStatus: true
           });
-        }
 
-        set({ isUpdatingOrderStatus: true });
+          try {
+            const res = await api.post(`/delivery/orders/${id}/accept`);
+            const order = normalizeOrder(res.data || res);
+
+            set({
+              orders: [order, ...get().orders.filter(o => !sameOrder(o, order) && !idKeysOf(o).includes(key))],
+              isUpdatingOrderStatus: false
+            });
+            return order;
+          } catch (e) {
+            // ⚠️ Rollback the optimistic acceptance, otherwise the list would keep
+            // showing "Mission Active" for an order the server refused.
+            set({ orders: snapshot, isUpdatingOrderStatus: false });
+            get().fetchAvailableOrders().catch(() => {});
+            throw e;
+          }
+        })();
+
+        acceptInFlight.set(key, run);
         try {
-          const res = await api.post(`/delivery/orders/${id}/accept`);
-          const order = normalizeOrder(res.data || res);
-
-          set({
-            orders: [order, ...get().orders.filter(o => o.id !== id)],
-            isUpdatingOrderStatus: false
-          });
-          return order;
-        } catch (e) {
-          // ⚠️ Rollback: Fetch orders again or revert if we have local copy
-          set({ isUpdatingOrderStatus: false });
-          get().fetchAvailableOrders();
-          throw e;
+          return await run;
+        } finally {
+          acceptInFlight.delete(key);
         }
       },
       // `auto` marks a reject fired by the expiring accept-countdown rather than by the
@@ -490,8 +553,11 @@ export const useDeliveryAuthStore = create(
         set({ isUpdatingOrderStatus: true });
         try {
           const res = await api.post(`/delivery/orders/${id}/reject`, { auto });
+          // The server ignores a reject for an order the rider already accepted - leave
+          // that order in the list instead of removing it from under them.
+          const refused = res?.data === null && /already accepted|still open/i.test(String(res?.message || ''));
           set({
-            orders: get().orders.filter(o => o.id !== id),
+            orders: refused ? get().orders : get().orders.filter(o => !idKeysOf(o).includes(String(id))),
             isUpdatingOrderStatus: false
           });
           return res.data || res;

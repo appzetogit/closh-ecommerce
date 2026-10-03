@@ -360,6 +360,10 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             orderType: order.orderType,
             isMultiVendor: order.isMultiVendor,
             vendorPickups: order.vendorPickups,
+            // Lets the app run its accept countdown off the real assignment time instead
+            // of restarting a fresh 120s every time the popup is (re)opened.
+            assignedAt: order.assignedAt,
+            serverTime: new Date(),
             type: 'auto_assigned_alert'
         };
 
@@ -380,10 +384,13 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             }
         });
 
-        // Clear other riders' caches
+        // Clear other riders' caches. `takenBy` is the rider this order was just offered
+        // to - the room includes them too, and they must not read it as "someone else
+        // took it".
         emitEvent('delivery_partners', 'order_taken', {
             orderId: order.orderId,
-            id: order._id
+            id: order._id,
+            takenBy: chosenRider._id.toString()
         });
 
         // Notify Admin Panel about live assignment
@@ -393,8 +400,10 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             assignedAt: order.assignedAt
         });
 
-        // 7. Schedule 120-Second Timeout for Acceptance (must match frontend timer of 120s)
-        QueueService.scheduleRiderAutoAssignTimeout(order._id, chosenRider._id, 120 * 1000);
+        // 7. Schedule the acceptance timeout. The app shows a 120s countdown; the server
+        // waits a few seconds longer so an Accept tapped as the clock reaches 0:00 (plus
+        // network latency) still lands instead of finding the order already reassigned.
+        QueueService.scheduleRiderAutoAssignTimeout(order._id, chosenRider._id, 125 * 1000);
 
         return true;
     } catch (error) {

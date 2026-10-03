@@ -173,7 +173,7 @@ export const acceptMultiVendorOrder = asyncHandler(async (req, res) => {
     }).catch(() => {});
 
     // Clear this order from other riders' screens
-    emitEvent('delivery_partners', 'order_taken', { orderId: order.orderId, id: order._id });
+    emitEvent('delivery_partners', 'order_taken', { orderId: order.orderId, id: order._id, takenBy: String(deliveryBoyId) });
 
     res.status(200).json(new ApiResponse(200, { order, batch }, 'Multi-vendor order accepted.'));
 });

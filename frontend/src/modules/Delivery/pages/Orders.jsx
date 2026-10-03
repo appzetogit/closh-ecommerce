@@ -27,7 +27,7 @@ import api from '../../../shared/utils/api';
 import PageTransition from '../../../shared/components/PageTransition';
 import { formatPrice } from '../../../shared/utils/helpers';
 import toast from 'react-hot-toast';
-import { useDeliveryAuthStore } from '../store/deliveryStore';
+import { useDeliveryAuthStore, getServerNow } from '../store/deliveryStore';
 import socketService from '../../../shared/utils/socket';
 import OrderCardSkeleton from '../../../shared/components/Skeletons/OrderCardSkeleton';
 
@@ -35,20 +35,28 @@ const CountdownTimer = ({ assignedAt, onExpire }) => {
   const [timeLeft, setTimeLeft] = useState(120);
 
   const onExpireRef = useRef(onExpire);
-  
+
   useEffect(() => {
     onExpireRef.current = onExpire;
   }, [onExpire]);
 
   useEffect(() => {
-    const startTime = assignedAt ? new Date(assignedAt).getTime() : Date.now();
+    // Anchored on the server's assignedAt and measured against the server's clock. It
+    // used to fall back to `updatedAt` (changes on any write, often long before the
+    // offer) and compare with the phone's own clock, so the timer could be at 0:00 on
+    // first render and fire an auto-reject on an order the rider hadn't even seen yet.
+    const startTime = assignedAt ? new Date(assignedAt).getTime() : getServerNow();
     const endTime = startTime + 120000;
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((endTime - getServerNow()) / 1000));
       setTimeLeft(remaining);
-      if (remaining === 0) {
+      return remaining;
+    };
+    tick();
+
+    const interval = setInterval(() => {
+      if (tick() === 0) {
         clearInterval(interval);
         if (onExpireRef.current) onExpireRef.current();
       }
@@ -86,6 +94,10 @@ const DeliveryOrders = () => {
   const isOnline = ['available', 'busy'].includes(deliveryBoy?.status);
   const [filter, setFilter] = useState(isOnline ? 'available' : 'pending');
   const [currentPage, setCurrentPage] = useState(1);
+  // Which order's Accept is in flight, so that card (and only that card) shows progress
+  // and can't be tapped again while the request is still running.
+  const [acceptingId, setAcceptingId] = useState(null);
+  const lastViewKeyRef = useRef(null);
   const [mvOrders, setMvOrders] = useState([]);
   const [mvLoading, setMvLoading] = useState(false);
   // Rejected orders state
@@ -131,6 +143,14 @@ const DeliveryOrders = () => {
 
 
   useEffect(() => {
+    // Only a tab/page switch should empty the list (so one tab never shows another
+    // tab's rows while loading). Background refreshes keep what's on screen.
+    const viewKey = `${filter}:${currentPage}`;
+    if (lastViewKeyRef.current !== null && lastViewKeyRef.current !== viewKey) {
+      useDeliveryAuthStore.setState({ orders: [] });
+    }
+    lastViewKeyRef.current = viewKey;
+
     loadOrders(currentPage, filter);
     const interval = setInterval(() => loadOrders(currentPage, filter), 120000);
     const handleGlobalRefresh = () => {
@@ -189,6 +209,8 @@ const DeliveryOrders = () => {
   };
 
   const handleAcceptOrder = async (orderId, type = 'order') => {
+    if (acceptingId) return;
+    setAcceptingId(orderId);
     try {
       if (type === 'return') {
         await useDeliveryAuthStore.getState().acceptReturn(orderId);
@@ -211,6 +233,8 @@ const DeliveryOrders = () => {
       // "I tapped Accept and it did nothing" with zero explanation.
       toast.error(err?.response?.data?.message || 'Failed to accept mission. Please try again.');
       loadOrders(currentPage, filter);
+    } finally {
+      setAcceptingId(null);
     }
   };
 
@@ -547,7 +571,10 @@ const DeliveryOrders = () => {
               ) : [];
               const displayTasks = filter === 'available' ? [...orders, ...activeReturns] : orders;
 
-              return isLoadingOrders ? (
+              // Skeletons only for the very first load. A background refresh (these fire on
+              // every socket nudge, e.g. right when an order is accepted) used to swap the
+              // whole list for skeletons and back - the white flash riders were seeing.
+              return isLoadingOrders && displayTasks.length === 0 ? (
                 Array(6).fill(0).map((_, i) => <OrderCardSkeleton key={i} />)
               ) : displayTasks.length === 0 ? (
                 <div className="text-center py-12 sm:py-20 bg-white rounded-[32px] sm:rounded-[40px] border border-slate-100 shadow-sm">
@@ -619,16 +646,18 @@ const DeliveryOrders = () => {
                         <CountdownTimer
                           assignedAt={order.assignedAt || order.updatedAt}
                           onExpire={() => {
-                            // Automatically trigger the rejection to notify backend to assign the next rider
-                            try {
-                              rejectOrder(order.id || order.orderId, { auto: true });
-                            } catch (e) {
+                            // The offer ran out: tell the backend so the next rider is tried.
+                            // But never for an order that got accepted while the countdown
+                            // was running (a tap that landed right at the end, an acceptance
+                            // from the popup) - and never remove it from the list ourselves:
+                            // the store drops it only once the server confirms the release.
+                            const live = useDeliveryAuthStore.getState().orders.find(
+                              o => [o.id, o._id, o.orderId].some(k => k && [order.id, order._id, order.orderId].includes(k))
+                            );
+                            if (live?.riderAcceptedAt || acceptingId) return;
+                            rejectOrder(order.id || order.orderId, { auto: true }).catch((e) => {
                               console.error("Auto-reject failed", e);
-                            }
-                            
-                            const currentOrders = useDeliveryAuthStore.getState().orders;
-                            const updated = currentOrders.filter(o => o.id !== order.id && o.orderId !== order.orderId);
-                            useDeliveryAuthStore.setState({ orders: updated });
+                            });
                           }}
                         />
                         <div className="flex gap-2">
@@ -641,10 +670,10 @@ const DeliveryOrders = () => {
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleAcceptOrder(order.id, order.type); }}
-                            disabled={isUpdatingOrderStatus}
-                            className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+                            disabled={isUpdatingOrderStatus || !!acceptingId}
+                            className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-60"
                           >
-                            Accept
+                            {acceptingId === order.id ? 'Accepting...' : 'Accept'}
                           </button>
                         </div>
                       </div>

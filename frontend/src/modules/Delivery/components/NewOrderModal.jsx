@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FiMapPin, FiPackage, FiClock, FiX, FiNavigation, FiZap, FiTarget } from 'react-icons/fi';
 import { formatPrice } from '../../../shared/utils/helpers';
 import SwipeToAccept from './SwipeToAccept';
+import { getServerNow } from '../store/deliveryStore';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 
@@ -13,18 +14,24 @@ const NewOrderModal = ({ order, isOpen, onClose, onAccept, isAccepting, riderLoc
     
     useEffect(() => {
         if (isOpen && order) {
-            // Only set to 120 if it's a new order or just opened
-            setTimeLeft(120);
+            // Count down to the SERVER's accept deadline (assignedAt + 120s, on the server's
+            // clock), not a fresh 120s from whenever the popup happened to open. Re-opening
+            // it for an order that was offered a minute ago used to show "2:00" while the
+            // server was about to reassign - so Accept landed on an order that was gone.
+            // Returns / orders without assignedAt keep the plain 120s from now.
+            const startMs = order.assignedAt ? new Date(order.assignedAt).getTime() : getServerNow();
+            const endMs = startMs + 120000;
+            const secondsLeft = () => Math.max(0, Math.ceil((endMs - getServerNow()) / 1000));
+
+            setTimeLeft(secondsLeft());
             const timer = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(timer);
-                        toast.error('Order request expired (Auto Cancelled)');
-                        onClose();
-                        return 0;
-                    }
-                    return prev - 1;
-                });
+                const left = secondsLeft();
+                setTimeLeft(left);
+                if (left <= 0) {
+                    clearInterval(timer);
+                    toast.error('Order request expired (Auto Cancelled)');
+                    onClose();
+                }
             }, 1000);
             return () => clearInterval(timer);
         }
