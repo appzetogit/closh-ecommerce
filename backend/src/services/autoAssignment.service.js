@@ -9,6 +9,7 @@ import { calculateDistance, getDeliveryEarning, getVendorPickupFee } from '../ut
 import { getDeliveryFeeConfig } from '../utils/deliveryFeeConfig.js';
 import { OrderNotificationService } from './orderNotification.service.js';
 import { QueueService } from './queue.service.js';
+import { reconcileBusyRiders } from './deliveryAvailability.service.js';
 
 /**
  * Automagically assigns the nearest available delivery boy to a multi-vendor or single-vendor order
@@ -91,6 +92,13 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
                 }
             }
         });
+
+        // Riders left on 'busy' with nothing to do would be skipped by the searches below.
+        try {
+            await reconcileBusyRiders();
+        } catch (reconcileErr) {
+            console.error('[AutoAssignment] Busy-rider reconcile failed:', reconcileErr.message);
+        }
 
         let deliveryBoys = [];
 
