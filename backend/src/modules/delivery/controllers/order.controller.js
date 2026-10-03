@@ -25,6 +25,7 @@ import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
 import Vendor from '../../../models/Vendor.model.js';
 import Enquiry from '../../../models/Enquiry.model.js';
 import CancellationReason from '../../../models/CancellationReason.model.js';
+import { releaseRiderIfIdle } from '../../../services/deliveryAvailability.service.js';
 
 const DELIVERY_OTP_TTL_MS = 10 * 60 * 1000;
 const DELIVERY_OTP_MAX_ATTEMPTS = 5;
@@ -378,6 +379,10 @@ export const getAvailableOrders = asyncHandler(async (req, res) => {
 export const getDashboardSummary = asyncHandler(async (req, res) => {
     const deliveryBoyId = req.user.id;
     const cacheKey = `dash:${deliveryBoyId}`;
+
+    // A rider stuck on 'busy' with no live task (some earlier flow never released them)
+    // heals as soon as they open the app.
+    await releaseRiderIfIdle(deliveryBoyId).catch(() => {});
 
     // Try cache first
     const cached = await cacheGet(cacheKey);
