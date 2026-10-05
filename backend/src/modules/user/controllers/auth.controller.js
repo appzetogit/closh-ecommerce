@@ -89,7 +89,7 @@ export const register = asyncHandler(async (req, res) => {
 export const verifyOTP = asyncHandler(async (req, res) => {
     const { email: identifier, otp, fcmToken, platform = 'app' } = req.body;
     const normalizedIdentifier = String(identifier || '').trim().toLowerCase();
-    console.log(`[VerifyOTP] Login request: ${normalizedIdentifier}, OTP: ${otp}`);
+    console.log(`[VerifyOTP] Login request: ${normalizedIdentifier}`);
     const user = await User.findOne({
         $or: [
             { email: normalizedIdentifier },
@@ -107,7 +107,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     const providedOtp = String(otp || '').trim();
 
     if (expectedOtp !== providedOtp) {
-        console.warn(`[VerifyOTP] Invalid OTP for ${normalizedIdentifier}. Expected: ${expectedOtp}, Received: ${providedOtp}`);
+        console.warn(`[VerifyOTP] Invalid OTP for ${normalizedIdentifier}.`);
         throw new ApiError(400, 'Invalid OTP.');
     }
 

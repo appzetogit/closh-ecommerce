@@ -106,6 +106,28 @@ export const otpLimiter = rateLimit({
     passOnStoreError: true,
 });
 
+// OTP *verification* limiter. A 6-digit OTP has only 1,000,000 values, so without a cap on
+// guesses it can be brute-forced inside its 10-minute life. The key is the account being
+// attacked (email/phone from the body) + the endpoint, NOT the caller's IP, so rotating IPs
+// does not help. The window equals the OTP lifetime, so requesting a fresh OTP does not reset
+// the counter either: at most 5 guesses per account per 10 minutes.
+const otpTargetKey = (req) => {
+    const body = req.body || {};
+    const target = String(body.email || body.phone || body.mobile || body.identifier || '')
+        .trim().toLowerCase().replace(/\s+/g, '');
+    return `${req.baseUrl}${req.path}|${target || req.ip}`;
+};
+export const otpVerifyLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: IS_DEV ? 10000 : 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: otpTargetKey,
+    message: { success: false, message: 'Too many incorrect OTP attempts. Please request a new OTP and try again later.' },
+    store: createStore('rl-otpv:'),
+    passOnStoreError: true,
+});
+
 // Location update limiter
 export const locationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

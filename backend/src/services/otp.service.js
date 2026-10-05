@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { isTestOtpNumber, TEST_OTP } from '../utils/staticOtp.js';
 import { sendSmsOtp } from './sms.service.js';
 import { sendEmail } from './email.service.js';
 
@@ -7,14 +8,11 @@ import { sendEmail } from './email.service.js';
  * Uses a real random OTP, except for specific test numbers.
  */
 const generateOtp = (phone) => {
-    const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
-    const testNumbers = ['7894561230', '1234567890', '7879363299', '9669002380'];
-    
-    // Use static OTP for test numbers, otherwise generate a real random OTP
-    const otp = testNumbers.includes(normalizedPhone) 
-        ? '123456' 
-        : crypto.randomInt(100000, 999999).toString();
-        
+    // Static OTP only for the dev-only test numbers (see utils/staticOtp.js); a real random OTP otherwise.
+    const otp = isTestOtpNumber(phone)
+        ? TEST_OTP
+        : crypto.randomInt(100000, 1000000).toString();
+
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     return { otp, otpExpiry };
 };
@@ -25,7 +23,7 @@ const generateOtp = (phone) => {
  * Delivery rules:
  *   - If the document has a valid `phone` field → send SMS via SMS India Hub.
  *   - If SMS fails (or no phone) AND `email` is present → send email as fallback.
- *   - Both channels can be silently skipped in dev (OTP is always '123456' anyway).
+ *   - Both channels are skipped when ENABLE_OTP_SERVICE is not 'true' (dev only).
  *
  * @param {Object} doc       - Mongoose user/vendor document
  * @param {string} type      - Purpose label for logging (e.g. 'email_verification')
@@ -46,7 +44,13 @@ export const sendOTP = async (doc, type = 'verification') => {
     const isOtpEnabled = process.env.ENABLE_OTP_SERVICE === 'true';
 
     if (!isOtpEnabled) {
-        console.log(`[OTP Simulated] ${type} | phone=+91${phone || 'N/A'} | email=${email || 'N/A'} | otp=${otp}`);
+        if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+            // Fail closed: nobody can read the OTP, so the login simply cannot complete. Printing it
+            // here would hand every account's OTP to anyone with access to the logs.
+            console.error(`[OTP] ENABLE_OTP_SERVICE is not 'true' in production; ${type} OTP was NOT delivered.`);
+        } else {
+            console.log(`[OTP Simulated] ${type} | phone=+91${phone || 'N/A'} | email=${email || 'N/A'} | otp=${otp}`);
+        }
         return otp;
     }
 
@@ -65,7 +69,7 @@ export const sendOTP = async (doc, type = 'verification') => {
     // ── Fallback: Email ───────────────────────────────────────────────────────
     if (!smsSent && email) {
         if (process.env.SMTP_USER === 'your_email@gmail.com') {
-            console.warn(`[OTP] Email fallback skipped due to placeholder SMTP_USER. otp=${otp}`);
+            console.warn('[OTP] Email fallback skipped due to placeholder SMTP_USER.');
         } else {
             try {
                 await sendEmail({

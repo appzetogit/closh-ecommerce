@@ -9,6 +9,19 @@ import { IMAGE_BASE_URL } from './constants.js';
 // base. There is no separate socket port to hardcode.
 const SOCKET_URL = IMAGE_BASE_URL;
 
+// The socket server only accepts connections that present a valid access token (the same JWT the
+// REST API uses). Pick the token for the area the user is currently in, mirroring api.js.
+const getSocketToken = () => {
+    try {
+        const path = window.location.pathname || '/';
+        if (path.startsWith('/admin')) return localStorage.getItem('adminToken');
+        if (path.startsWith('/vendor')) return localStorage.getItem('vendor-token');
+        if (path.startsWith('/delivery')) return localStorage.getItem('delivery-token');
+        return localStorage.getItem('token');
+    } catch {
+        return null;
+    }
+};
 
 class SocketService {
     constructor() {
@@ -20,7 +33,19 @@ class SocketService {
     connect() {
         if (this.socket?.connected) return;
 
+        // Not signed in: there is nothing a socket could be authorized for, so don't open one.
+        // (Pages call connect() again after login, via the *Register helpers below.)
+        if (!getSocketToken()) return;
+
+        // Reuse the existing socket (its auth callback re-reads the current token on every attempt).
+        if (this.socket) {
+            this.socket.connect();
+            return;
+        }
+
         this.socket = io(SOCKET_URL, {
+            // Evaluated on every (re)connection attempt, so a refreshed token is picked up.
+            auth: (cb) => cb({ token: getSocketToken() }),
             withCredentials: true,
             autoConnect: true,
             reconnection: true,
@@ -75,6 +100,24 @@ class SocketService {
 
         this.socket.on('connect_error', (error) => {
             console.error('🔌 [SOCKET] Connection error:', error.message);
+            // The server rejects an expired/invalid token and socket.io does not retry on its own.
+            // REST calls refresh the token in the background, so try again once it has changed.
+            if (error.message === 'unauthorized') {
+                const triedToken = getSocketToken();
+                setTimeout(() => {
+                    const current = getSocketToken();
+                    if (current && current !== triedToken && this.socket && !this.socket.connected) {
+                        this.socket.connect();
+                    }
+                }, 4000);
+            }
+        });
+
+        // Token expired while connected: reconnect with whatever the app has refreshed it to.
+        this.socket.on('auth_expired', () => {
+            setTimeout(() => {
+                if (getSocketToken() && this.socket && !this.socket.connected) this.socket.connect();
+            }, 2000);
         });
     }
 
@@ -84,6 +127,8 @@ class SocketService {
         console.log(`🚴 [SOCKET] Registering: ${deliveryBoyId}`);
         if (this.socket?.connected) {
             this.socket.emit('delivery_register', deliveryBoyId);
+        } else {
+            this.connect(); // first call after login: the token exists now
         }
     }
 
@@ -93,6 +138,8 @@ class SocketService {
         console.log(`👤 [SOCKET] Registering User: ${userId}`);
         if (this.socket?.connected) {
             this.socket.emit('user_register', userId);
+        } else {
+            this.connect();
         }
     }
 
@@ -102,6 +149,8 @@ class SocketService {
         console.log(`🏪 [SOCKET] Registering Vendor: ${vendorId}`);
         if (this.socket?.connected) {
             this.socket.emit('vendor_register', vendorId);
+        } else {
+            this.connect();
         }
     }
 

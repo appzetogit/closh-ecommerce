@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
@@ -14,6 +15,7 @@ import {
     rotateRefreshSession,
 } from '../../../services/refreshToken.service.js';
 import { emitEvent } from '../../../services/socket.service.js';
+import { isTestOtpNumber, TEST_OTP } from '../../../utils/staticOtp.js';
 import { cacheInvalidate } from './order.controller.js';
 import { assertRiderIsFree } from '../../../services/deliveryAvailability.service.js';
 
@@ -193,9 +195,9 @@ export const sendRegistrationOTP = asyncHandler(async (req, res) => {
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-    // Default OTP for test number
-    const testNumbers = ['7894561230', '1234567890', '7879363299', '8817921168'];
-    const finalOtp = testNumbers.includes(normalizedPhone) ? '123456' : otp;
+    // Static OTP only for dev-only test numbers (utils/staticOtp.js); never on a production server
+    const isTestNumber = isTestOtpNumber(normalizedPhone);
+    const finalOtp = isTestNumber ? TEST_OTP : otp;
 
     registrationOtpStore.set(normalizedPhone, { otp: finalOtp, expiry, verified: false });
 
@@ -203,12 +205,12 @@ export const sendRegistrationOTP = asyncHandler(async (req, res) => {
     const results = { sms: false, email: false };
 
     try {
-        if (!testNumbers.includes(normalizedPhone)) {
+        if (!isTestNumber) {
             const { sendSmsOtp } = await import('../../../services/sms.service.js');
             await sendSmsOtp(normalizedPhone, finalOtp);
             results.sms = true;
         }
-        console.log(`✅ Registration OTP sent to ${normalizedPhone}: ${finalOtp}`);
+        console.log(`✅ Registration OTP sent to ${normalizedPhone}`);
     } catch (smsError) {
         console.warn(`⚠️ SMS failed for ${normalizedPhone}:`, smsError.message);
     }
@@ -228,7 +230,7 @@ export const sendRegistrationOTP = asyncHandler(async (req, res) => {
                        </div>`,
             });
             results.email = true;
-            console.log(`✅ Registration OTP sent to email ${normalizedEmail}: ${finalOtp}`);
+            console.log(`✅ Registration OTP sent to email ${normalizedEmail}`);
         } catch (emailError) {
             console.warn(`⚠️ Email failed for ${normalizedEmail}:`, emailError.message);
         }
@@ -388,8 +390,8 @@ export const sendOTP = asyncHandler(async (req, res) => {
     }
 
     // Generate 6-digit OTP
-    const testNumbers = ['7894561230', '1234567890', '7879363299', '8817921168'];
-    const otp = testNumbers.includes(normalizedPhone) ? '123456' : String(Math.floor(100000 + Math.random() * 900000));
+    const isTestNumber = isTestOtpNumber(normalizedPhone);
+    const otp = isTestNumber ? TEST_OTP : String(crypto.randomInt(100000, 1000000));
     
     deliveryBoy.resetOtp = otp;
     deliveryBoy.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes for easier testing
@@ -398,12 +400,12 @@ export const sendOTP = asyncHandler(async (req, res) => {
 
     // Send OTP via SMS
     try {
-        if (testNumbers.includes(normalizedPhone)) {
-            console.log(`🔐 [Static Bypass] OTP for ${normalizedPhone}: ${otp}`);
+        if (isTestNumber) {
+            console.log(`🔐 [Test OTP] static OTP active for ${normalizedPhone} (dev only)`);
         } else {
             const { sendSmsOtp } = await import('../../../services/sms.service.js');
             await sendSmsOtp(normalizedPhone, otp);
-            console.log(`✅ OTP sent to ${normalizedPhone}: ${otp}`);
+            console.log(`✅ OTP sent to ${normalizedPhone}`);
         }
     } catch (smsError) {
         console.warn(`⚠️ SMS failed for ${normalizedPhone}:`, smsError.message);
@@ -427,9 +429,10 @@ export const verifyOTPAndLogin = asyncHandler(async (req, res) => {
     }
 
     const deliveryBoy = await DeliveryBoy.findOne({ phone: normalizedPhone }).select('+resetOtp +resetOtpExpiry +refreshTokenHash +refreshTokenExpiresAt');
-    const testNumbers = ['7894561230', '1234567890', '7879363299', '8817921168'];
-    const staticOtp = '123456';
-    const isStaticAuth = testNumbers.includes(normalizedPhone) && String(otp) === staticOtp;
+    // Same answer for "no such rider" and "wrong OTP" so this can't be used to enumerate riders
+    if (!deliveryBoy) throw new ApiError(401, 'Invalid OTP. Please try again.');
+
+    const isStaticAuth = isTestOtpNumber(normalizedPhone) && String(otp) === TEST_OTP;
 
     if (deliveryBoy.applicationStatus === 'pending') {
         throw new ApiError(403, 'Your account is pending admin approval.');

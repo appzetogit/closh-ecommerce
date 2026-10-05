@@ -29,7 +29,6 @@ export const sendDeliveryOtp = async (order, otp) => {
     if (!order || !otp) return;
 
     const phone = order.shippingAddress?.phone || order.guestInfo?.phone;
-    const isProduction = process.env.NODE_ENV === 'production';
 
     // 1. Send SMS (SMS India Hub)
     if (phone) {
@@ -67,7 +66,9 @@ export const sendDeliveryOtp = async (order, otp) => {
 
     // 3. Emit Socket Event
     const userRoom = order.userId ? `user_${order.userId}` : `guest_${order.orderId}`;
-    const socketData = { orderId: order.orderId, otp: isProduction ? undefined : otp };
+    // The shared order_<id> room also contains the rider and the vendor, so it must never carry the OTP.
+    // Only the customer's own room (below) gets it.
+    const socketData = { orderId: order.orderId };
 
     // Common room for live tracking
     emitEvent(`order_${order._id}`, 'delivery_otp_sent', socketData);

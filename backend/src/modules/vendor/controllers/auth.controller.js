@@ -173,7 +173,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-        console.log(`[Vendor ForgotPassword] phone=+91${phone || 'N/A'} | email=${vendor.email || 'N/A'} | sms=${smsSent} | resetOtp=${otp}`);
+        console.log(`[Vendor ForgotPassword] phone=+91${phone || 'N/A'} | email=${vendor.email || 'N/A'} | sms=${smsSent}${process.env.NODE_ENV !== 'production' ? ` | resetOtp=${otp}` : ''}`);
     }
 
     return res.status(200).json(

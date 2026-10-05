@@ -883,6 +883,9 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
             order.openBoxPhoto = req.body.openBoxPhoto;
         }
 
+        if ((Number(order.deliveryOtpAttempts) || 0) >= DELIVERY_OTP_MAX_ATTEMPTS) {
+            throw new ApiError(429, 'Too many incorrect OTP attempts. Ask the customer to resend the OTP.');
+        }
         const isMatch = order.deliveryOtpHash === DeliveryOtpService.hashOtp(normalizedOtp);
         if (!isMatch) {
             order.deliveryOtpAttempts = (Number(order.deliveryOtpAttempts) || 0) + 1;
@@ -2041,6 +2044,12 @@ export const handleCompleteDelivery = asyncHandler(async (req, res) => {
 
     if (!otpHash || !otpExpiry) throw new ApiError(400, 'OTP was not generated.');
     if (new Date(otpExpiry) < new Date()) throw new ApiError(400, 'OTP has expired. Please resend.');
+
+    // The attempt counter was recorded but never enforced, so a rider could guess the 6-digit
+    // delivery OTP without limit. It is reset whenever a fresh OTP is issued (resend/arrival).
+    if ((flow.otpAttempts || 0) >= DELIVERY_OTP_MAX_ATTEMPTS) {
+        throw new ApiError(429, 'Too many incorrect OTP attempts. Ask the customer to resend the OTP.');
+    }
 
     const isMatch = otpHash === DeliveryOtpService.hashOtp(normalizedOtp);
     const isDebugMatch = !IS_PRODUCTION && (flow.otpDebug === normalizedOtp || order.deliveryOtpDebug === normalizedOtp);

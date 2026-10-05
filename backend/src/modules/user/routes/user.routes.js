@@ -9,7 +9,7 @@ import * as notificationController from '../controllers/notification.controller.
 import * as supportController from '../controllers/support.controller.js';
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
-import { authLimiter, otpLimiter } from '../../../middlewares/rateLimiter.js';
+import { authLimiter, otpLimiter, otpVerifyLimiter } from '../../../middlewares/rateLimiter.js';
 import { validate } from '../../../middlewares/validate.js';
 import { uploadSingle } from '../../../middlewares/upload.js';
 import {
@@ -42,10 +42,10 @@ router.post('/auth/check-phone', authLimiter, validate(checkPhoneSchema), authCo
 router.post('/auth/register', authLimiter, validate(registerSchema), authController.register);
 router.post('/auth/register-otp', authLimiter, validate(registerOtpSchema), authController.registerOtp);
 router.post('/auth/login-otp', authLimiter, validate(loginOtpSchema), authController.loginOtp);
-router.post('/auth/verify-otp', validate(otpSchema), authController.verifyOTP);
+router.post('/auth/verify-otp', otpVerifyLimiter, validate(otpSchema), authController.verifyOTP);
 router.post('/auth/resend-otp', otpLimiter, validate(resendOtpSchema), authController.resendOTP);
 router.post('/auth/forgot-password', authLimiter, validate(forgotPasswordSchema), authController.forgotPassword);
-router.post('/auth/verify-reset-otp', authLimiter, validate(verifyResetOtpSchema), authController.verifyResetOTP);
+router.post('/auth/verify-reset-otp', authLimiter, otpVerifyLimiter, validate(verifyResetOtpSchema), authController.verifyResetOTP);
 router.post('/auth/reset-password', authLimiter, validate(resetPasswordSchema), authController.resetPassword);
 router.post('/auth/login', authLimiter, validate(loginSchema), authController.login);
 router.post('/auth/refresh', validate(refreshTokenSchema), authController.refresh);

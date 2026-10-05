@@ -18,7 +18,7 @@ import * as attributeController from '../../admin/controllers/attribute.controll
 import * as withdrawalController from '../controllers/withdrawal.controller.js';
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
-import { authLimiter } from '../../../middlewares/rateLimiter.js';
+import { authLimiter, otpLimiter, otpVerifyLimiter } from '../../../middlewares/rateLimiter.js';
 import { validate } from '../../../middlewares/validate.js';
 import {
     registerSchema,
@@ -53,13 +53,13 @@ router.post('/auth/register', authLimiter, uploadSingle('document'), (req, res, 
     }
     next();
 }, validate(registerSchema), authController.register);
-router.post('/auth/verify-otp', validate(verifyOtpSchema), authController.verifyOTP);
-router.post('/auth/resend-otp', validate(resendOtpSchema), authController.resendOTP);
+router.post('/auth/verify-otp', otpVerifyLimiter, validate(verifyOtpSchema), authController.verifyOTP);
+router.post('/auth/resend-otp', otpLimiter, validate(resendOtpSchema), authController.resendOTP);
 router.post('/auth/forgot-password', authLimiter, validate(forgotPasswordSchema), authController.forgotPassword);
-router.post('/auth/verify-reset-otp', authLimiter, validate(verifyResetOtpSchema), authController.verifyResetOTP);
+router.post('/auth/verify-reset-otp', authLimiter, otpVerifyLimiter, validate(verifyResetOtpSchema), authController.verifyResetOTP);
 router.post('/auth/reset-password', authLimiter, validate(resetPasswordSchema), authController.resetPassword);
 router.post('/auth/login', authLimiter, validate(loginSchema), authController.login);
-router.post('/auth/verify-login-otp', validate(verifyLoginOtpSchema), authController.verifyLoginOTP);
+router.post('/auth/verify-login-otp', otpVerifyLimiter, validate(verifyLoginOtpSchema), authController.verifyLoginOTP);
 router.post('/auth/refresh', validate(refreshTokenSchema), authController.refresh);
 router.post('/auth/logout', validate(logoutSchema), authController.logout);
 router.get('/auth/profile', ...vendorAuth, authController.getProfile);
