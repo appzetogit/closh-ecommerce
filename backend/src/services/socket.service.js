@@ -215,6 +215,18 @@ export const initSocket = (server) => {
             socket.deliveryBoyId = id; // Track for disconnect
         }
 
+        // The client refreshed its access token: extend this socket's lifetime instead of dropping
+        // it at expiry. Only a valid token for the SAME identity is accepted. Deliberately not
+        // `guarded`, so it also works right after the old token expired.
+        socket.on('reauth', (token) => {
+            try {
+                const payload = verifyAccessToken(String(token || ''));
+                if (String(payload.id) === id && String(payload.role || '').toLowerCase() === role) {
+                    socket.data.exp = payload.exp;
+                }
+            } catch { /* invalid/expired token: ignore; the old expiry still applies */ }
+        });
+
         socket.on('join_room', guarded(socket, async (room) => { await joinIfAllowed(socket, room); }));
 
         socket.on('leave_room', (room) => {

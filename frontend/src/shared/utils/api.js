@@ -287,4 +287,15 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * For the socket client (shared/utils/socket.js): which auth area the current page belongs to,
+ * and a way to refresh that area's access token through the same single-flight refresh the REST
+ * interceptor uses (so a socket refresh and a REST refresh never race each other and burn the
+ * rotating refresh token). Resolves with the new access token; rejects if there is no refresh
+ * token or the server refuses it.
+ */
+export const getAuthScopeForPath = (path) => getScopeFromPath(path);
+export const getAccessTokenForScope = (scope) => localStorage.getItem(AUTH_SCOPES[scope]?.accessKey);
+export const refreshAccessTokenForScope = (scope) => runRefresh(scope);
+
 export default api;
