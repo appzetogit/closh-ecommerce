@@ -916,6 +916,30 @@ const OrderDetail = () => {
                 <span className="font-bold text-gray-800">Total</span>
                 <span className="font-bold text-lg text-gray-800">{formatCurrency(order.total)}</span>
               </div>
+              {order.originalPricing?.capturedAt && (
+                <div className="mt-3 rounded-md bg-amber-50 border border-amber-100 p-3 space-y-1.5">
+                  <p className="text-xs font-semibold text-amber-800">
+                    As originally quoted (before Try &amp; Buy at the door)
+                  </p>
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(order.originalPricing.subtotal)}</span>
+                  </div>
+                  {(order.originalPricing.couponDiscount ?? order.originalPricing.discount) > 0 && (
+                    <div className="flex justify-between text-xs text-green-700">
+                      <span>
+                        Coupon discount
+                        {order.couponCode && <span className="ml-1">({order.couponCode})</span>}
+                      </span>
+                      <span>-{formatCurrency(order.originalPricing.couponDiscount ?? order.originalPricing.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xs font-semibold text-gray-800 border-t border-amber-100 pt-1.5">
+                    <span>Original total</span>
+                    <span>{formatCurrency(order.originalPricing.total)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

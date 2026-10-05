@@ -73,7 +73,21 @@ const OrderDetailsPage = () => {
     const canCancelOrder = order && CANCELLABLE_STATUSES.includes(order.status?.toLowerCase()) && order.status?.toLowerCase() !== 'cancelled';
     const needsSupportToCancel = order && SUPPORT_CANCELLABLE_STATUSES.includes(order.status?.toLowerCase());
 
-    const isOrderDelivered = order?.status?.toLowerCase() === 'delivered';
+    // Try & Buy: the customer can keep some items and return the rest at the door. The order
+    // then ends as 'try_buy_completed' - it is a delivered order, not a returned one.
+    const isPartiallyKept = order?.status?.toLowerCase() === 'try_buy_completed';
+    const isOrderDelivered = order?.status?.toLowerCase() === 'delivered' || isPartiallyKept;
+    const tryBuyDecisionByProduct = (() => {
+        const decisions = {};
+        (order?.deliveryFlow?.tryAndBuyItems || []).forEach((entry) => {
+            if (entry?.productId && entry.decision) decisions[String(entry.productId)] = entry.decision;
+        });
+        return decisions;
+    })();
+    const keptCount = Object.values(tryBuyDecisionByProduct).filter((d) => d === 'accepted').length;
+    const returnedCount = Object.values(tryBuyDecisionByProduct).filter((d) => d === 'rejected').length;
+    const isTryBuyAutoReturnOrder = !!(order?.returnRequest?.isTryBuyAutoReturn || order?.returnRequest?.reason === 'Try & Buy Auto-Return');
+    const itemDecision = (item) => tryBuyDecisionByProduct[String(item?.productId?._id || item?.productId || item?.id || '')];
 
     // Check which products have already been reviewed
     useEffect(() => {
@@ -819,7 +833,7 @@ const OrderDetailsPage = () => {
                             <span className="text-[10px] font-bold uppercase">Invoice</span>
                         </button>
                         <span className="text-[9px] md:text-[10px] font-bold bg-black text-white px-3 py-1.5 rounded-full uppercase ">
-                            {order.status?.toLowerCase() === 'assigned' ? 'assigned to pickup' : order.status?.toLowerCase() === 'ready_for_pickup' ? 'ready for pickup' : order.status?.toLowerCase() === 'picked_up' ? 'picked up' : order.status?.toLowerCase() === 'out_for_delivery' ? 'out for delivery' : order.status}
+                            {order.status?.toLowerCase() === 'assigned' ? 'assigned to pickup' : order.status?.toLowerCase() === 'ready_for_pickup' ? 'ready for pickup' : order.status?.toLowerCase() === 'picked_up' ? 'picked up' : order.status?.toLowerCase() === 'out_for_delivery' ? 'out for delivery' : isPartiallyKept ? 'partially delivered' : order.status}
                         </span>
                     </div>
                 </div>
@@ -878,9 +892,19 @@ const OrderDetailsPage = () => {
                                                 <span className="bg-gray-50 px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold text-gray-600 border border-gray-100 uppercase">
                                                     Qty: {item.quantity}
                                                 </span>
+                                                {itemDecision(item) === 'accepted' && (
+                                                    <span className="bg-emerald-50 px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold text-emerald-700 border border-emerald-100 uppercase">
+                                                        Kept
+                                                    </span>
+                                                )}
+                                                {itemDecision(item) === 'rejected' && (
+                                                    <span className="bg-rose-50 px-2 py-0.5 rounded text-[8px] md:text-[10px] font-bold text-rose-600 border border-rose-100 uppercase">
+                                                        Returned
+                                                    </span>
+                                                )}
                                             </div>
                                             <p className="text-[12px] md:text-base font-bold text-black mt-1">₹{item.discountedPrice || item.price}</p>
-                                            {isOrderDelivered && (() => {
+                                            {isOrderDelivered && itemDecision(item) !== 'rejected' && (() => {
                                                 const pid = String(item.productId || item.id || item._id || '');
                                                 const alreadyReviewed = reviewedProductIds[pid];
                                                 return alreadyReviewed ? (
@@ -1128,13 +1152,13 @@ const OrderDetailsPage = () => {
                                 );
                                 
                                 // Step 3: Picked Up (Collected by rider)
-                                const isPickedUp = ['picked_up', 'out_for_delivery', 'delivered'].includes(status);
+                                const isPickedUp = ['picked_up', 'out_for_delivery', 'delivered', 'try_buy_completed'].includes(status);
                                 
                                 // Step 4: Out for Delivery (On the way to you)
-                                const isOutForDelivery = ['out_for_delivery', 'delivered'].includes(status);
+                                const isOutForDelivery = ['out_for_delivery', 'delivered', 'try_buy_completed'].includes(status);
                                 
                                 // Step 5: Delivered (Arrived safely)
-                                const isDelivered = status === 'delivered';
+                                const isDelivered = status === 'delivered' || status === 'try_buy_completed';
                                 
                                 if (stepIndex === 1) {
                                     if (isConfirmed) return 'completed';
@@ -1213,7 +1237,7 @@ const OrderDetailsPage = () => {
                                 }
                             ];
 
-                            const isReturned = ['returned', 'returned_to_vendor', 'returning_unselected_items', 'return_requested'].includes(status) || order.returnRequest;
+                            const isReturned = !isPartiallyKept && (['returned', 'returned_to_vendor', 'returning_unselected_items', 'return_requested'].includes(status) || order.returnRequest);
 
                             return (
                                 <div className="w-full">
@@ -1232,11 +1256,22 @@ const OrderDetailsPage = () => {
                                         <div className="text-center py-6 bg-emerald-50 rounded-2xl border border-emerald-100/50 px-4">
                                             <p className="text-emerald-600 text-xs font-black uppercase tracking-widest">Order Returned</p>
                                             <p className="text-slate-500 text-[11px] font-bold mt-2 leading-relaxed">
-                                                This order has been returned. Your refund has been processed or is being processed according to the return request.
+                                                {isTryBuyAutoReturnOrder
+                                                    ? `You returned the items at the door, so you were only charged the fee of ₹${order.total ?? 0}. There is nothing to refund.`
+                                                    : 'This order has been returned. Your refund has been processed or is being processed according to the return request.'}
                                             </p>
                                         </div>
                                     ) : (
                                         <div>
+                                            {isPartiallyKept && (
+                                                <div className="mb-3 text-center py-3 bg-emerald-50 rounded-2xl border border-emerald-100/50 px-4">
+                                                    <p className="text-emerald-600 text-xs font-black uppercase tracking-widest">Order Delivered</p>
+                                                    <p className="text-slate-500 text-[11px] font-bold mt-1 leading-relaxed">
+                                                        You kept {keptCount} item{keptCount === 1 ? '' : 's'} and returned {returnedCount}. You paid ₹{order.total}
+                                                        {order.originalPricing?.total ? ` (originally quoted ₹${order.originalPricing.total})` : ''}.
+                                                    </p>
+                                                </div>
+                                            )}
                                             {/* DESKTOP HORIZONTAL TIMELINE */}
                                             <div className="hidden md:flex items-center justify-between relative px-4 py-6">
                                                 {/* Background track line */}
