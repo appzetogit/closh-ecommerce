@@ -1,0 +1,22 @@
+name: Security guard
+
+# Fails the build if a source file contains the hidden/obfuscated payload that was
+# repeatedly injected into frontend/vite.config.js. Runs on every push and PR, so a
+# re-infected commit is flagged even if the local hook/predev guard was bypassed.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  malware-pattern-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Scan source files
+        run: node scripts/check-malware.mjs

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Blocks a commit if the tree contains the hidden/obfuscated payload pattern
+# (see scripts/check-malware.mjs). Enable once per clone:
+#   git config core.hooksPath .githooks
+root="$(git rev-parse --show-toplevel)"
+node "$root/scripts/check-malware.mjs" || {
+  echo "pre-commit: commit blocked by the supply-chain guard." >&2
+  exit 1
+}

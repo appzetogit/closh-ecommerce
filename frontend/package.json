@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "guard": "node -e \"var f='../scripts/check-malware.mjs',fs=require('fs');if(fs.existsSync(f)){try{require('child_process').execFileSync(process.execPath,[f],{stdio:'inherit'})}catch(e){process.exit(1)}}else{console.warn('[guard] ../scripts/check-malware.mjs not found, skipped')}\"",
+    "predev": "npm run guard",
     "dev": "vite",
+    "prebuild": "npm run guard",
     "build": "vite build",
     "preview": "vite preview"
   },
