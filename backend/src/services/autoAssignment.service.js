@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomUUID } from 'crypto';
 import Order from '../models/Order.model.js';
 import DeliveryBoy from '../models/DeliveryBoy.model.js';
 import DeliveryBatch from '../models/DeliveryBatch.model.js';
@@ -10,6 +11,55 @@ import { getDeliveryFeeConfig } from '../utils/deliveryFeeConfig.js';
 import { OrderNotificationService } from './orderNotification.service.js';
 import { QueueService } from './queue.service.js';
 import { reconcileBusyRiders } from './deliveryAvailability.service.js';
+
+
+// Order states in which an order must never be (re)assigned or released by these helpers.
+const NON_ASSIGNABLE_STATUSES = ['cancelled', 'delivered'];
+// A rider can only drop an assignment before the physical handover has started.
+const NON_RELEASABLE_STATUSES = ['picked_up', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+const ACTIVE_BATCH_STATUSES = ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'];
+
+/**
+ * Atomically take an assignment away from a rider who has NOT accepted it yet.
+ *
+ * Accept (assignment.controller.js) and this release both write the same order document,
+ * so the winner is decided by one conditional update rather than by read-check-save:
+ * the filter demands riderAcceptedAt is still empty. If a rider's Accept landed first the
+ * filter no longer matches and this returns null, so an accepted order can never be pulled
+ * back off the rider (the old worker read the order, saw no acceptance, and then saved
+ * over an Accept that had landed in between).
+ *
+ * Used by the 125s timeout worker and by a rider's manual/auto reject.
+ *
+ * @returns the updated order, or null when it was already accepted / reassigned / moved on.
+ */
+export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId) => {
+    const order = await Order.findOneAndUpdate(
+        {
+            _id: orderId,
+            deliveryBoyId,
+            riderAcceptedAt: null,
+            status: { $nin: NON_RELEASABLE_STATUSES },
+        },
+        {
+            $set: { status: 'searching', riderAcceptedAt: null, vendorPickups: [] },
+            $unset: { deliveryBoyId: '' },
+            $addToSet: { rejectedDeliveryBoys: deliveryBoyId },
+        },
+        { new: true }
+    );
+    if (!order) return null;
+
+    // Only free a rider who is still marked busy; never flip someone who has since
+    // gone offline or been given something else.
+    await DeliveryBoy.updateOne({ _id: deliveryBoyId, status: 'busy' }, { $set: { status: 'available' } });
+    await DeliveryBatch.deleteMany({
+        orderId: order._id,
+        deliveryBoyId,
+        status: { $in: ACTIVE_BATCH_STATUSES },
+    });
+    return order;
+};
 
 /**
  * Automagically assigns the nearest available delivery boy to a multi-vendor or single-vendor order
@@ -79,6 +129,20 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         const excludeObjectIds = combinedExclusions.map(id => {
             try { return new mongoose.Types.ObjectId(id); } catch (e) { return null; }
         }).filter(Boolean);
+
+        // An order may be (re)assigned only if nobody holds it, or the holder is one of the
+        // riders we are explicitly excluding (the rider who just rejected / timed out).
+        // Every write below carries this filter, so concurrent callers (placeOrder, retry
+        // worker, timeout worker, reject) can't both win the same order.
+        const assignableFilter = {
+            _id: order._id,
+            status: { $nin: NON_ASSIGNABLE_STATUSES },
+            $or: [{ deliveryBoyId: null }, { deliveryBoyId: { $in: excludeObjectIds } }],
+        };
+        const markSearching = () => Order.updateOne(assignableFilter, {
+            $set: { status: 'searching', pickupLocation: { type: 'Point', coordinates: firstVendorLocation } },
+            $unset: { deliveryBoyId: '' },
+        });
 
         // 2. Find which ServiceArea boundary the pickup location falls inside
         const activeServiceArea = await ServiceArea.findOne({
@@ -163,9 +227,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
 
         if (shortlist.length === 0) {
             console.warn(`[AutoAssignment] ❌ No available delivery partners found in the system for order ${order.orderId}. Waiting for manual intervention.`);
-            order.deliveryBoyId = undefined;
-            order.status = 'searching';
-            await order.save();
+            await markSearching();
             QueueService.scheduleAutoAssignRetry(order._id, 30 * 1000);
             return false;
         }
@@ -188,12 +250,33 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             const bTime = b.boy.lastAssignedAt ? new Date(b.boy.lastAssignedAt).getTime() : 0;
             return aTime - bTime; // never-assigned (0) or longest-idle first
         });
-        const chosenRider = ranked[0].boy;
         console.log(
             `[AutoAssignment] Shortlist for ${order.orderId}: ` +
             ranked.map((c) => `${c.boy.name} @ ${Number.isFinite(c.distanceKm) ? c.distanceKm.toFixed(2) + 'km' : 'no GPS'}`).join(', ')
         );
-        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — ${Number.isFinite(ranked[0].distanceKm) ? ranked[0].distanceKm.toFixed(2) + 'km from pickup' : 'no GPS fix'}, idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
+
+        // Claim a rider ATOMICALLY, best candidate first. The candidates above were read a
+        // moment ago, so by now another order may already have taken the top one; the
+        // conditional update on status 'available' is what guarantees a rider is handed
+        // to exactly one order. If the best candidate is gone we move to the next.
+        let chosen = null;
+        for (const candidate of ranked) {
+            const claimedRider = await DeliveryBoy.findOneAndUpdate(
+                { _id: candidate.boy._id, status: 'available', isAvailable: true, applicationStatus: 'approved' },
+                { $set: { status: 'busy', lastAssignedAt: new Date() } }
+            );
+            if (claimedRider) { chosen = candidate; break; }
+        }
+
+        if (!chosen) {
+            console.warn(`[AutoAssignment] Every shortlisted rider was taken by another order for ${order.orderId}. Will retry.`);
+            await markSearching();
+            QueueService.scheduleAutoAssignRetry(order._id, 30 * 1000);
+            return false;
+        }
+
+        const chosenRider = chosen.boy;
+        console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — ${Number.isFinite(chosen.distanceKm) ? chosen.distanceKm.toFixed(2) + 'km from pickup' : 'no GPS fix'}, idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
 
         // 3. Optimize pickup route sequence from rider's current location
         const riderCoords = chosenRider.currentLocation?.coordinates || firstVendorLocation;
@@ -235,18 +318,49 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             };
         });
 
-        // 4. Update the Order
+        // 4. Claim the Order ATOMICALLY and write every assignment field in that same
+        // update. This used to be a read-modify-save of a document loaded at the top of
+        // the function, so two concurrent runs (placeOrder + retry worker + a reject, ...)
+        // both passed the 'already assigned?' check and the later save won, leaving two
+        // riders marked busy for one order. Now only the caller whose update still matches
+        // `assignableFilter` (no holder, or the holder is the excluded rider) gets it.
+        const assignedAt = new Date();
+        const isMultiVendor = order.vendorItems.length > 1;
+        order.generateDeliveryOtp(); // sets the OTP fields in memory only; persisted below
+        const orderClaim = await Order.updateOne(assignableFilter, {
+            $set: {
+                status: 'assigned',
+                deliveryBoyId: chosenRider._id,
+                assignedAt, // Frontend countdown relies on this
+                riderAcceptedAt: null, // Clear any previous acceptance
+                isMultiVendor,
+                vendorPickups,
+                pickupLocation: { type: 'Point', coordinates: firstVendorLocation },
+                deliveryOtpHash: order.deliveryOtpHash,
+                deliveryOtpDebug: order.deliveryOtpDebug,
+                deliveryOtpSentAt: order.deliveryOtpSentAt,
+                deliveryOtpExpiry: order.deliveryOtpExpiry,
+            },
+        });
+
+        if (orderClaim.matchedCount === 0) {
+            // Lost the race: someone else assigned (or cancelled) this order after we looked.
+            // Give the rider we just locked back and let the winner's assignment stand.
+            await DeliveryBoy.updateOne({ _id: chosenRider._id, status: 'busy' }, { $set: { status: 'available' } });
+            const stillOpen = await Order.exists({ _id: order._id, status: { $nin: NON_ASSIGNABLE_STATUSES }, deliveryBoyId: { $ne: null } });
+            console.log(`[AutoAssignment] Order ${order.orderId} was assigned elsewhere while we were choosing; released rider ${chosenRider._id}.`);
+            return !!stillOpen;
+        }
+
+        // Mirror the committed state onto the in-memory doc used for the notifications below.
         order.deliveryBoyId = chosenRider._id;
         order.status = 'assigned';
-        order.assignedAt = new Date(); // Fix: Frontend countdown relies on this
-        order.riderAcceptedAt = null; // Clear any previous acceptance
-        order.isMultiVendor = order.vendorItems.length > 1;
+        order.assignedAt = assignedAt;
+        order.riderAcceptedAt = null;
+        order.isMultiVendor = isMultiVendor;
         order.vendorPickups = vendorPickups;
-        order.generateDeliveryOtp();
-        await order.save();
 
-        // 5. Update Delivery Boy status to busy
-        await DeliveryBoy.findByIdAndUpdate(chosenRider._id, { status: 'busy', lastAssignedAt: new Date() });
+        // 5. The rider was already marked busy by the atomic claim above.
 
         // 6. Create DeliveryBatch for tracing stop-by-stop pickups
         const pickupStops = vendorPickups.map((stop) => ({
@@ -268,7 +382,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
         });
 
-        const batchId = `MVBATCH-${Date.now()}`;
+        const batchId = `MVBATCH-${Date.now()}-${randomUUID().slice(0, 8)}`;
         const newBatch = await DeliveryBatch.create({
             batchId,
             orderId: order._id,

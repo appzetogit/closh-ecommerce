@@ -2,6 +2,7 @@ import Enquiry from '../../../models/Enquiry.model.js';
 import { Order } from '../../../models/Order.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
+import { releaseCouponForOrder } from '../../../services/coupon.service.js';
 
 // Helper function to calculate distance between two coordinates in km (Haversine formula)
 const calculateDistance = (coord1, coord2) => {
@@ -151,6 +152,7 @@ export const handleEnquiry = async (req, res) => {
             }
 
             await order.save();
+            if (order.status === 'cancelled') await releaseCouponForOrder(order._id);
             
             if (order.deliveryBoyId) {
                 const DeliveryBoy = (await import('../../../models/DeliveryBoy.model.js')).default;

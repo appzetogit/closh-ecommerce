@@ -9,6 +9,7 @@ import { ApiResponse } from '../../../utils/ApiResponse.js';
 import { asyncHandler } from '../../../utils/asyncHandler.js';
 import { refundPayment, payoutToUpi } from '../../../services/razorpay.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
+import { isTryBuyAutoReturn } from '../../../utils/tryBuyReturn.js';
 import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
 import { restockItems } from '../../../utils/stockRestore.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
@@ -440,28 +441,34 @@ export const updateReturnRequestStatus = asyncHandler(async (req, res) => {
                         { _id: request._id, restockedAt: { $exists: false } },
                         { $set: { restockedAt: new Date() } }
                     );
-                    if (claim.modifiedCount > 0) {
+                    // A Try & Buy auto-return is closed by the rider's drop-off, which already
+                    // restocked, priced the order and paid the vendor for the kept items only, so
+                    // closing it here is bookkeeping only (see vendor/return.controller.js).
+                    const autoReturn = isTryBuyAutoReturn(request);
+                    if (claim.modifiedCount > 0 && !autoReturn) {
                         await restockItems(request.items || []);
                     }
 
-                    // Reverse vendor earnings and commission
+                    // Reverse vendor earnings and commission (skips the vendor side for auto-returns)
                     await WalletService.processOrderReturn(request);
 
-                    // Stamp returned quantities/amount onto the order so invoices
-                    // (admin/user/vendor) show the actual amount payable after this return.
-                    applyReturnToOrder(order, request);
+                    if (!autoReturn) {
+                        // Stamp returned quantities/amount onto the order so invoices
+                        // (admin/user/vendor) show the actual amount payable after this return.
+                        applyReturnToOrder(order, request);
 
-                    // Belt-and-braces: cover the case where completion is
-                    // reached without going through the 'approved' branch
-                    // above (e.g. status set straight to 'completed').
-                    if (!['cancelled', 'returned'].includes(order.status)) {
-                        order.status = 'returned';
-                    }
-                    const vendorGroup = (order.vendorItems || []).find(
-                        (group) => String(group.vendorId) === String(request.vendorId)
-                    );
-                    if (vendorGroup && vendorGroup.status !== 'returned') {
-                        vendorGroup.status = 'returned';
+                        // Belt-and-braces: cover the case where completion is
+                        // reached without going through the 'approved' branch
+                        // above (e.g. status set straight to 'completed').
+                        if (!['cancelled', 'returned'].includes(order.status)) {
+                            order.status = 'returned';
+                        }
+                        const vendorGroup = (order.vendorItems || []).find(
+                            (group) => String(group.vendorId) === String(request.vendorId)
+                        );
+                        if (vendorGroup && vendorGroup.status !== 'returned') {
+                            vendorGroup.status = 'returned';
+                        }
                     }
 
                     await order.save();

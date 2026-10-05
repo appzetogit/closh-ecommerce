@@ -319,7 +319,7 @@ export const completeBatchDelivery = asyncHandler(async (req, res) => {
          await order.save();
          
          // Credit earnings
-         await WalletService.processOrderCompletion(order).catch(e => console.error(`[Batch Earnings] Failed for ${order._id}:`, e.message));
+         await WalletService.processOrderCompletionSafe(order);
          
          emitEvent(`user_${batch.customerId}`, 'order_delivered', { orderId: order._id });
      }

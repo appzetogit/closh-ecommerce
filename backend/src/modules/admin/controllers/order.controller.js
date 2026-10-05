@@ -16,6 +16,7 @@ import { calculateDistance } from '../../../utils/geo.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
 import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
+import { releaseCouponForOrder } from '../../../services/coupon.service.js';
 
 // GET /api/admin/orders
 export const getAllOrders = asyncHandler(async (req, res) => {
@@ -247,6 +248,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     await order.save();
 
     if (nextStatus === 'cancelled') {
+        await releaseCouponForOrder(order._id);
         // Free the delivery boy if assigned and credit them for the cancellation trip if they accepted it
         if (order.deliveryBoyId) {
             const DeliveryBoy = mongoose.model('DeliveryBoy');

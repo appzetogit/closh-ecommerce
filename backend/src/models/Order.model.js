@@ -309,6 +309,30 @@ const orderSchema = new mongoose.Schema(
         pickedUpAt: Date,
         deliveredAt: Date,
         isCashSettled: { type: Boolean, default: false },
+        // Wallet credit bookkeeping (see WalletService.processOrderCompletion).
+        // walletProcessedAt is claimed atomically inside the crediting transaction, so
+        // an order can be credited at most once even if completion fires twice.
+        // walletCreditFailed marks an order whose credit threw, for the retry job.
+        // Coupon usage bookkeeping (see coupon.service.js). couponUsageConsumed is set only
+        // when this order actually incremented Coupon.usedCount, so orders placed before
+        // that existed are never "released" (decremented) by mistake.
+        couponUsageConsumed: { type: Boolean, default: false },
+        couponUsageReleased: { type: Boolean, default: false },
+        // Snapshot of the price the customer was originally quoted. Try & Buy rewrites
+        // subtotal/discount/tax/total in place once items are accepted or rejected at the
+        // door, which used to leave no trace of the original amount or coupon discount.
+        originalPricing: {
+            subtotal: Number,
+            discount: Number,
+            couponDiscount: Number,
+            tax: Number,
+            shipping: Number,
+            platformFee: Number,
+            total: Number,
+            capturedAt: Date,
+        },
+        walletProcessedAt: { type: Date },
+        walletCreditFailed: { type: Boolean, default: false, index: true },
         settledAt: Date,
         cancelledAt: Date,
         cancellationReason: String,

@@ -12,7 +12,7 @@ import ApiError from '../../../utils/ApiError.js';
 import OrderNotificationService from '../../../services/orderNotification.service.js';
 import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee, MAX_CLAIM_DISTANCE_KM } from '../../../utils/geo.js';
 import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
-import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
+import { autoAssignDeliveryBoy, releaseUnacceptedAssignment } from '../../../services/autoAssignment.service.js';
 
 // The rider app counts 120s down to auto-reject an unaccepted offer. The server never
 // takes an app's word for it: an auto-reject earlier than this is ignored.
@@ -368,8 +368,10 @@ export const acceptOrderAssignment = asyncHandler(async (req, res) => {
                 { status: { $in: ['ready_for_pickup', 'all_vendors_ready', 'processing', 'assigned', 'searching'] } },
                 { 
                     $or: [
-                        { deliveryBoyId: null }, 
-                        { deliveryBoyId: { $exists: false } },
+                        // Open order: anyone EXCEPT a rider who already declined / timed out on it.
+                        // Without this, a stale Accept arriving just after the server released the
+                        // order let that rider silently take it back from the next rider.
+                        { deliveryBoyId: null, rejectedDeliveryBoys: { $ne: deliveryBoyId } },
                         { deliveryBoyId: deliveryBoyId }
                     ] 
                 }
@@ -567,26 +569,20 @@ export const rejectOrderAssignment = asyncHandler(async (req, res) => {
         }
     }
 
-    // 1. Mark this delivery boy as rejected for this order
-    if (!order.rejectedDeliveryBoys.includes(deliveryBoyId)) {
-        order.rejectedDeliveryBoys.push(deliveryBoyId);
+    // 1-4. Release the assignment atomically (the same helper the timeout worker uses).
+    // The checks above ran on a snapshot; if the rider's Accept (or the worker) wins the
+    // race in the meantime this returns null instead of stripping an accepted order.
+    const released = await releaseUnacceptedAssignment(order._id, deliveryBoyId);
+    if (!released) {
+        const latest = await Order.findById(order._id).select('deliveryBoyId riderAcceptedAt');
+        if (latest?.riderAcceptedAt && String(latest.deliveryBoyId) === String(deliveryBoyId)) {
+            if (req.body?.auto === true) {
+                return res.status(200).json(new ApiResponse(200, null, 'Order already accepted; auto-reject ignored.'));
+            }
+            throw new ApiError(400, 'You already accepted this mission. Use "Customer Refused / Cancel Mission" from the order screen instead.');
+        }
+        throw new ApiError(404, 'Order assignment not found or already assigned/reassigned to another rider.');
     }
-
-    // 2. Clear assignment on the Order
-    order.deliveryBoyId = undefined;
-    order.status = 'searching';
-    order.vendorPickups = []; // Will be recalculated by new assignment
-    await order.save();
-
-    // 3. Re-enable rider availability
-    await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' });
-
-    // 4. Delete the DeliveryBatch for THIS order
-    await DeliveryBatch.deleteMany({
-        orderId: order._id,
-        deliveryBoyId: deliveryBoyId,
-        status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
-    });
 
     // 5. Trigger auto assignment for the next nearest rider (excluding current one)
     console.log(`[RejectAssignment] Triggering autoAssignment search excluding current rider ${deliveryBoyId}`);

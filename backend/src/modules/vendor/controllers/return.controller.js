@@ -12,6 +12,7 @@ import Vendor from '../../../models/Vendor.model.js';
 import Address from '../../../models/Address.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
+import { isTryBuyAutoReturn } from '../../../utils/tryBuyReturn.js';
 import { applyReturnToOrder } from '../../../utils/applyReturnToOrder.js';
 import { restockItems } from '../../../utils/stockRestore.js';
 
@@ -307,23 +308,28 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                         { _id: request._id, restockedAt: { $exists: false } },
                         { $set: { restockedAt: new Date() } }
                     );
-                    if (claim.modifiedCount > 0) {
+                    // A Try & Buy auto-return is closed by the rider's drop-off, which already
+                    // restocked, priced the order and paid the vendor for the kept items only.
+                    // Closing it here must not restock again, re-price the order or reverse the
+                    // vendor, nor flip an order the customer partly kept to 'returned'.
+                    const autoReturn = isTryBuyAutoReturn(request);
+                    if (claim.modifiedCount > 0 && !autoReturn) {
                         await restockItems(request.items || []);
                     }
 
-                    // Reverse vendor earnings and commission
+                    // Reverse vendor earnings and commission (skips the vendor side for auto-returns)
                     await WalletService.processOrderReturn(request);
 
                     // Stamp returned quantities/amount onto the order so invoices
                     // (admin/user/vendor) show the actual amount payable after this return.
-                    applyReturnToOrder(order, request);
+                    if (!autoReturn) applyReturnToOrder(order, request);
 
                     // Mark full order returned/refunded only when every vendor in this order completed returns.
                     const completedReturns = await ReturnRequest.find({
                         orderId: order._id,
                         status: 'completed',
                     })
-                        .select('vendorId')
+                        .select('vendorId refundAmount')
                         .lean();
 
                     const completedVendorSet = new Set(
@@ -332,11 +338,21 @@ export const updateVendorReturnRequestStatus = asyncHandler(async (req, res) => 
                     const allVendorsCompleted =
                         uniqueVendorIds.length > 0 && uniqueVendorIds.every((vendorId) => completedVendorSet.has(vendorId));
 
-                    if (allVendorsCompleted) {
+                    if (allVendorsCompleted && !autoReturn) {
                         if (order.status !== 'cancelled') {
                             order.status = 'returned';
                         }
-                        order.paymentStatus = 'refunded';
+                        // Only call it "refunded" if money actually goes back to the customer.
+                        // A Try & Buy order where every item was rejected completes its return
+                        // with refundAmount 0 while the platform fee collected at the door is
+                        // kept; marking that "refunded" misreported the payment.
+                        const totalRefundAmount = completedReturns.reduce(
+                            (sum, entry) => sum + Number(entry?.refundAmount || 0),
+                            0
+                        );
+                        if (totalRefundAmount > 0) {
+                            order.paymentStatus = 'refunded';
+                        }
                     }
 
                     await order.save();

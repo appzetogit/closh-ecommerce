@@ -5,8 +5,9 @@ const allowedStatuses = [
     'accepted',
     'ready_for_pickup',
     'picked_up',
-    'out_for_delivery',
-    'delivered',
+    // 'out_for_delivery' and 'delivered' are deliberately absent: only the rider
+    // can move an order into those, after the customer's delivery OTP. A vendor
+    // setting 'delivered' used to credit the rider and vendor wallets with no OTP.
     'cancelled',
 ];
 

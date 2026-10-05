@@ -9,9 +9,9 @@ import { createNotification } from '../../../services/notification.service.js';
 import { notifyNearbyDeliveryBoys } from '../../delivery/controllers/assignment.controller.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { OrderNotificationService } from '../../../services/orderNotification.service.js';
-import { WalletService } from '../../../services/wallet.service.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
+import { releaseCouponForOrder } from '../../../services/coupon.service.js';
 
 const deriveTopLevelOrderStatus = (vendorItems = [], fallback = 'pending') => {
     const statuses = (vendorItems || [])
@@ -220,6 +220,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     order.status = deriveTopLevelOrderStatus(order.vendorItems, order.status);
     console.log(`[VendorUpdate] New Group Status: ${status}, Overall Order Status: ${oldStatus} -> ${order.status}`);
     await order.save();
+    if (order.status === 'cancelled') await releaseCouponForOrder(order._id);
 
     // ── Sync Vendor Status to active DeliveryBatch ──
     try {
@@ -342,12 +343,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         message: `Your order from ${storeName} is now ${status.replace(/_/g, ' ')}.`
     });
 
-    // If marked delivered by vendor, process financial earnings
-    if (status === 'delivered') {
-        await WalletService.processOrderCompletion(order).catch(err => {
-            console.error(`[Wallet] Error processing earnings for order ${order._id}:`, err);
-        });
-    }
+    // Earnings are credited only when the rider completes delivery with the
+    // customer's OTP (delivery controllers). The validator no longer lets a vendor
+    // set 'delivered', so there is no vendor-side credit path.
 
     // Multi-vendor: when all vendors are ready, populate vendorPickups and notify riders
     if (order.status === 'all_vendors_ready' && (!order.vendorPickups || order.vendorPickups.length === 0)) {

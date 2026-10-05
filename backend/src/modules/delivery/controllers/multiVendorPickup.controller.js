@@ -485,9 +485,7 @@ export const completeMultiVendorDelivery = asyncHandler(async (req, res) => {
 
     // Credit vendor + rider earnings — this path previously skipped wallet settlement entirely.
     const { WalletService } = await import('../../../services/wallet.service.js');
-    await WalletService.processOrderCompletion(order).catch(err => {
-        console.error(`[Wallet] Error processing earnings for multi-vendor order ${order._id}:`, err.message);
-    });
+    await WalletService.processOrderCompletionSafe(order);
 
     await DeliveryBatch.findOneAndUpdate(
         { deliveryBoyId, isMultiVendor: true },

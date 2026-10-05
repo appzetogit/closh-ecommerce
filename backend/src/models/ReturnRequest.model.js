@@ -49,6 +49,14 @@ const returnRequestSchema = new mongoose.Schema(
         isMultiVendor: { type: Boolean, default: false },
         vendorDropoffs: [vendorDropoffSchema],
         trySessionActive: { type: Boolean, default: false },
+        // Created automatically when a customer rejects items at the door (Try & Buy).
+        // Those items were never part of what the vendor got paid for, so closing this
+        // request must not reverse vendor earnings, restock a second time or change the
+        // order's overall status. See utils/tryBuyReturn.js.
+        isTryBuyAutoReturn: { type: Boolean, default: false },
+        // Claimed atomically when the rider's return-trip fee is credited, so the several
+        // paths that can complete a return (rider, vendor, admin) pay it only once.
+        riderCreditedAt: { type: Date },
         items: [
             {
                 productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },

@@ -161,6 +161,8 @@ if (isRedisAvailable) {
             );
 
             if (updated) {
+                const { releaseCouponForOrder } = await import('./coupon.service.js');
+                await releaseCouponForOrder(updated._id);
                 // Notify Customer
                 emitEvent(`user_${order.userId}`, 'order_cancelled', { 
                     orderId: order.orderId, 
@@ -311,57 +313,40 @@ if (isRedisAvailable) {
 }
 
 /**
- * Worker Logic: Rider Auto Assign 120s Timeout Check
- * If an order was auto-assigned but the rider didn't accept in 120s, Auto-Reject and search again.
+ * Rider Auto Assign 120s Timeout Check
+ * If an order was auto-assigned but the rider didn't accept in 120s, take it back and
+ * search again. Exported so the race against a rider's Accept can be tested directly.
+ *
+ * The decision "was it accepted?" is made by the conditional update inside
+ * releaseUnacceptedAssignment, not by reading the order here first: a read-then-save
+ * let a rider's Accept land between the two, after which this job still stripped the
+ * order off the rider who had just been told 200.
  */
+export const handleRiderAssignTimeout = async ({ orderId, deliveryBoyId }) => {
+    const { releaseUnacceptedAssignment, autoAssignDeliveryBoy } = await import('./autoAssignment.service.js');
+
+    const order = await releaseUnacceptedAssignment(orderId, deliveryBoyId);
+    if (!order) return false; // accepted, already reassigned, cancelled, or moved on
+
+    console.log(`[Worker] ⏰ Rider ${deliveryBoyId} failed to accept order ${order.orderId} within 120s. Auto-rejected.`);
+
+    // Tell the rider that they missed it
+    emitEvent(`delivery_${deliveryBoyId}`, 'order_missed', {
+        orderId: order.orderId,
+        id: order._id,
+        message: 'Order was removed because it was not accepted within 120 seconds.'
+    });
+
+    // Trigger auto assignment for the next nearest rider
+    autoAssignDeliveryBoy(order._id, [deliveryBoyId]).catch(err => {
+        console.error("[Worker] AutoAssign fallback trigger failed:", err);
+    });
+    return true;
+};
+
 if (isRedisAvailable) {
     new Worker('rider-auto-assign-timeout-queue', async job => {
-        const { orderId, deliveryBoyId } = job.data;
-        const order = await Order.findById(orderId);
-
-        if (!order) return;
-
-        // Check if the order is STILL assigned to this rider BUT they haven't explicitly accepted it.
-        if (order.status === 'assigned' && String(order.deliveryBoyId) === String(deliveryBoyId) && !order.riderAcceptedAt) {
-            console.log(`[Worker] ⏰ Rider ${deliveryBoyId} failed to accept order ${order.orderId} within 120s. Auto-rejecting.`);
-
-            // 1. Mark this rider as rejected
-            if (!order.rejectedDeliveryBoys.includes(deliveryBoyId)) {
-                order.rejectedDeliveryBoys.push(deliveryBoyId);
-            }
-
-            // 2. Clear assignment
-            order.deliveryBoyId = undefined;
-            order.riderAcceptedAt = null; // Ensure this is cleared
-            order.status = 'searching';
-            order.vendorPickups = []; // Will be recalculated by new assignment
-            await order.save();
-
-            // 3. Make rider available again
-            const DeliveryBoy = (await import('../models/DeliveryBoy.model.js')).default;
-            await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: 'available' });
-
-            // 4. Delete the DeliveryBatch for THIS order, if any
-            const DeliveryBatch = (await import('../models/DeliveryBatch.model.js')).default;
-            await DeliveryBatch.deleteMany({
-                orderId: order._id,
-                deliveryBoyId: deliveryBoyId,
-                status: { $in: ['assigned', 'picked_up', 'arrived', 'try_and_buy', 'payment_pending'] }
-            });
-
-            // 5. Notify the rider that they missed it
-            emitEvent(`delivery_${deliveryBoyId}`, 'order_missed', { 
-                orderId: order.orderId,
-                id: order._id,
-                message: 'Order was removed because it was not accepted within 120 seconds.'
-            });
-
-            // 6. Trigger auto assignment for the next nearest rider
-            const { autoAssignDeliveryBoy } = await import('./autoAssignment.service.js');
-            autoAssignDeliveryBoy(order._id, [deliveryBoyId]).catch(err => {
-                console.error("[Worker] AutoAssign fallback trigger failed:", err);
-            });
-        }
+        await handleRiderAssignTimeout(job.data);
     }, { connection: redisConnection, removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } });
 }
 

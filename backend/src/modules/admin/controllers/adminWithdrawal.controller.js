@@ -80,9 +80,16 @@ export const updateWithdrawalStatus = asyncHandler(async (req, res) => {
                     if (!requester || (Math.round(currentBalance) < Math.round(requestAmount) && !isSettlementRequest)) {
                          throw new ApiError(400, `Requester no longer has sufficient balance. Current: ₹${currentBalance}, Requested: ₹${requestAmount}`);
                     }
-                    await model.findByIdAndUpdate(request.requesterId, {
-                        $inc: { [balanceToCheck]: -requestAmount }
-                    }, { session });
+                    // Conditional decrement: the read above is stale by the time two admins
+                    // approve different requests together, which could overdraw the balance.
+                    const debited = await model.findOneAndUpdate(
+                        { _id: request.requesterId, [balanceToCheck]: { $gte: requestAmount } },
+                        { $inc: { [balanceToCheck]: -requestAmount } },
+                        { session, new: true }
+                    );
+                    if (!debited) {
+                        throw new ApiError(400, `Requester no longer has sufficient balance for ₹${requestAmount}.`);
+                    }
                 }
 
                 // If UPI ID is present, try to process real payout via Razorpay

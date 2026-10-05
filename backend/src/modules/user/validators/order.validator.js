@@ -26,7 +26,13 @@ export const placeOrderSchema = Joi.object({
         zipCode: Joi.string().required(),
         country: Joi.string().required(),
     }).required(),
-    paymentMethod: Joi.string().valid('card', 'cash', 'cod', 'bank', 'wallet', 'upi', 'prepaid').required(),
+    // Only methods the server can actually collect. 'prepaid' is the only one that
+    // opens a Razorpay order; 'cod'/'cash' are collected by the rider. Any other
+    // value (card, upi, wallet, bank...) used to be accepted, skipped payment
+    // entirely, and still dispatched a rider - i.e. a free order.
+    paymentMethod: Joi.string().valid('cod', 'cash', 'prepaid').required().messages({
+        'any.only': 'Unsupported payment method. Choose Cash on Delivery or Prepaid.',
+    }),
     couponCode: Joi.string().optional().allow(''),
     shippingOption: Joi.string().valid('standard', 'express', 'try_and_buy', 'check_and_buy', 'online').default('online'),
     orderType: Joi.string().valid('check_and_buy', 'try_and_buy').required(),

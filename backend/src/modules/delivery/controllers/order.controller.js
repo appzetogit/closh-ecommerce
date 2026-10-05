@@ -19,6 +19,7 @@ import { OrderNotificationService } from '../../../services/orderNotification.se
 import { sendDeliveryOtpSms } from '../../../services/sms.service.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import redisConnection from '../../../config/redis.js';
+import { releaseCouponForOrder } from '../../../services/coupon.service.js';
 import { WalletService } from '../../../services/wallet.service.js';
 import { calculateDistance, calculatePathDistance, getDeliveryEarning, getVendorPickupFee, getVendorDropoffFee, MAX_CLAIM_DISTANCE_KM } from '../../../utils/geo.js';
 import { getDeliveryFeeConfig } from '../../../utils/deliveryFeeConfig.js';
@@ -1630,34 +1631,80 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     flow.finalAmount = acceptedSubtotal + shipping + platformFee - adjustedDiscount + hiddenFees;
     if (flow.finalAmount < 0) flow.finalAmount = 0;
 
+    // Keep the quoted price before it is rewritten below. Once items are accepted/rejected
+    // the order's subtotal/discount/tax/total are overwritten in place, so without this an
+    // all-rejected order showed subtotal 0 and no coupon discount, as if the coupon had
+    // zeroed the price. Captured once: this step is only reachable from phase 'arrived'.
+    if (!order.originalPricing?.capturedAt) {
+        order.originalPricing = {
+            subtotal: order.subtotal,
+            discount: order.discount,
+            couponDiscount: order.couponDiscount,
+            tax: order.tax,
+            shipping: order.shipping,
+            platformFee: order.platformFee,
+            total: order.total,
+            capturedAt: new Date(),
+        };
+    }
+
     // Sync to main order document so all other views (Admin, User, Vendor) see the adjusted price
     order.total = flow.finalAmount;
     order.subtotal = acceptedSubtotal;
     order.tax = adjustedTax;
     order.discount = adjustedDiscount;
 
-    // Synchronize vendorItems to reflect item rejections
-    if (order.vendorItems) {
-        order.vendorItems.forEach(vi => {
-            const matchingTryItem = tryItems.find(ti =>
-                String(ti.productId) === String(vi.productId) &&
-                getVariantSignature(ti.variant || {}) === getVariantSignature(vi.variant || {})
-            );
-            if (matchingTryItem && matchingTryItem.decision === 'rejected') {
-                vi.quantity = 0;
-                vi.subtotal = 0;
-                // Also adjust earnings/commission to 0 for rejected items
-                vi.vendorEarnings = 0;
-                vi.commissionAmount = 0;
-            }
-        });
-    }
+    // Re-derive every vendor group's totals from the items the customer KEPT.
+    // vendorItems are per-vendor GROUPS (the lines live in group.items), so the previous
+    // loop - which compared each group's own productId - never matched anything. The group
+    // kept its pre-rejection subtotal/earnings, and the wallet later credited the vendor
+    // for items that went back to the shop. Per-line figures (commission, margin, taxes)
+    // are already stored on each line, so the kept lines can simply be summed.
+    // Variant objects are compared by their non-empty values (order lines carry
+    // {size:'', color:''} when the product has no variants).
+    const variantSig = (v) => JSON.stringify(
+        Object.entries(v && typeof v === 'object' ? v : {})
+            .filter(([, val]) => val !== '' && val !== null && val !== undefined)
+            .map(([k, val]) => [k, String(val)])
+            .sort(([a], [b]) => a.localeCompare(b))
+    );
+    const keptDecision = (item) => {
+        const match = tryItems.find(ti =>
+            String(ti.productId) === String(item.productId) &&
+            variantSig(ti.variant) === variantSig(item.variant)
+        );
+        return match?.decision === 'accepted';
+    };
+    const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    (order.vendorItems || []).forEach(group => {
+        const kept = (group.items || []).filter(keptDecision);
+        const sum = (pick) => kept.reduce((acc, item) => acc + (Number(pick(item)) || 0), 0);
+
+        const subtotal = sum(i => (Number(i.price) || 0) * (Number(i.quantity) || 0));
+        const commission = sum(i => i.commissionAmount);
+        const margin = sum(i => i.marginAmount);
+        const igst = sum(i => i.customerIgst), cgst = sum(i => i.customerCgst), sgst = sum(i => i.customerSgst);
+
+        group.subtotal = round2(subtotal);
+        group.basePrice = round2(sum(i => (Number(i.vendorPrice) || 0) * (Number(i.quantity) || 0)));
+        group.commissionAmount = round2(commission);
+        group.vendorEarnings = round2(subtotal - commission - margin);
+        group.vendorTax = round2(sum(i => i.vendorTax));
+        group.commissionTax = round2(sum(i => i.commissionTax));
+        group.totalCustomerIgst = round2(igst);
+        group.totalCustomerCgst = round2(cgst);
+        group.totalCustomerSgst = round2(sgst);
+        group.tax = round2(igst + cgst + sgst);
+    });
 
     // Store rejected items to be returned to vendors
     const rejectedItems = tryItems.filter(i => i.decision === 'rejected');
     flow.rejectedItems = rejectedItems;
 
     await order.save();
+
+    // Nothing was kept, so the coupon was never really used: give the use back.
+    if (acceptedItems.length === 0) await releaseCouponForOrder(order._id);
 
     // Note: Stock is NO LONGER restored here. It will be restored only after
     // the delivery partner successfully returns the items to the respective vendors.
@@ -1926,6 +1973,7 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
             hasSpecificVariantStock: i.hasSpecificVariantStock,
         })),
         reason: 'Try & Buy Auto-Return',
+        isTryBuyAutoReturn: true,
         status: 'processing', // Already approved and assigned
         deliveryBoyId: riderId,
         originalDeliveryBoyId: riderId,
@@ -2129,9 +2177,7 @@ export const handleCompleteDelivery = asyncHandler(async (req, res) => {
     // Process financial earnings (Rider + Vendor) and ledger entries
     // Only process completion if fully delivered. For Try & Buy with rejects, process after return is complete.
     if (!hasRejectedItems) {
-        await WalletService.processOrderCompletion(order).catch(err => {
-            console.error(`[Wallet] Error processing earnings for order ${order._id}:`, err);
-        });
+        await WalletService.processOrderCompletionSafe(order);
     }
 
     let returnReq = null;
@@ -2335,6 +2381,41 @@ export const markTryBuyVendorReturned = asyncHandler(async (req, res) => {
     const allReturned = order.vendorReturnStops.every(s => s.status === 'returned');
 
     if (allReturned) {
+        // Settle the vendor groups: a vendor that kept nothing is 'returned'; one with items
+        // the customer kept is 'delivered'. They were left on 'returning_unselected_items',
+        // so vendor/admin screens kept showing a return in progress.
+        const keptProductIds = new Set(
+            (order.deliveryFlow?.tryAndBuyItems || [])
+                .filter(i => i.decision === 'accepted')
+                .map(i => String(i.productId))
+        );
+        (order.vendorItems || []).forEach(group => {
+            const keptSomething = (group.items || []).some(item => keptProductIds.has(String(item.productId)));
+            group.status = keptSomething ? 'delivered' : 'returned';
+            if (keptSomething) group.deliveredAt = group.deliveredAt || new Date();
+        });
+
+        // The rider has physically returned the items and the stock is already back, so
+        // close the auto-return request here instead of leaving it 'processing' until
+        // someone marks it by hand. restockedAt is claimed so a later vendor/admin
+        // 'completed' can't restock again; the rider's return-trip fee is paid once via
+        // processOrderReturn's own claim.
+        const autoReturn = await ReturnRequest.findOne({ orderId: order._id, isTryBuyAutoReturn: true, status: { $ne: 'completed' } });
+        if (autoReturn) {
+            await ReturnRequest.updateOne(
+                { _id: autoReturn._id },
+                { $set: { status: 'completed', trySessionActive: false } }
+            );
+            await ReturnRequest.updateOne(
+                { _id: autoReturn._id, restockedAt: { $exists: false } },
+                { $set: { restockedAt: new Date() } }
+            );
+            const { WalletService: ReturnWallet } = await import('../../../services/wallet.service.js');
+            await ReturnWallet.processOrderReturn(autoReturn).catch(err =>
+                console.error(`[TryBuyReturn] Return-trip credit failed for ${autoReturn._id}:`, err.message)
+            );
+        }
+
         const isFullyRejected = order.deliveryFlow?.rejectedItems?.length === (order.items?.length || 0) && order.items?.length > 0;
         const newStatus = isFullyRejected ? 'returned' : 'try_buy_completed';
         
@@ -2342,9 +2423,7 @@ export const markTryBuyVendorReturned = asyncHandler(async (req, res) => {
         flow.phase = newStatus;
         
         const { WalletService } = await import('../../../services/wallet.service.js');
-        await WalletService.processOrderCompletion(order).catch(err => {
-            console.error(`[Wallet] Error processing earnings for order ${order._id}:`, err);
-        });
+        await WalletService.processOrderCompletionSafe(order);
 
         const updatedRider = await DeliveryBoy.findByIdAndUpdate(order.deliveryBoyId, { status: 'available' }, { new: true }).select('availableBalance totalEarnings totalDeliveries');
 
@@ -2644,17 +2723,9 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
                 returnReq.deliveryDistance = totalDistance;
                 returnReq.deliveryEarnings = earnings;
 
-                if (earnings > 0) {
-                    await DeliveryBoy.findByIdAndUpdate(
-                        deliveryBoyId,
-                        {
-                            $inc: {
-                                totalEarnings: earnings,
-                                availableBalance: earnings
-                            }
-                        }
-                    );
-                }
+                // The fee is credited by WalletService.processOrderReturn below, which claims
+                // it atomically. It used to be credited here AND there, paying the rider the
+                // return trip twice.
             }
         } catch (calcError) {
             console.error('[Return Earnings Calc Error]', calcError.message);

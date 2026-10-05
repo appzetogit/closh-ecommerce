@@ -1,5 +1,6 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import CashSettlement from '../../../models/CashSettlement.model.js';
 import ApiError from '../../../utils/ApiError.js';
@@ -86,40 +87,78 @@ export const verifySettlement = asyncHandler(async (req, res) => {
     const settlement = await CashSettlement.findOne({ razorpayOrderId: razorpay_order_id });
     if (!settlement) throw new ApiError(404, 'Settlement record not found.');
 
+    // A rider may only verify their own settlement. Without this, any signed-in rider
+    // who learned a Razorpay order id could mark another rider's settlement as failed.
+    if (String(settlement.deliveryBoyId) !== String(req.user.id)) {
+        throw new ApiError(403, 'This settlement does not belong to you.');
+    }
+
     if (settlement.status === 'completed') {
         return res.status(200).json(new ApiResponse(200, settlement, 'Settlement already completed.'));
     }
 
-    // Verify signature
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
-    const generatedSignature = hmac.digest('hex');
+    // Verify signature (constant-time)
+    const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(razorpay_order_id + "|" + razorpay_payment_id)
+        .digest('hex');
+    const expectedBuf = Buffer.from(generatedSignature, 'utf8');
+    const providedBuf = Buffer.from(String(razorpay_signature || ''), 'utf8');
+    const signatureOk = expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
 
-    if (generatedSignature !== razorpay_signature) {
-        settlement.status = 'failed';
-        await settlement.save();
+    if (!signatureOk) {
+        // Only flip a still-pending settlement; never overwrite a completed one.
+        await CashSettlement.updateOne({ _id: settlement._id, status: 'pending' }, { $set: { status: 'failed' } });
         throw new ApiError(400, 'Invalid payment signature. Verification failed.');
     }
 
-    // Payment is valid - Update Rider's cashCollected
-    const rider = await DeliveryBoy.findById(settlement.deliveryBoyId);
-    if (!rider) throw new ApiError(404, 'Delivery boy not found.');
+    // Claim the settlement and debit the rider in ONE transaction. The claim is
+    // conditional on status 'pending', so two concurrent verifies cannot both pass and
+    // deduct twice; the debit is a single $inc rather than read-modify-save.
+    // rider.cashCollected is a lifetime total, so only cashInHand is reduced.
+    const session = await mongoose.startSession();
+    let completed = null;
+    try {
+        await session.withTransaction(async () => {
+            completed = await CashSettlement.findOneAndUpdate(
+                { _id: settlement._id, status: 'pending' },
+                {
+                    $set: {
+                        razorpayPaymentId: razorpay_payment_id,
+                        razorpaySignature: razorpay_signature,
+                        status: 'completed',
+                        settledAt: new Date(),
+                    },
+                },
+                { session, new: true }
+            );
+            if (!completed) return; // someone else already completed it
 
-    rider.cashInHand = Math.max(0, rider.cashInHand - settlement.amount);
-    // rider.cashCollected is a lifetime total, do not decrement it.
-    await rider.save();
+            const rider = await DeliveryBoy.findByIdAndUpdate(
+                settlement.deliveryBoyId,
+                { $inc: { cashInHand: -settlement.amount } },
+                { session, new: true }
+            );
+            if (!rider) throw new ApiError(404, 'Delivery boy not found.');
+
+            // cashInHand never goes below zero.
+            if (rider.cashInHand < 0) {
+                await DeliveryBoy.updateOne({ _id: rider._id }, { $set: { cashInHand: 0 } }, { session });
+            }
+        });
+    } finally {
+        await session.endSession();
+    }
+
+    if (!completed) {
+        const latest = await CashSettlement.findById(settlement._id);
+        return res.status(200).json(new ApiResponse(200, latest, 'Settlement already completed.'));
+    }
 
     // Invalidate dashboard and profile cache to reflect updated balance immediately
-    await cacheInvalidate(`dash:${rider._id}`, `profile:${rider._id}`);
+    await cacheInvalidate(`dash:${settlement.deliveryBoyId}`, `profile:${settlement.deliveryBoyId}`);
 
-    // Update settlement record
-    settlement.razorpayPaymentId = razorpay_payment_id;
-    settlement.razorpaySignature = razorpay_signature;
-    settlement.status = 'completed';
-    settlement.settledAt = new Date();
-    await settlement.save();
-
-    res.status(200).json(new ApiResponse(200, settlement, 'Cash settled successfully via online payment.'));
+    res.status(200).json(new ApiResponse(200, completed, 'Cash settled successfully via online payment.'));
 });
 
 /**

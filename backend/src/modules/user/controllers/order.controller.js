@@ -24,7 +24,7 @@ import { OrderNotificationService } from '../../../services/orderNotification.se
 import { geocodeAddress, getDistanceMatrix, getRouteDistance } from '../../../services/googleMaps.service.js';
 import { applyActiveCampaigns } from '../../../utils/productUtils.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
-import { validateCoupon } from '../../../services/coupon.service.js';
+import { validateCoupon, consumeCoupon, releaseCouponForOrder } from '../../../services/coupon.service.js';
 import { autoAssignDeliveryBoy } from '../../../services/autoAssignment.service.js';
 import * as DeliveryOtpService from '../../../services/deliveryOtp.service.js';
 import { QueueService } from '../../../services/queue.service.js';
@@ -148,6 +148,11 @@ export const placeOrder = asyncHandler(async (req, res) => {
     }
 
     const normalizedPaymentMethod = paymentMethod === 'cash' ? 'cod' : paymentMethod;
+    // Defence in depth: the Joi schema already restricts this, but placeOrder must
+    // never create an order whose payment nothing will collect.
+    if (!['cod', 'prepaid'].includes(normalizedPaymentMethod)) {
+        throw new ApiError(400, 'Unsupported payment method. Choose Cash on Delivery or Prepaid.');
+    }
     const rawIdempotencyKey = String(req.get('x-idempotency-key') || '').trim();
     const idempotencyKey = rawIdempotencyKey || null;
     const normalizedGuestEmail = String(shippingAddress?.email || '').trim().toLowerCase();
@@ -485,7 +490,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
     );
     const platformFee = Number(dynamicPlatformFee || 0);
     // Tax is inclusive in subtotal, so we don't add it to the final total
-    const total = parseFloat((subtotal - couponDiscount + shipping + platformFee).toFixed(2));
+    const total = Math.max(0, parseFloat((subtotal - couponDiscount + shipping + platformFee).toFixed(2)));
 
     console.log(`💰 [TOTALS] Subtotal: ₹${subtotal}, Shipping: ₹${shipping}, Discount: ₹${couponDiscount}, Tax: ₹${tax}, Platform Fee: ₹${platformFee}, Grand Total: ₹${total}`);
 
@@ -562,6 +567,7 @@ export const placeOrder = asyncHandler(async (req, res) => {
                 platformFee,
                 total,
                 couponCode: couponCode?.toUpperCase(),
+                couponUsageConsumed: !!appliedCoupon,
                 couponDiscount,
                 isMultiVendor: vendorItems.length > 1,
                 orderType,
@@ -577,6 +583,10 @@ export const placeOrder = asyncHandler(async (req, res) => {
             }], { session });
 
             order = createdOrder;
+
+            // Spend one use of the coupon in the same transaction as the order; throws (and
+            // rolls everything back) if the usage limit was reached since validation.
+            if (appliedCoupon) await consumeCoupon(appliedCoupon, { session });
             console.log("STEP 4 - Saved order.customerLocation:", order.dropoffLocation);
 
             // Step 4.5: Decrement stock and update stock status
@@ -1019,6 +1029,7 @@ export const cancelOrderInternal = async (orderId, userId, reason) => {
 
         // Unified Notification to all parties
         if (cancelledOrder) {
+            await releaseCouponForOrder(cancelledOrder._id);
             await OrderNotificationService.notifyOrderUpdate(cancelledOrder._id, 'cancelled', {
                 reason: reason || 'Cancelled by customer',
                 isSystemCancel: false

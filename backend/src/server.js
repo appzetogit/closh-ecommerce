@@ -6,6 +6,7 @@ import { validateEnv } from "./config/env.js";
 import http from 'http';
 import { initSocket } from './services/socket.service.js';
 import { connectRedis } from './config/redis.js';
+import { WalletService } from './services/wallet.service.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -20,6 +21,14 @@ const startServer = async () => {
 
     // Initialize Socket.io
     initSocket(server);
+
+    // Re-attempt rider/vendor credits that failed at delivery time. Idempotent and
+    // safe on every instance (see WalletService.processOrderCompletion).
+    setInterval(() => {
+      WalletService.retryFailedCompletions().catch((err) =>
+        console.error('[Wallet] Retry sweep error:', err.message)
+      );
+    }, 5 * 60 * 1000).unref();
 
     server.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);

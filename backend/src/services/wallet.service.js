@@ -2,6 +2,7 @@ import { Vendor } from '../models/Vendor.model.js';
 import DeliveryBoy from '../models/DeliveryBoy.model.js';
 import Commission from '../models/Commission.model.js';
 import mongoose from 'mongoose';
+import { isTryBuyAutoReturn } from '../utils/tryBuyReturn.js';
 
 /**
  * WalletService handles all financial balance updates for Vendors and Riders
@@ -16,9 +17,26 @@ export const WalletService = {
         session.startTransaction();
 
         try {
-            // 0. Idempotency Check: Don't process if already done
+            // 0. Idempotency. Two guards:
+            //  - legacy: orders credited before the flag existed already have Commission rows.
+            //  - atomic claim: only one caller can flip walletProcessedAt from unset to set.
+            //    This also covers orders that produce no Commission row (zero vendor
+            //    earnings / fully rejected), which the Commission lookup alone cannot see.
+            //    A concurrent second caller gets a write conflict and aborts, so the rider
+            //    and vendor credits below can never be applied twice.
             const existing = await Commission.findOne({ orderId: order._id }).session(session);
             if (existing) {
+                await session.abortTransaction();
+                return true;
+            }
+
+            const Order = mongoose.model('Order');
+            const claim = await Order.updateOne(
+                { _id: order._id, walletProcessedAt: { $exists: false } },
+                { $set: { walletProcessedAt: new Date(), walletCreditFailed: false } },
+                { session }
+            );
+            if (claim.modifiedCount === 0) {
                 await session.abortTransaction();
                 return true;
             }
@@ -130,6 +148,55 @@ export const WalletService = {
     },
 
     /**
+     * processOrderCompletion for callers that must not fail the delivery response.
+     * A failure used to be swallowed with console.error, leaving a delivered order
+     * that nobody was ever paid for and nothing to find it by. Now the order is
+     * flagged (walletCreditFailed) so retryFailedCompletions() picks it up.
+     * Never throws.
+     */
+    async processOrderCompletionSafe(order) {
+        try {
+            return await this.processOrderCompletion(order);
+        } catch (error) {
+            console.error(`[Wallet] Credit failed for order ${order?._id}; flagged for retry:`, error.message);
+            try {
+                await mongoose.model('Order').updateOne(
+                    { _id: order._id, walletProcessedAt: { $exists: false } },
+                    { $set: { walletCreditFailed: true } }
+                );
+            } catch (flagError) {
+                console.error(`[Wallet] Could not flag order ${order?._id} for retry:`, flagError.message);
+            }
+            return false;
+        }
+    },
+
+    /**
+     * Retry credits that failed earlier. Safe to run on every instance and as often
+     * as needed: processOrderCompletion's atomic claim makes a repeat a no-op.
+     */
+    async retryFailedCompletions(limit = 50) {
+        const Order = mongoose.model('Order');
+        const failed = await Order.find({ walletCreditFailed: true, walletProcessedAt: { $exists: false } })
+            .limit(limit);
+        let recovered = 0;
+
+        for (const order of failed) {
+            try {
+                await this.processOrderCompletion(order);
+                await Order.updateOne({ _id: order._id }, { $set: { walletCreditFailed: false } });
+                recovered += 1;
+            } catch (error) {
+                console.error(`[Wallet] Retry failed for order ${order._id}:`, error.message);
+            }
+        }
+        if (failed.length) {
+            console.log(`[Wallet] Retried ${failed.length} failed credit(s); ${recovered} recovered.`);
+        }
+        return recovered;
+    },
+
+    /**
      * Reverse earnings from vendor after a successful return completion
      * @param {Object} returnRequest - ReturnRequest document
      */
@@ -150,21 +217,42 @@ export const WalletService = {
             
             let amountToDeduct = 0;
             let salesToDeduct = 0;
+            // Which bucket the earnings are sitting in is decided by the commission's
+            // status BEFORE we cancel it. This used to be read after
+            // `commission.status = 'cancelled'`, so the 'paid' check could never be true
+            // and every reversal hit pendingBalance - driving it negative while the
+            // vendor kept the money in availableBalance.
+            let previousCommissionStatus = null;
 
-            if (commission) {
-                amountToDeduct = Number(commission.vendorEarnings || 0);
-                salesToDeduct = Number(commission.subtotal || 0);
-                
-                commission.status = 'cancelled';
-                await commission.save({ session });
+            // A Try & Buy auto-return only carries items the customer rejected at the door.
+            // Vendor earnings for that order were already computed from the ACCEPTED items
+            // alone (see handleTryAndBuy / processOrderCompletion), so there is nothing to
+            // take back. Reversing here used to wipe the vendor's whole earning for the
+            // order, including the items the customer kept and paid for.
+            const autoReturn = isTryBuyAutoReturn(returnRequest);
+
+            if (autoReturn) {
+                // nothing to reverse on the vendor side
+            } else if (commission) {
+                // Already reversed (e.g. the same return processed twice): never deduct twice.
+                if (commission.status !== 'cancelled') {
+                    previousCommissionStatus = commission.status;
+                    amountToDeduct = Number(commission.vendorEarnings || 0);
+                    salesToDeduct = Number(commission.subtotal || 0);
+
+                    commission.status = 'cancelled';
+                    await commission.save({ session });
+                }
             } else if (vendorGroup) {
                 amountToDeduct = Number(vendorGroup.vendorEarnings || 0);
                 salesToDeduct = Number(vendorGroup.subtotal || 0);
             }
 
             if (amountToDeduct > 0) {
-                const balanceField = (commission && commission.status === 'paid') ? 'availableBalance' : 'pendingBalance';
-                
+                const balanceField = ['ready', 'requested', 'paid'].includes(previousCommissionStatus)
+                    ? 'availableBalance'
+                    : 'pendingBalance';
+
                 await Vendor.findByIdAndUpdate(
                     vendorId,
                     {
@@ -179,8 +267,19 @@ export const WalletService = {
                 console.log(`[Wallet] Deducted ₹${amountToDeduct} from Vendor ${vendorId} (${balanceField}) for returned order ${orderId}`);
             }
 
-            // Credit Delivery Boy for the return
-            if (returnRequest.deliveryBoyId && Number(returnRequest.deliveryEarnings) > 0) {
+            // Credit Delivery Boy for the return - once. The rider's drop-off, the vendor's
+            // status change and the admin's status change can each reach this point for the
+            // same request; the atomic claim on riderCreditedAt makes the fee payable once.
+            let riderClaimed = false;
+            if (returnRequest.deliveryBoyId && Number(returnRequest.deliveryEarnings) > 0 && returnRequest._id) {
+                const claim = await mongoose.model('ReturnRequest').updateOne(
+                    { _id: returnRequest._id, riderCreditedAt: { $exists: false } },
+                    { $set: { riderCreditedAt: new Date() } },
+                    { session }
+                );
+                riderClaimed = claim.modifiedCount > 0;
+            }
+            if (riderClaimed) {
                 const riderEarnings = Number(returnRequest.deliveryEarnings);
                 const DeliveryBoy = mongoose.model('DeliveryBoy');
                 
