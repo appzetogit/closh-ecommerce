@@ -4,6 +4,7 @@ import ApiError from '../../../utils/ApiError.js';
 import Cart from '../../../models/Cart.model.js';
 import Product from '../../../models/Product.model.js';
 import mongoose from 'mongoose';
+import { resolveVariantPrice } from '../../../utils/variantKey.js';
 
 // Fields to pull live from Product via populate
 const PRODUCT_SELECT = 'name price originalPrice discount image images stock stockQuantity isActive isVisible variants categoryId brandId vendorId';
@@ -27,11 +28,14 @@ const formatItems = (cart) => {
         .filter((item) => item.productId && item.productId.isActive !== false)
         .map((item) => {
             const p = item.productId;
+            // The selected size/colour can have its own price; quote what checkout will charge.
+            const { price } = resolveVariantPrice(p, item.variant);
             return {
                 cartItemId: item._id,
                 id: p._id,
                 name: p.name,
-                price: p.price,
+                price,
+                basePrice: p.price,
                 originalPrice: p.originalPrice || p.price,
                 discount: p.discount || 0,
                 image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : p.image,

@@ -33,6 +33,7 @@ import {
     toVariantStockEntries,
     resolveOrderItemVariantKey,
     resolveVariantKeyFromKeys,
+    resolveVariantPrice,
 } from '../../../utils/variantKey.js';
 import { restockItems } from '../../../utils/stockRestore.js';
 
@@ -55,31 +56,14 @@ const resolveVariantSelection = (product, selectedVariant) => {
         throw new ApiError(400, `Invalid price configured for product ${product?.name || product?._id || ''}.`);
     }
 
-    const priceEntries = toVariantPriceEntries(product?.variants?.prices);
-    const stockEntries = toVariantStockEntries(product?.variants?.stockMap);
-
-    // Resolve the best matching key from both Price and Stock maps
-    const variantKey = resolveOrderItemVariantKey(product, { variant: selectedVariant });
-
     const sizes = Array.isArray(product?.variants?.sizes) ? product.variants.sizes : [];
     const colors = Array.isArray(product?.variants?.colors) ? product.variants.colors : [];
     const attributes = Array.isArray(product?.variants?.attributes) ? product.variants.attributes : [];
     const hasVariantAxes = sizes.length > 0 || colors.length > 0 || attributes.length > 0;
 
-    if (variantKey) {
-        // Try to find price for this key
-        const priceMatch = priceEntries.find(([k]) => String(k).trim() === variantKey);
-        const price = priceMatch ? Number(priceMatch[1]) : basePrice;
-
-        return {
-            price: (Number.isFinite(price) && price >= 0) ? price : basePrice,
-            variantKey,
-            hasVariantAxes
-        };
-    }
-
-    // Fallback if no variant key resolved but product has variant axes
-    return { price: basePrice, variantKey: null, hasVariantAxes };
+    // Same resolution the cart uses, so the quoted price and the charged price agree.
+    const { price, variantKey } = resolveVariantPrice(product, selectedVariant);
+    return { price, variantKey, hasVariantAxes };
 };
 
 // POST /api/user/orders

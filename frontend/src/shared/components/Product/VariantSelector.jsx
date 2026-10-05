@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { FiCheck } from "react-icons/fi";
 import { formatPrice } from "../../utils/helpers";
-import { getVariantSignature } from "../../utils/variant";
+import { getVariantSignature, resolveVariantPrice } from "../../utils/variant";
 
 const normalizeAxisName = (value) =>
   String(value || "")
@@ -104,24 +104,8 @@ const VariantSelector = ({ variants, onVariantChange, currentPrice }) => {
   };
 
   const getVariantPrice = () => {
-    const base = Number(currentPrice) || 0;
-    const entries = toEntries(variants?.prices);
-    if (!entries.length) return base;
-    const key = getVariantSignature(selectedVariant || {});
-    if (!key) return base;
-    const exact = entries.find(([rawKey]) => String(rawKey).trim() === key);
-    if (exact) {
-      const parsed = Number(exact[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-    const normalized = entries.find(
-      ([rawKey]) => String(rawKey).trim().toLowerCase() === key.toLowerCase()
-    );
-    if (normalized) {
-      const parsed = Number(normalized[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-    return base;
+    // Same key matching as checkout/order pricing (incl. the "size|" key format).
+    return resolveVariantPrice({ variants }, selectedVariant, currentPrice);
   };
 
   return (

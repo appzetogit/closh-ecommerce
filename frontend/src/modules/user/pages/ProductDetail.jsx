@@ -25,7 +25,7 @@ import {
 } from "../data/catalogData";
 import api from "../../../shared/utils/api";
 import { formatPrice } from "../../../shared/utils/helpers";
-import { getVariantSignature } from "../../../shared/utils/variant";
+import { getVariantSignature, resolveVariantPrice } from "../../../shared/utils/variant";
 import toast from "react-hot-toast";
 import MobileLayout from "../components/Layout/MobileLayout";
 import ImageGallery from "../../../shared/components/Product/ImageGallery";
@@ -36,59 +36,8 @@ import PageTransition from "../../../shared/components/PageTransition";
 import Badge from "../../../shared/components/Badge";
 import ProductCard from "../../../shared/components/ProductCard";
 
-const resolveVariantPrice = (product, selectedVariant) => {
-  const basePrice = Number(product?.price) || 0;
-  if (!selectedVariant || !product?.variants?.prices) return basePrice;
-
-  const entries =
-    product.variants.prices instanceof Map
-      ? Array.from(product.variants.prices.entries())
-      : Object.entries(product.variants.prices || {});
-  const dynamicKey = getVariantSignature(selectedVariant || {});
-  if (dynamicKey) {
-    const direct = entries.find(([key]) => String(key).trim() === dynamicKey);
-    if (direct) {
-      const parsed = Number(direct[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-    const normalized = entries.find(
-      ([key]) => String(key).trim().toLowerCase() === dynamicKey.toLowerCase()
-    );
-    if (normalized) {
-      const parsed = Number(normalized[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-  }
-
-  const size = String(selectedVariant.size || "").trim().toLowerCase();
-  const color = String(selectedVariant.color || "").trim().toLowerCase();
-
-  const candidates = [
-    `${size}|${color}`,
-    `${size}-${color}`,
-    `${size}_${color}`,
-    `${size}:${color}`,
-    size && !color ? size : null,
-    color && !size ? color : null,
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    const exact = entries.find(([key]) => String(key).trim() === candidate);
-    if (exact) {
-      const parsed = Number(exact[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-    const normalized = entries.find(
-      ([key]) => String(key).trim().toLowerCase() === candidate
-    );
-    if (normalized) {
-      const parsed = Number(normalized[1]);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-    }
-  }
-
-  return basePrice;
-};
+// Variant pricing (resolveVariantPrice) is shared with checkout/order pricing: see
+// shared/utils/variant.js. This copy missed the "size|" key format.
 
 const isMongoId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || ""));
 const normalizeProduct = (raw) => {

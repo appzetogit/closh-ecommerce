@@ -30,7 +30,7 @@ import LocationModal from '../../components/Header/LocationModal';
 import { useUserLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
 import LoginModal from '../../components/Modals/LoginModal';
-import { getVariantSignature } from '../../../../shared/utils/variant';
+import { getVariantSignature, resolveVariantPrice } from '../../../../shared/utils/variant';
 import ProductReviews from '../../components/Product/ProductReviews';
 import ProductCard from '../../components/ProductCard/ProductCard';
 import ImageZoomViewer from '../../components/Product/ImageZoomViewer';
@@ -169,38 +169,9 @@ const ProductDetailsPage = () => {
     const currentPrice = useMemo(() => {
         if (!product) return 0;
 
-        let finalPrice = product.discountedPrice !== undefined ? product.discountedPrice : product.price;
-
-        if (product.variants?.prices) {
-            const signature = getVariantSignature({ size: selectedSize });
-            const entries = Object.entries(product.variants.prices || {});
-
-            // 1. Exact match with standardized signature
-            let match = entries.find(([k]) => String(k).trim() === signature);
-
-            // 2. Case-insensitive match 
-            if (!match && signature) {
-                match = entries.find(([k]) => String(k).trim().toLowerCase() === signature.toLowerCase());
-            }
-
-            // 3. Legacy legacy format (size)
-            if (!match) {
-                const s = String(selectedSize || "").trim().toLowerCase();
-                const candidates = [s].filter(Boolean);
-                for (const cand of candidates) {
-                    match = entries.find(([k]) => String(k).trim().toLowerCase() === cand);
-                    if (match) break;
-                }
-            }
-
-            if (match) {
-                const parsed = Number(match[1]);
-                if (Number.isFinite(parsed) && parsed >= 0) {
-                    finalPrice = parsed;
-                }
-            }
-        }
-        return finalPrice;
+        const basePrice = product.discountedPrice !== undefined ? product.discountedPrice : product.price;
+        // Same key matching as checkout/order pricing (incl. the "size|" key format).
+        return resolveVariantPrice(product, selectedSize ? { size: selectedSize } : null, basePrice);
     }, [product, selectedSize]);
 
     const getSizeStock = (size) => {

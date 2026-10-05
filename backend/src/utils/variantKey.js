@@ -63,6 +63,25 @@ export const resolveVariantKeyFromKeys = (keys = [], variant = {}) => {
     return null;
 };
 
+/**
+ * The price a customer pays for `product` in the selected variant: the variant's own price
+ * from variants.prices when one is set, otherwise the product's base price. This is what
+ * placing an order charges, so anything that shows a price before checkout (cart, checkout
+ * totals) must use it too. The cart used to show the base price only, so a product whose
+ * size had its own price (e.g. base 999, size UK 8 at 799) was quoted at 999 and then
+ * charged 799 when the order was placed.
+ */
+export const resolveVariantPrice = (product, selectedVariant) => {
+    const basePrice = Number(product?.price);
+    const variantKey = resolveOrderItemVariantKey(product, { variant: selectedVariant });
+    if (variantKey) {
+        const priceMatch = toVariantPriceEntries(product?.variants?.prices).find(([k]) => String(k).trim() === variantKey);
+        const price = priceMatch ? Number(priceMatch[1]) : basePrice;
+        if (Number.isFinite(price) && price >= 0) return { price, variantKey };
+    }
+    return { price: basePrice, variantKey: variantKey || null };
+};
+
 export const resolveOrderItemVariantKey = (product, orderItem) => {
     const explicitKey = String(orderItem?.variantKey || '').trim();
     if (explicitKey) return explicitKey;
