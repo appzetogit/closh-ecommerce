@@ -15,12 +15,23 @@ const getMessaging = () => {
     }
 };
 
+// The delivery partner app (closh_delivery, Flutter) rings only on its own channel and sound:
+//   Android channel 'critical_order_alerts_v5' + res/raw/order_ringtone.mp3, iOS order_ringtone.mp3,
+// and treats a push as an order alert when data.type contains 'order'. Pushes used to name a
+// channel ('high_priority_channel') and a sound ('mgs_codec.mp3') the app does not have, so when
+// the app was in the background Android fell back to its plain default channel - no ring.
+const DELIVERY_RING = {
+    androidChannelId: 'critical_order_alerts_v5',
+    androidSound: 'order_ringtone',
+    apnsSound: 'order_ringtone.mp3',
+};
+
 /**
  * Send a push notification using Firebase Messaging
  * @param {Array} tokens - Array of FCM registration tokens
- * @param {Object} payload - { title, body, data, sound, imageUrl, actionLink }
+ * @param {Object} payload - { title, body, data, sound, imageUrl, actionLink, androidChannelId, androidSound, apnsSound }
  */
-const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'default', imageUrl, actionLink }) => {
+const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'default', imageUrl, actionLink, androidChannelId, androidSound, apnsSound }) => {
     if (!tokens || tokens.length === 0) return;
 
     const messaging = getMessaging();
@@ -45,15 +56,15 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
         android: {
             priority: 'high',
             notification: {
-                sound: sound === 'default' ? 'default' : sound,
-                channelId: sound === 'default' ? 'default_channel' : 'high_priority_channel',
+                sound: androidSound || (sound === 'default' ? 'default' : sound),
+                channelId: androidChannelId || (sound === 'default' ? 'default_channel' : 'high_priority_channel'),
                 ...(imageUrl ? { imageUrl } : {}),
             }
         },
         apns: {
             payload: {
                 aps: {
-                    sound: sound === 'default' ? 'default' : sound,
+                    sound: apnsSound || (sound === 'default' ? 'default' : sound),
                     'mutable-content': imageUrl ? 1 : 0,
                 }
             },
@@ -106,7 +117,7 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
  * Create a notification for a user/vendor/delivery/admin and trigger Push/Socket
  * @param {Object} options - { recipientId, recipientType, title, message, type, data, token, tokens }
  */
-export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {}, token, tokens, imageUrl, actionLink }) => {
+export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {}, token, tokens, imageUrl, actionLink, ring = false }) => {
     // 1. Persist to DB if recipientId is provided
     let notification = null;
     if (recipientId) {
@@ -155,7 +166,10 @@ export const createNotification = async ({ recipientId, recipientType, title, me
                 sound = 'mgs_codec.mp3'; // The custom buzzer sound file name
             }
 
-            await sendPushToTokens(pushTokens, { title, body: message, data: { ...data, type }, sound, imageUrl, actionLink });
+            // `ring` marks a new-order offer for a delivery partner: use the app's ringing channel.
+            const ringPayload = (recipientType === 'delivery' && ring) ? DELIVERY_RING : {};
+
+            await sendPushToTokens(pushTokens, { title, body: message, data: { ...data, type }, sound, imageUrl, actionLink, ...ringPayload });
         }
     } catch (err) {
         console.error('Failed to trigger push notification:', err.message);

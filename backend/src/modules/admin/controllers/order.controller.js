@@ -538,6 +538,18 @@ export const assignDeliveryBoy = asyncHandler(async (req, res) => {
     };
     emitEvent(`delivery_${deliveryBoyId}`, 'order_ready_for_pickup', socketPayload);
 
+    // Ring the partner app the same way an auto-assignment does; the socket event above only
+    // reaches a rider whose app is open.
+    await createNotification({
+        recipientId: String(deliveryBoyId),
+        recipientType: 'delivery',
+        title: 'New Order Assigned',
+        message: `Admin has assigned you order #${order.orderId}. Please head to the vendor.`,
+        type: 'order',
+        ring: true,
+        data: { orderId: order.orderId },
+    }).catch((err) => console.error(`[AdminAssign] Rider notification failed for ${order.orderId}:`, err.message));
+
     res.status(200).json(new ApiResponse(200, order, 'Delivery boy assigned.'));
 });
 

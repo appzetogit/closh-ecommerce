@@ -575,6 +575,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             title: 'New Order Auto-Assigned',
             message: `You have been automatically assigned to order #${order.orderId}. Please head towards the vendor cluster.`,
             type: 'order',
+            ring: true,
             data: {
                 orderId: order.orderId,
                 batchId: newBatch.batchId,
