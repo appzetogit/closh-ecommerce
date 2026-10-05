@@ -669,8 +669,8 @@ export const placeOrder = asyncHandler(async (req, res) => {
                 autoAssignDeliveryBoy(order._id).catch(err => {
                     console.error("[AutoAssign Error in placeOrder]", err);
                 });
-                QueueService.scheduleAdminEscalation(order._id);
-                QueueService.scheduleUserNoPartnerNotification(order._id);
+                QueueService.scheduleAdminEscalation(order._id).catch((err) => console.error(`[Queue] scheduleAdminEscalation failed for ${order._id}:`, err.message));
+                QueueService.scheduleUserNoPartnerNotification(order._id).catch((err) => console.error(`[Queue] scheduleUserNoPartnerNotification failed for ${order._id}:`, err.message));
             }
         }
     } catch (err) {
@@ -843,8 +843,8 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     autoAssignDeliveryBoy(claimed._id).catch(err => {
         console.error("[AutoAssign Error in verifyPayment]", err);
     });
-    QueueService.scheduleAdminEscalation(claimed._id);
-    QueueService.scheduleUserNoPartnerNotification(claimed._id);
+    QueueService.scheduleAdminEscalation(claimed._id).catch((err) => console.error(`[Queue] scheduleAdminEscalation failed for ${claimed._id}:`, err.message));
+    QueueService.scheduleUserNoPartnerNotification(claimed._id).catch((err) => console.error(`[Queue] scheduleUserNoPartnerNotification failed for ${claimed._id}:`, err.message));
 
     res.status(200).json(new ApiResponse(200, { orderId: claimed.orderId }, "Payment verified successfully."));
 });

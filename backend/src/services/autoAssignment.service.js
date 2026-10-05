@@ -9,7 +9,7 @@ import { emitEvent, isDeliveryBoyConnected } from './socket.service.js';
 import { calculateDistance, getDeliveryEarning, getVendorPickupFee } from '../utils/geo.js';
 import { getDeliveryFeeConfig } from '../utils/deliveryFeeConfig.js';
 import { OrderNotificationService } from './orderNotification.service.js';
-import { QueueService } from './queue.service.js';
+import { QueueService, handleRiderAssignTimeout } from './queue.service.js';
 import { reconcileBusyRiders } from './deliveryAvailability.service.js';
 
 
@@ -33,7 +33,7 @@ const ACTIVE_BATCH_STATUSES = ['assigned', 'picked_up', 'arrived', 'try_and_buy'
  *
  * @returns the updated order, or null when it was already accepted / reassigned / moved on.
  */
-export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId) => {
+export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId, { markRejected = true } = {}) => {
     const order = await Order.findOneAndUpdate(
         {
             _id: orderId,
@@ -44,7 +44,9 @@ export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId) => {
         {
             $set: { status: 'searching', riderAcceptedAt: null, vendorPickups: [] },
             $unset: { deliveryBoyId: '' },
-            $addToSet: { rejectedDeliveryBoys: deliveryBoyId },
+            // A rider who declined / timed out is excluded from this order; one we released because OUR
+            // assignment failed (batch creation etc.) did nothing wrong and stays eligible.
+            ...(markRejected ? { $addToSet: { rejectedDeliveryBoys: deliveryBoyId } } : {}),
         },
         { new: true }
     );
@@ -61,6 +63,74 @@ export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId) => {
     return order;
 };
 
+
+// --- Failure handling ---------------------------------------------------------
+// autoAssignDeliveryBoy used to swallow every error and return false. Callers ignore the
+// return value, so one failed run (a DB hiccup, a missing geo index, ...) left the order in
+// 'pending' with no rider, no retry job and, if Redis was down, an unhandled rejection from the
+// un-awaited schedule calls. The helpers below make failure recoverable.
+
+const SEARCH_WINDOW_MS = 10 * 60 * 1000; // same cap the retry worker applies
+
+// Queue a retry; if the queue itself is unavailable (Redis down) fall back to an in-process timer
+// so the order is still retried. Never throws.
+const queueAutoAssignRetry = async (orderId, delayMs = 30 * 1000) => {
+    try {
+        await QueueService.scheduleAutoAssignRetry(orderId, delayMs);
+    } catch (err) {
+        console.error(`[AutoAssignment] Could not queue a retry for ${orderId} (${err.message}); using an in-process timer.`);
+        setTimeout(async () => {
+            try {
+                const o = await Order.findById(orderId).select('status deliveryBoyId searchStartedAt createdAt').lean();
+                if (!o || o.status !== 'searching' || o.deliveryBoyId) return;
+                if (Date.now() - new Date(o.searchStartedAt || o.createdAt).getTime() >= SEARCH_WINDOW_MS) return;
+                await autoAssignDeliveryBoy(orderId);
+            } catch (innerErr) {
+                console.error(`[AutoAssignment] In-process retry failed for ${orderId}:`, innerErr.message);
+            }
+        }, delayMs).unref();
+    }
+};
+
+// Schedule the rider's accept-timeout; on queue failure use an in-process timer, otherwise a rider who
+// never answers would hold the order (and be marked busy) forever. handleRiderAssignTimeout is atomic and
+// idempotent, so it is safe even if the queued job also fires later.
+const queueRiderTimeout = async (orderId, deliveryBoyId, delayMs) => {
+    try {
+        await QueueService.scheduleRiderAutoAssignTimeout(orderId, deliveryBoyId, delayMs);
+    } catch (err) {
+        console.error(`[AutoAssignment] Could not queue the accept-timeout for ${orderId} (${err.message}); using an in-process timer.`);
+        setTimeout(() => {
+            handleRiderAssignTimeout({ orderId, deliveryBoyId }).catch((e) =>
+                console.error(`[AutoAssignment] In-process accept-timeout failed for ${orderId}:`, e.message));
+        }, delayMs).unref();
+    }
+};
+
+// Put things back after an unexpected failure so the order is offered again instead of being stuck:
+//  - a half-built assignment is undone (and the rider is NOT marked as having rejected it);
+//  - a rider locked 'busy' for an assignment that never happened is freed;
+//  - an unassigned order moves to 'searching' (the state the retry worker acts on);
+//  - a retry is queued. Never throws.
+const recoverFromAssignFailure = async ({ orderId, riderId, orderClaimed }) => {
+    try {
+        if (riderId && orderClaimed) {
+            await releaseUnacceptedAssignment(orderId, riderId, { markRejected: false });
+        } else {
+            if (riderId) {
+                await DeliveryBoy.updateOne({ _id: riderId, status: 'busy' }, { $set: { status: 'available' } });
+            }
+            await Order.updateOne(
+                { _id: orderId, deliveryBoyId: null, status: { $nin: NON_ASSIGNABLE_STATUSES } },
+                { $set: { status: 'searching' } }
+            );
+        }
+    } catch (recoveryErr) {
+        console.error(`[AutoAssignment] Recovery after a failed assignment of ${orderId} also failed:`, recoveryErr.message);
+    }
+    await queueAutoAssignRetry(orderId);
+};
+
 /**
  * Automagically assigns the nearest available delivery boy to a multi-vendor or single-vendor order
  * immediately after checkout/payment verification.
@@ -69,6 +139,8 @@ export const releaseUnacceptedAssignment = async (orderId, deliveryBoyId) => {
  * @returns {Promise<Boolean>} Success status of assignment
  */
 export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
+    let lockedRiderId = null; // rider we flipped to 'busy'
+    let orderClaimed = false; // the order now points at that rider
     try {
         console.log(`[AutoAssignment] Starting smart assignment for order: ${orderId}. Excluding: ${excludeRiderIds}`);
         const order = await Order.findById(orderId).populate('vendorItems.vendorId');
@@ -228,7 +300,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         if (shortlist.length === 0) {
             console.warn(`[AutoAssignment] ❌ No available delivery partners found in the system for order ${order.orderId}. Waiting for manual intervention.`);
             await markSearching();
-            QueueService.scheduleAutoAssignRetry(order._id, 30 * 1000);
+            await queueAutoAssignRetry(order._id);
             return false;
         }
 
@@ -271,11 +343,12 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         if (!chosen) {
             console.warn(`[AutoAssignment] Every shortlisted rider was taken by another order for ${order.orderId}. Will retry.`);
             await markSearching();
-            QueueService.scheduleAutoAssignRetry(order._id, 30 * 1000);
+            await queueAutoAssignRetry(order._id);
             return false;
         }
 
         const chosenRider = chosen.boy;
+        lockedRiderId = chosenRider._id;
         console.log(`[AutoAssignment] Selected rider: ${chosenRider.name} (${chosenRider._id}) for order ${order.orderId} — ${Number.isFinite(chosen.distanceKm) ? chosen.distanceKm.toFixed(2) + 'km from pickup' : 'no GPS fix'}, idle since ${chosenRider.lastAssignedAt || 'never assigned'}`);
 
         // 3. Optimize pickup route sequence from rider's current location
@@ -352,6 +425,8 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
             return !!stillOpen;
         }
 
+        orderClaimed = true;
+
         // Mirror the committed state onto the in-memory doc used for the notifications below.
         order.deliveryBoyId = chosenRider._id;
         order.status = 'assigned';
@@ -401,10 +476,11 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         console.log(`[AutoAssignment] Created DeliveryBatch ${batchId} for order ${order.orderId}`);
 
         // 7. Notify customer and delivery partner
+        // Notifications are best-effort: a push/FCM failure must not undo (or abort) a valid assignment.
         await OrderNotificationService.notifyOrderUpdate(order._id, 'assigned', {
             title: 'Delivery Partner Assigned',
             message: `Smart assignment: Rider ${chosenRider.name} has been assigned to your order.`
-        });
+        }).catch((err) => console.error(`[AutoAssignment] Customer notification failed for ${order.orderId}:`, err.message));
 
         // Prepare Payload details (Vendor Name, Address, Distance, Time, Fee)
         const firstVendor = order.vendorItems?.[0] || {};
@@ -504,7 +580,7 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
                 batchId: newBatch.batchId,
                 type: 'auto_assigned_alert'
             }
-        });
+        }).catch((err) => console.error(`[AutoAssignment] Rider notification failed for ${order.orderId}:`, err.message));
 
         // Clear other riders' caches. `takenBy` is the rider this order was just offered
         // to - the room includes them too, and they must not read it as "someone else
@@ -525,11 +601,12 @@ export const autoAssignDeliveryBoy = async (orderId, excludeRiderIds = []) => {
         // 7. Schedule the acceptance timeout. The app shows a 120s countdown; the server
         // waits a few seconds longer so an Accept tapped as the clock reaches 0:00 (plus
         // network latency) still lands instead of finding the order already reassigned.
-        QueueService.scheduleRiderAutoAssignTimeout(order._id, chosenRider._id, 125 * 1000);
+        await queueRiderTimeout(order._id, chosenRider._id, 125 * 1000);
 
         return true;
     } catch (error) {
-        console.error(`[AutoAssignment] ❌ Error assigning delivery boy:`, error);
+        console.error(`[AutoAssignment] ❌ Error assigning delivery boy for order ${orderId}:`, error);
+        await recoverFromAssignFailure({ orderId, riderId: lockedRiderId, orderClaimed });
         return false;
     }
 };
