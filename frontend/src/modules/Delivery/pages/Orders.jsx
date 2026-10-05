@@ -569,7 +569,26 @@ const DeliveryOrders = () => {
               const activeReturns = filter === 'available' ? (returns || []).filter(r => 
                 ['processing', 'accepted'].includes(r.status?.toLowerCase()) || r.rawStatus === 'processing'
               ) : [];
-              const displayTasks = filter === 'available' ? [...orders, ...activeReturns] : orders;
+              // A Try & Buy order with rejected items gets an auto-return task for the trip back
+              // to the vendor. The order itself also stays open ('returning_unselected_items')
+              // until that trip is done, so the same job showed up twice - once as the order
+              // (full total, all items) and once as the return (₹0, rejected items). Finishing
+              // either one closes the other, and the app sends the rider to the return task
+              // right after delivery, so show only the return while it is active.
+              const autoReturnOrderKeys = new Set(
+                activeReturns
+                  .filter(r => r.isTryBuyAutoReturn || r.reason === 'Try & Buy Auto-Return')
+                  .flatMap(r => [r.orderId?._id, r.orderId?.orderId, typeof r.orderId === 'string' ? r.orderId : null])
+                  .filter(Boolean)
+                  .map(String)
+              );
+              const visibleOrders = filter === 'available'
+                ? orders.filter(o => !(
+                    ['returning_unselected_items', 'returning_unselected'].includes(String(o.status || '').toLowerCase()) &&
+                    [o._id, o.orderId, o.id].some(k => k && autoReturnOrderKeys.has(String(k)))
+                  ))
+                : orders;
+              const displayTasks = filter === 'available' ? [...visibleOrders, ...activeReturns] : orders;
 
               // Skeletons only for the very first load. A background refresh (these fire on
               // every socket nudge, e.g. right when an order is accepted) used to swap the

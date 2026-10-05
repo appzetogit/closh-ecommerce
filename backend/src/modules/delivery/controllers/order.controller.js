@@ -27,6 +27,7 @@ import Vendor from '../../../models/Vendor.model.js';
 import Enquiry from '../../../models/Enquiry.model.js';
 import CancellationReason from '../../../models/CancellationReason.model.js';
 import { releaseRiderIfIdle } from '../../../services/deliveryAvailability.service.js';
+import { isTryBuyAutoReturn } from '../../../utils/tryBuyReturn.js';
 
 const DELIVERY_OTP_TTL_MS = 10 * 60 * 1000;
 const DELIVERY_OTP_MAX_ATTEMPTS = 5;
@@ -1905,9 +1906,11 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
     
     // Build vendorDropoffs array
     let vendorDropoffs = [];
+    const dropoffOtps = {};
     for (const vendor of vendors) {
         const vid = vendor._id.toString();
         const otp = DeliveryOtpService.generateOtp();
+        dropoffOtps[vid] = otp;
         const fullAddress = vendor.shopAddress
             || [vendor.address?.street, vendor.address?.city, vendor.address?.state, vendor.address?.zipCode]
                 .filter(Boolean).join(', ')
@@ -1955,6 +1958,14 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
 
     console.log(`[TryBuyReturn] ReturnDist: ${totalReturnDistance}km | Stops: ${numDropoffStops} | StopFee: ₹${stopFee} | DistFee: ₹${distanceFee} | Total: ₹${deliveryEarnings}`);
 
+    // A single-vendor drop-off is verified against the request's own deliveryOtpHash (the
+    // rider app completes it through updateReturnStatus), which was never set here - only
+    // vendorDropoffs[0] got an OTP, and nobody was told it. The vendor had nothing to give
+    // the rider, so the first handover always failed until the rider pressed Resend.
+    const singleVendorOtp = vendorDropoffs.length === 1
+        ? dropoffOtps[String(vendorDropoffs[0].vendorId)]
+        : null;
+
     // Create the ReturnRequest
     const returnReq = await ReturnRequest.create({
         orderId: order._id,
@@ -1987,8 +1998,26 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
         deliveryEarnings: deliveryEarnings,
         pickupOtpHash: DeliveryOtpService.hashOtp('123456'), // Auto pickup from customer (already has it)
         pickupOtpDebug: '123456',
-        pickupPhoto: order.deliveryPhoto || order.openBoxPhoto || 'default.jpg' // Use delivery photo as initial pickup photo
+        pickupPhoto: order.deliveryPhoto || order.openBoxPhoto || 'default.jpg', // Use delivery photo as initial pickup photo
+        ...(singleVendorOtp ? {
+            deliveryOtpHash: DeliveryOtpService.hashOtp(singleVendorOtp),
+            deliveryOtpExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            deliveryOtpDebug: singleVendorOtp,
+        } : {}),
     });
+
+    // Each vendor needs its handover OTP before the rider arrives.
+    for (const dropoff of vendorDropoffs) {
+        const otp = dropoffOtps[String(dropoff.vendorId)];
+        await createNotification({
+            recipientId: dropoff.vendorId,
+            recipientType: 'vendor',
+            title: 'Return Drop-off OTP 🔐',
+            message: `The rider is bringing back items the customer did not keep (order #${order.orderId}). Your verification OTP is ${otp}.`,
+            type: 'order',
+            data: { returnId: String(returnReq._id), otp }
+        }).catch((err) => console.error('[TryBuyReturn] Vendor OTP notification failed:', err.message));
+    }
 
     // Notify Rider
     emitEvent(`delivery_${riderId}`, 'try_buy_return_created', {
@@ -2003,6 +2032,65 @@ const createTryBuyReturn = async (order, rejectedItems, riderId) => {
     });
 
     return returnReq;
+};
+
+/**
+ * Close a Try & Buy order once its auto-return (the rejected items) has reached the vendor(s)
+ * through the return-task screens. Mirrors what markTryBuyVendorReturned does when the rider
+ * finishes from the order screen instead. The return-task path used to treat the trip like a
+ * customer return: the order was always set to 'returned' (even when the customer kept and paid
+ * for items), the wallet was never settled (no vendor earning for the kept items, no rider
+ * delivery fee, no COD cash-in-hand) and the customer was asked for a UPI ID for a ₹0 refund.
+ * Stock for the rejected items is restored by the caller, not here.
+ */
+const finalizeTryBuyOrderAfterAutoReturn = async (orderId, riderId) => {
+    const order = await Order.findById(orderId);
+    if (!order) return null;
+    // Already settled (e.g. the rider finished from the order screen first).
+    if (!['returning_unselected_items', 'returning_unselected'].includes(order.status)) return order;
+
+    const flow = order.deliveryFlow || {};
+    const keptProductIds = new Set(
+        (flow.tryAndBuyItems || [])
+            .filter(i => i.decision === 'accepted')
+            .map(i => String(i.productId))
+    );
+    (order.vendorItems || []).forEach(group => {
+        const keptSomething = (group.items || []).some(item => keptProductIds.has(String(item.productId)));
+        group.status = keptSomething ? 'delivered' : 'returned';
+        if (keptSomething) group.deliveredAt = group.deliveredAt || new Date();
+        else group.returnedAt = group.returnedAt || new Date();
+    });
+    // The order-screen flow tracks its own stops; close them so it can't be re-run.
+    (order.vendorReturnStops || []).forEach(stop => {
+        if (stop.status !== 'returned') {
+            stop.status = 'returned';
+            stop.returnedAt = new Date();
+        }
+    });
+    if (order.vendorReturnStops?.length) order.markModified('vendorReturnStops');
+
+    const isFullyRejected = (flow.rejectedItems?.length || 0) === (order.items?.length || 0) && order.items?.length > 0;
+    const newStatus = isFullyRejected ? 'returned' : 'try_buy_completed';
+    order.status = newStatus;
+    if (order.deliveryFlow) order.deliveryFlow.phase = newStatus;
+    await order.save();
+
+    await WalletService.processOrderCompletionSafe(order);
+
+    const updatedRider = await DeliveryBoy.findById(riderId).select('availableBalance totalEarnings totalDeliveries').lean();
+    emitEvent(`delivery_${riderId}`, 'earnings_updated', {
+        availableBalance: updatedRider?.availableBalance,
+        totalEarnings: updatedRider?.totalEarnings,
+        totalDeliveries: updatedRider?.totalDeliveries,
+    });
+    await OrderNotificationService.notifyOrderUpdate(order._id, newStatus, {
+        excludeRecipientId: riderId,
+        title: `Order #${order.orderId} Completed`,
+        message: `Order ${order.orderId} return flow is complete.`
+    }).catch((err) => console.error('[TryBuyReturn] Completion notification failed:', err.message));
+
+    return order;
 };
 
 // PATCH /api/delivery/orders/:id/complete
@@ -2457,6 +2545,7 @@ export const markTryBuyVendorReturned = asyncHandler(async (req, res) => {
     }
 
     await order.save();
+    await cacheInvalidate(`dash:${req.user.id}`, `profile:${req.user.id}`);
     res.status(200).json(new ApiResponse(200, order, `Returned unselected items to vendor ${vendorId}`));
 });
 
@@ -2703,8 +2792,11 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
         if (deliveryPhoto) {
             returnReq.deliveryPhoto = deliveryPhoto;
         }
+        // A Try & Buy auto-return carries items the customer never paid for: no refund, no UPI.
+        const autoReturn = isTryBuyAutoReturn(returnReq);
         returnReq.status = 'completed';
-        returnReq.isUpiRequested = true;
+        returnReq.isUpiRequested = !autoReturn;
+        if (autoReturn) returnReq.trySessionActive = false;
 
         try {
             const rider = await DeliveryBoy.findById(deliveryBoyId);
@@ -2742,10 +2834,15 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
 
         await WalletService.processOrderReturn(returnReq);
 
-        const order = await Order.findById(returnReq.orderId);
-        if (order) {
-            order.status = 'returned';
-            await order.save();
+        let order;
+        if (autoReturn) {
+            order = await finalizeTryBuyOrderAfterAutoReturn(returnReq.orderId?._id || returnReq.orderId, deliveryBoyId);
+        } else {
+            order = await Order.findById(returnReq.orderId);
+            if (order) {
+                order.status = 'returned';
+                await order.save();
+            }
         }
 
         // Restore stock for returned items. Atomic claim so a repeat call
@@ -2760,14 +2857,16 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
         }
 
         // Notify user to submit UPI ID
-        await createNotification({
-            recipientId: returnReq.userId?._id,
-            recipientType: 'user',
-            title: 'Submit UPI ID for Refund',
-            message: `Your return for order #${order?.orderId || returnReq.returnId} has reached the vendor. Please submit your UPI ID for the refund.`,
-            type: 'return',
-            data: { returnId: String(returnReq._id) }
-        });
+        if (!autoReturn) {
+            await createNotification({
+                recipientId: returnReq.userId?._id,
+                recipientType: 'user',
+                title: 'Submit UPI ID for Refund',
+                message: `Your return for order #${order?.orderId || returnReq.returnId} has reached the vendor. Please submit your UPI ID for the refund.`,
+                type: 'return',
+                data: { returnId: String(returnReq._id) }
+            });
+        }
 
         // Notify user and vendor
         emitEvent(`user_${returnReq.userId?._id}`, 'return_completed', { returnId: returnReq._id });
@@ -2783,6 +2882,10 @@ export const updateReturnStatus = asyncHandler(async (req, res) => {
     }
 
     await returnReq.save();
+
+    // The rider's dashboard summary (active returns) is cached; a finished return stayed on
+    // the Active Duty list for up to the cache TTL.
+    await cacheInvalidate(`dash:${deliveryBoyId}`, `profile:${deliveryBoyId}`);
 
     emitEvent(`return_${returnReq._id}`, 'return_status_updated', returnReq);
 
@@ -2875,6 +2978,9 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         throw new ApiError(400, `Cannot drop off in status: ${returnReq.status}`);
     }
 
+    // A Try & Buy auto-return carries items the customer never paid for: no refund, no UPI.
+    const autoReturn = isTryBuyAutoReturn(returnReq);
+
     const normalizedOtp = String(otp || '').trim();
     const otpHash = DeliveryOtpService.hashOtp(normalizedOtp);
 
@@ -2903,7 +3009,8 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         const allDropped = returnReq.vendorDropoffs.every(d => d.status === 'dropped_off');
         if (allDropped) {
             returnReq.status = 'completed';
-            returnReq.isUpiRequested = true;
+            returnReq.isUpiRequested = !autoReturn;
+            if (autoReturn) returnReq.trySessionActive = false;
         }
     } else {
         const isValidOtp = otpHash === returnReq.deliveryOtpHash || (!IS_PRODUCTION && normalizedOtp === returnReq.deliveryOtpDebug);
@@ -2911,7 +3018,8 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
 
         returnReq.deliveryPhoto = deliveryPhoto;
         returnReq.status = 'completed';
-        returnReq.isUpiRequested = true;
+        returnReq.isUpiRequested = !autoReturn;
+        if (autoReturn) returnReq.trySessionActive = false;
         returnReq.restockedAt = new Date();
         itemsToRestock = returnReq.items || [];
     }
@@ -2938,8 +3046,17 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         );
     }
 
-    const order = await Order.findById(returnReq.orderId);
-    if (order) {
+    let order;
+    if (autoReturn) {
+        if (returnReq.status === 'completed') {
+            order = await finalizeTryBuyOrderAfterAutoReturn(returnReq.orderId, deliveryBoyId);
+        } else {
+            order = await Order.findById(returnReq.orderId).select('orderId').lean();
+        }
+    } else {
+        order = await Order.findById(returnReq.orderId);
+    }
+    if (order && !autoReturn) {
         // Update the specific vendor's status to 'returned'
         if (order.vendorItems && order.vendorItems.length > 0) {
             const currentVendorId = String(vendorId || returnReq.vendorId);
@@ -2962,7 +3079,7 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         await order.save();
     }
 
-    if (returnReq.status === 'completed') {
+    if (returnReq.status === 'completed' && !autoReturn) {
         await createNotification({
             recipientId: returnReq.userId,
             recipientType: 'user',
@@ -2973,6 +3090,8 @@ export const dropoffReturnAtVendor = asyncHandler(async (req, res) => {
         });
         emitEvent(`user_${returnReq.userId}`, 'return_completed', { returnId: returnReq._id });
     }
+
+    await cacheInvalidate(`dash:${deliveryBoyId}`, `profile:${deliveryBoyId}`);
 
     res.status(200).json(new ApiResponse(200, returnReq, 'Return dropped off successfully.'));
 });
