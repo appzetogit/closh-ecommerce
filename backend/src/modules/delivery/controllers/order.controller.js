@@ -28,6 +28,7 @@ import Enquiry from '../../../models/Enquiry.model.js';
 import CancellationReason from '../../../models/CancellationReason.model.js';
 import { releaseRiderIfIdle } from '../../../services/deliveryAvailability.service.js';
 import { isTryBuyAutoReturn } from '../../../utils/tryBuyReturn.js';
+import Coupon from '../../../models/Coupon.model.js';
 
 const DELIVERY_OTP_TTL_MS = 10 * 60 * 1000;
 const DELIVERY_OTP_MAX_ATTEMPTS = 5;
@@ -1571,6 +1572,43 @@ export const handleArrivedAtCustomer = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, order, 'Rider arrived. OTP sent to customer.'));
 });
 
+/**
+ * Coupon discount on what the customer actually keeps at the door.
+ *
+ * The coupon was checked against the full cart at checkout. When items are rejected, the
+ * kept items must qualify on their own: below the coupon's minimum order value the coupon
+ * no longer applies at all, otherwise it is recalculated on the kept subtotal (percentage
+ * with its cap, fixed as is). It used to be scaled by the kept share instead, so a ₹1000
+ * order with ₹170 off, keeping one ₹500 item, still got ₹85 off although ₹500 never met
+ * the coupon's ₹1000 minimum.
+ *
+ * Only the minimum-value rule and the discount formula are re-applied: expiry, usage limit
+ * and first-order checks were satisfied when the order was placed. Never more than the
+ * discount given at checkout. If the coupon record is gone, falls back to the old
+ * proportional scaling.
+ */
+const recomputeTryBuyCouponDiscount = async (order, acceptedSubtotal, subtotalRatio) => {
+    const originalDiscount = Number(order.originalPricing?.discount ?? order.discount) || 0;
+    if (originalDiscount <= 0 || acceptedSubtotal <= 0) return 0;
+
+    const coupon = order.couponCode
+        ? await Coupon.findOne({ code: String(order.couponCode).toUpperCase() }).lean()
+        : null;
+    if (!coupon) return Math.round(originalDiscount * subtotalRatio);
+
+    if (acceptedSubtotal < (Number(coupon.minOrderValue) || 0)) return 0;
+
+    let discount = 0;
+    if (coupon.type === 'percentage') {
+        discount = (acceptedSubtotal * Number(coupon.value || 0)) / 100;
+        if (coupon.maxDiscount) discount = Math.min(discount, Number(coupon.maxDiscount));
+    } else if (coupon.type === 'fixed') {
+        discount = Number(coupon.value || 0);
+    }
+    discount = Math.min(discount, acceptedSubtotal, originalDiscount);
+    return Math.max(0, parseFloat(discount.toFixed(2)));
+};
+
 // PATCH /api/delivery/orders/:id/try-buy
 export const handleTryAndBuy = asyncHandler(async (req, res) => {
     const { items } = req.body; // [{ productId, decision: 'accepted'|'rejected' }]
@@ -1620,11 +1658,11 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     const originalSubtotal = order.subtotal || acceptedSubtotal;
     const subtotalRatio = originalSubtotal > 0 ? (acceptedSubtotal / originalSubtotal) : 1;
 
-    // Fixed fees are preserved; tax and discount are scaled by the acceptance ratio
+    // Fixed fees are preserved; tax is scaled by the acceptance ratio
     const shipping = order.shipping || 0;
     const platformFee = order.platformFee || 0;
     const adjustedTax = Math.round((order.tax || 0) * subtotalRatio);
-    const adjustedDiscount = Math.round((order.discount || 0) * subtotalRatio);
+    const adjustedDiscount = await recomputeTryBuyCouponDiscount(order, acceptedSubtotal, subtotalRatio);
 
     // Frontend might have added COD fee or other hidden fees into original order.total
     // Expected original total (without hidden fees)
@@ -1657,6 +1695,7 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     order.subtotal = acceptedSubtotal;
     order.tax = adjustedTax;
     order.discount = adjustedDiscount;
+    if (order.couponCode) order.couponDiscount = adjustedDiscount;
 
     // Re-derive every vendor group's totals from the items the customer KEPT.
     // vendorItems are per-vendor GROUPS (the lines live in group.items), so the previous
@@ -1707,8 +1746,11 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
 
     await order.save();
 
-    // Nothing was kept, so the coupon was never really used: give the use back.
-    if (acceptedItems.length === 0) await releaseCouponForOrder(order._id);
+    // Nothing was kept, or what was kept no longer qualifies for the coupon: the coupon gave
+    // the customer nothing, so give the use back.
+    if (acceptedItems.length === 0 || (order.couponCode && adjustedDiscount === 0)) {
+        await releaseCouponForOrder(order._id);
+    }
 
     // Note: Stock is NO LONGER restored here. It will be restored only after
     // the delivery partner successfully returns the items to the respective vendors.
