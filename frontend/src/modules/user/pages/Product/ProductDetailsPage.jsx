@@ -35,6 +35,7 @@ import ProductReviews from '../../components/Product/ProductReviews';
 import ProductCard from '../../components/ProductCard/ProductCard';
 import ImageZoomViewer from '../../components/Product/ImageZoomViewer';
 import api from '../../../../shared/utils/api';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const ProductDetailsPage = () => {
     const { id } = useParams();
@@ -419,7 +420,7 @@ const ProductDetailsPage = () => {
                                 {productImages.map((img, idx) => (
                                     <div key={idx} className="w-full h-full shrink-0 snap-center relative">
                                         <img
-                                            src={img}
+                                            src={getOptimizedImageUrl(img, 600)} decoding="async"
                                             alt={`${product.name} - ${idx}`}
                                             className="w-full h-full object-contain mix-blend-multiply transition-transform duration-700 group-hover:scale-105 pointer-events-none"
                                         />
@@ -476,7 +477,7 @@ const ProductDetailsPage = () => {
                                         onClick={() => handleThumbnailClick(idx)}
                                         className={`snap-center w-16 md:w-24 aspect-[3/4] rounded-xl md:rounded-2xl overflow-hidden cursor-pointer transition-all border-2 shrink-0 bg-white ${activeImg === idx ? 'border-black shadow-lg scale-105' : 'border-transparent opacity-60 hover:opacity-100'}`}
                                     >
-                                        <img src={img} alt="" className="w-full h-full object-contain mix-blend-multiply p-1" />
+                                        <img src={getOptimizedImageUrl(img, 96)} loading="lazy" decoding="async" alt="" className="w-full h-full object-contain mix-blend-multiply p-1" />
                                     </div>
                                 ))}
                             </div>

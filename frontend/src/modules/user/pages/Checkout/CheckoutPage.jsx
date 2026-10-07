@@ -28,6 +28,7 @@ import LocationModal from '../../components/Header/LocationModal';
 import CouponsModal from '../../components/Checkout/CouponsModal';
 import { normalizeProduct } from '../../../../shared/store/productStore';
 import { useSettingsStore } from '../../../../shared/store/settingsStore';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 
 const CheckoutPage = () => {
@@ -349,7 +350,7 @@ const CheckoutPage = () => {
                                     className="relative w-[110px] h-[140px] shrink-0 rounded-2xl overflow-hidden bg-gray-100 cursor-pointer"
                                     onClick={() => setZoomedImage(item.image)}
                                 >
-                                    <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                    <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                     {item.tryAndBuy && (
                                         <div className="absolute left-0 top-0 bottom-0 w-8 bg-black/90 flex items-center justify-center">
                                             <span className="text-white text-[9px] font-bold uppercase [writing-mode:vertical-lr] rotate-180">
@@ -550,7 +551,7 @@ const CheckoutPage = () => {
                                             className="min-w-[170px] bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col group hover:shadow-md transition-shadow cursor-pointer"
                                         >
                                             <div className="aspect-[4/5] bg-gray-100 relative overflow-hidden">
-                                                <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                                <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                                             </div>
                                             <div className="p-3">
                                                 <p className="text-[9px] font-bold uppercase text-gray-400 mb-0.5 truncate">{item.brand}</p>

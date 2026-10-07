@@ -4,7 +4,7 @@ import AccountLayout from '../../components/Profile/AccountLayout';
 import { Tag, ChevronDown, ChevronUp, Percent, ArrowLeft, Calendar, ChevronRight, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../../shared/utils/api';
-import { formatPrice } from '../../../../shared/utils/helpers';
+import { formatPrice, getOptimizedImageUrl } from '../../../../shared/utils/helpers';
 
 const OffersPage = () => {
     const navigate = useNavigate();
@@ -197,7 +197,7 @@ const OffersPage = () => {
                                                             <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-2">
                                                                 {image ? (
                                                                     <img 
-                                                                        src={image} 
+                                                                        src={getOptimizedImageUrl(image, 300)} loading="lazy" decoding="async" 
                                                                         alt={product.name}
                                                                         className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-500"
                                                                     />

@@ -25,7 +25,11 @@ const LazyImage = ({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setImageSrc(getOptimizedImageUrl(src, width));
+            // Without an explicit width, ask for the size the image is actually laid out
+            // at. Callers that passed no width used to download the full-size original
+            // (often 1000-1600px) for a 50-300px slot.
+            const measured = Math.round(entry.boundingClientRect?.width || imgRef.current?.clientWidth || 0);
+            setImageSrc(getOptimizedImageUrl(src, width || measured || undefined));
             observer.disconnect();
           }
         });
@@ -94,6 +98,7 @@ const LazyImage = ({
           onLoad={handleLoad}
           onError={handleError}
           loading="lazy"
+          decoding="async"
           {...props}
         />
       )}

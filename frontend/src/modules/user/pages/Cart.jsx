@@ -4,6 +4,7 @@ import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Heart, ShieldCheck, Chevro
 import { useCartStore } from '../../../shared/store/useStore';
 import { useWishlistStore } from '../../../shared/store/wishlistStore';
 import { useAuthStore } from '../../../shared/store/authStore';
+import { getOptimizedImageUrl } from "../../../shared/utils/helpers";
 
 const CartPage = () => {
     const { items: cart, removeItem, updateQuantity, getTotal } = useCartStore();
@@ -84,7 +85,7 @@ const CartPage = () => {
                             return (
                                 <div key={item.cartLineKey || item.id} className="bg-white rounded-[24px] overflow-hidden border border-gray-100 shadow-sm flex flex-row p-3 sm:p-5 relative group">
                                     <Link to={`/product/${item.id}`} className="w-20 sm:w-28 aspect-square rounded-2xl overflow-hidden shrink-0 bg-white border border-gray-100">
-                                        <img src={imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                        <img src={getOptimizedImageUrl(imageUrl, 120)} loading="lazy" decoding="async" alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                                     </Link>
 
                                     <div className="flex-1 flex flex-col pl-4 sm:pl-6">

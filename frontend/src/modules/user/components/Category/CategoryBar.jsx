@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCategoryStore } from '../../../../shared/store/categoryStore';
 import { useCategory } from '../../context/CategoryContext';
 import allImage from '../../../../assets/animations/lottie/image.png';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const CategoryBar = () => {
     const { categories, initialize } = useCategoryStore();
@@ -86,7 +87,7 @@ const CategoryBar = () => {
                                 <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full p-[2px] transition-transform duration-300 group-hover:scale-105">
                                     <div className="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
                                         <img
-                                            src={cat.image || "https://via.placeholder.com/150"}
+                                            src={getOptimizedImageUrl(cat.image || "https://via.placeholder.com/150", 64)} loading="lazy" decoding="async"
                                             alt={cat.name}
                                             className={`w-full h-full object-cover rounded-full transition-transform duration-300 ${isSelected ? 'scale-105' : ''}`}
                                             onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=' + encodeURIComponent(cat.name) }}

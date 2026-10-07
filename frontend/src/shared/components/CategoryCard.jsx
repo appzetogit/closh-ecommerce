@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { getOptimizedImageUrl } from "../utils/helpers";
 
 const CategoryCard = ({ category }) => {
   const categoryLink = `/category/${category.id}`;
@@ -11,7 +12,7 @@ const CategoryCard = ({ category }) => {
         className="glass-card rounded-2xl overflow-hidden cursor-pointer hover-lift group h-full flex flex-col">
         <div className="w-full h-24 md:h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden relative">
           <img
-            src={category.image}
+            src={getOptimizedImageUrl(category.image, 150)} loading="lazy" decoding="async"
             alt={category.name}
             className="w-full h-full object-contain scale-50 group-hover:scale-65 transition-transform duration-500"
             onError={(e) => {

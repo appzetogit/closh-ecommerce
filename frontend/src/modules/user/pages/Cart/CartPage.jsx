@@ -6,6 +6,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import LocationModal from '../../components/Header/LocationModal';
 import { useUserLocation } from '../../context/LocationContext';
 import toast from 'react-hot-toast';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const CartPage = () => {
     const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
@@ -144,7 +145,7 @@ const CartPage = () => {
                                 )}
                                 {/* Compact Image Section */}
                                 <Link to={`/product/${item.id}`} className={`w-24 sm:w-28 aspect-square rounded-2xl overflow-hidden shrink-0 bg-[#F8F8F8] border border-gray-50 ${isItemOutOfStock ? 'opacity-50' : ''}`}>
-                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                    <img src={getOptimizedImageUrl(item.image, 120)} loading="lazy" decoding="async" alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                                 </Link>
 
                                 {/* Organized Content Section */}

@@ -24,7 +24,7 @@ const PromoBanners = () => {
             title: 'NEW Drop',
             subtitle: 'Power Your Performance',
             badge: 'STARTS ₹399',
-            image: 'https://images.unsplash.com/photo-1518310352947-a230552b0b8c?auto=format&fit=crop&q=80&w=2070',
+            image: 'https://images.unsplash.com/photo-1518310352947-a230552b0b8c?auto=format&fit=crop&q=70&w=1280',
             bg: 'bg-[#E0DAF5]'
         },
         {
@@ -33,7 +33,7 @@ const PromoBanners = () => {
             title: 'NEW Drop',
             subtitle: 'Style That Speaks You',
             badge: 'BEST SELLER',
-            image: 'https://images.unsplash.com/photo-1539109132314-347596adf3f3?auto=format&fit=crop&q=80&w=2070',
+            image: 'https://images.unsplash.com/photo-1539109132314-347596adf3f3?auto=format&fit=crop&q=70&w=1280',
             bg: 'bg-[#524432]'
         },
         {
@@ -42,7 +42,7 @@ const PromoBanners = () => {
             title: 'NEW Drop',
             subtitle: 'Grace in Its Purest Form',
             badge: 'NEW SEASON',
-            image: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&q=80&w=2070',
+            image: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&q=70&w=1280',
             bg: 'bg-[#D18697]'
         }
     ];

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useCategoryStore } from '../../../../shared/store/categoryStore';
 import { useCategory as useUiCategory } from '../../context/CategoryContext';
 import { useNavigate } from 'react-router-dom';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const CategoryContent = () => {
     const { activeCategory } = useUiCategory();
@@ -70,7 +71,7 @@ const CategoryContent = () => {
                                     <div className="absolute inset-0 p-1.5 md:p-2">
                                         <div className="w-full h-full rounded-[18px] overflow-hidden relative group-hover:rounded-[14px] transition-all duration-500">
                                             <img
-                                                src={item.image || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop'}
+                                                src={getOptimizedImageUrl(item.image || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop', 200)} loading="lazy" decoding="async"
                                                 alt={item.name}
                                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] filter contrast-[0.95]"
                                             />

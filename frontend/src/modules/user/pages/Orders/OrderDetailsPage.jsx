@@ -10,6 +10,7 @@ import { useReviewsStore } from '../../../../shared/store/reviewsStore';
 import socketService from '../../../../shared/utils/socket';
 import DeliveryRatingCard from '../../components/Profile/DeliveryRatingCard';
 import ReviewForm from '../../../../shared/components/Product/ReviewForm';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 
 const OrderDetailsPage = () => {
@@ -868,7 +869,7 @@ const OrderDetailsPage = () => {
                                         className="flex gap-3 border-b border-gray-50 last:border-0 pb-3 last:pb-0 rounded-xl transition-all"
                                     >
                                         <div className="w-14 h-18 md:w-20 md:h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-100">
-                                            <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                            <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                         </div>
                                         <div className="flex-1 min-w-0 py-0">
                                             <h4 className="text-[12px] md:text-sm font-bold text-gray-900 line-clamp-1">{item.name}</h4>
@@ -1970,7 +1971,7 @@ const OrderDetailsPage = () => {
                                                         className="w-4 h-4 accent-black rounded shrink-0"
                                                     />
                                                     <div className="w-10 h-12 bg-gray-50 rounded-lg overflow-hidden shrink-0 border border-gray-100">
-                                                        <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                                        <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-[11px] font-bold text-gray-900 line-clamp-1">{item.name}</p>
@@ -2216,7 +2217,7 @@ const OrderDetailsPage = () => {
                         <div className="p-5 overflow-y-auto flex-1">
                             <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
                                 <div className="w-14 h-18 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-100">
-                                    <img src={reviewItem.image} alt="" className="w-full h-full object-cover" />
+                                    <img src={getOptimizedImageUrl(reviewItem.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h4 className="text-[12px] font-bold text-gray-900 line-clamp-1">{reviewItem.name}</h4>

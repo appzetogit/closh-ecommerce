@@ -4,7 +4,7 @@ import { FiTrash2, FiMinus, FiPlus, FiHeart, FiAlertCircle } from "react-icons/f
 import { toast } from "react-hot-toast";
 import { useCartStore } from "../../store/useStore";
 import { useWishlistStore } from "../../store/wishlistStore";
-import { formatPrice } from "../../utils/helpers";
+import { formatPrice, getOptimizedImageUrl } from "../../utils/helpers";
 import { formatVariantLabel } from "../../utils/variant";
 import useSwipeGesture from "../../../modules/user/hooks/useSwipeGesture";
 
@@ -122,7 +122,7 @@ const SwipeableCartItem = ({ item, index }) => {
                 {/* Product Image */}
                 <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200 relative z-10">
                     <img
-                        src={item.image}
+                        src={getOptimizedImageUrl(item.image, 120)} loading="lazy" decoding="async"
                         alt={item.name}
                         className="w-full h-full object-cover"
                     />

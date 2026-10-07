@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { getOptimizedImageUrl } from "../utils/helpers";
 
 const BrandCard = ({ brand }) => {
   return (
@@ -8,7 +9,7 @@ const BrandCard = ({ brand }) => {
     >
       <div className="w-full h-20 flex items-center justify-center mb-2">
         <img
-          src={brand.logo}
+          src={getOptimizedImageUrl(brand.logo, 150)} loading="lazy" decoding="async"
           alt={brand.name}
           className="max-w-full max-h-full object-contain scale-60 group-hover:scale-75 transition-transform duration-300 filter group-hover:brightness-110"
           onError={(e) => {

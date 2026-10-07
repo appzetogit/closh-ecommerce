@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronDown, Compass, Loader2, ArrowLeft, Filter, Search, 
 import ProductCard from '../../components/ProductCard/ProductCard';
 import ProductSkeleton from '../../components/ProductCard/ProductSkeleton';
 import { categories as localCategories } from '../../data/index';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const ShopPage = () => {
     const navigate = useNavigate();
@@ -304,7 +305,7 @@ const ShopPage = () => {
                                                     {/* Mobile Vertical Fallback */}
                                                     <div className={`md:hidden w-[50px] h-[50px] rounded-[16px] overflow-hidden bg-gray-50 flex-shrink-0 group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all p-0.5 border ${isSelected ? 'border-gray-1000' : 'border-transparent'}`}>
                                                         <img
-                                                            src={item.image || categoryImages[activeCategory]}
+                                                            src={getOptimizedImageUrl(item.image || categoryImages[activeCategory], 200)} loading="lazy" decoding="async"
                                                             alt={item.name || item}
                                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 rounded-[14px]"
                                                         />

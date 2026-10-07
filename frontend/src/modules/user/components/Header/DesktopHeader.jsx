@@ -12,6 +12,7 @@ import { useUserNotificationStore } from "../../store/userNotificationStore";
 import { categories } from "../../../../data/categories";
 import { useUserLocation } from "../../context/LocationContext";
 import LocationModal from "./LocationModal";
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const DesktopHeader = () => {
     const navigate = useNavigate();
@@ -212,7 +213,7 @@ const DesktopHeader = () => {
                             >
                                 <div className="w-10 h-10 rounded-full overflow-hidden bg-white border border-gray-100 group-hover:border-primary-500 transition-colors">
                                     <img
-                                        src={category.image}
+                                        src={getOptimizedImageUrl(category.image, 80)} loading="lazy" decoding="async"
                                         alt={category.name}
                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                     />

@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { useCategoryStore } from "../../../shared/store/categoryStore";
 import PageTransition from "../../../shared/components/PageTransition";
 import { useCategory } from "../../user/context/CategoryContext";
+import { getOptimizedImageUrl } from "../../../shared/utils/helpers";
 
 // Robust ID normalization
 const normalizeId = (value) => {
@@ -180,7 +181,7 @@ const MobileCategories = () => {
                   )}
                   <div className={`w-12 h-12 rounded-2xl overflow-hidden transition-all duration-300 ${isActive ? 'scale-105' : 'opacity-80'}`}>
                     <img
-                      src={sub.image || "https://via.placeholder.com/150"}
+                      src={getOptimizedImageUrl(sub.image || "https://via.placeholder.com/150", 120)} loading="lazy" decoding="async"
                       alt={sub.name}
                       className="w-full h-full object-cover rounded-2xl"
                     />
@@ -242,7 +243,7 @@ const MobileCategories = () => {
                       >
                         <div className="w-28 h-28 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-[#F8F9FA] rounded-[24px] overflow-hidden p-0 flex items-center justify-center border border-transparent transition-all group-hover:border-[#FF5722] shadow-sm">
                           <img
-                            src={grand.image || "https://via.placeholder.com/150"}
+                            src={getOptimizedImageUrl(grand.image || "https://via.placeholder.com/150", 120)} loading="lazy" decoding="async"
                             alt={grand.name}
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                           />

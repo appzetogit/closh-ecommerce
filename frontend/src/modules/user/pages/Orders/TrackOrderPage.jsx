@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle, Package, Truck, MapPin, Clock, Shield, Phone, C
 import { useOrderStore } from '../../../../shared/store/orderStore';
 import socketService from '../../../../shared/utils/socket';
 import TrackingMap from '../../../../shared/components/TrackingMap';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 // Statuses that mean a rider has been assigned (show live tracking map)
 const ASSIGNED_STATUSES = ['assigned', 'picked_up', 'shipped', 'out_for_delivery', 'delivered', 'try_active', 'returning_unselected_items', 'returned_to_vendor', 'try_buy_completed'];
@@ -678,7 +679,7 @@ const TrackOrderPage = () => {
                             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                                 {order.items.slice(0, 4).map((item, idx) => (
                                     <div key={idx} className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden shrink-0">
-                                        <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                        <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                     </div>
                                 ))}
                                 {order.items.length > 4 && (

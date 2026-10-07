@@ -3,7 +3,7 @@ import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCategory } from '../../context/CategoryContext';
-import { getPlaceholderImage } from '../../../../shared/utils/helpers';
+import { getPlaceholderImage, getOptimizedImageUrl } from '../../../../shared/utils/helpers';
 
 const ProductCard = ({ product }) => {
     const { toggleWishlist, isInWishlist } = useWishlist();
@@ -20,7 +20,7 @@ const ProductCard = ({ product }) => {
                     {/* Image Container - Compact ratio */}
                     <div className="relative w-full aspect-[3/4] overflow-hidden rounded-lg bg-[#F5F5F5] group-hover:rounded-xl transition-all duration-500">
                         <img
-                            src={product.image}
+                            src={getOptimizedImageUrl(product.image, 300)} loading="lazy" decoding="async"
                             alt={product.name}
                             className={`absolute inset-0 w-full h-full object-contain transition-transform duration-700 ease-out group-hover:scale-110 ${product.stock === 'out_of_stock' ? 'grayscale opacity-70' : ''}`}
                             onError={(e) => { e.target.onerror = null; e.target.src = getPlaceholderImage(400, 533, 'Image unavailable'); }}

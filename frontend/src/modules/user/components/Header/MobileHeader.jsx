@@ -14,6 +14,7 @@ import { categories as fallbackCategories } from "../../../../data/categories";
 import { useUserLocation } from "../../context/LocationContext";
 import { useCategoryStore } from "../../../../shared/store/categoryStore";
 import LocationModal from "./LocationModal";
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const MobileHeader = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -323,7 +324,7 @@ const MobileHeader = () => {
                     >
                         <div className={`w-12 h-12 rounded-full overflow-hidden border bg-white ${currentCategoryId === String(category.id) ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-100'}`}>
                             <img 
-                                src={category.image} 
+                                src={getOptimizedImageUrl(category.image, 80)} loading="lazy" decoding="async" 
                                 alt={category.name} 
                                 className="w-full h-full object-cover group-active:scale-95 transition-transform" 
                             />

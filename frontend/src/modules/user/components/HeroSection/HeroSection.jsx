@@ -28,7 +28,7 @@ const HeroSection = () => {
             id: 'fallback-1',
             title: "The SS24 Collection",
             subtitle: "Discover the new season's most coveted pieces, crafted with uncompromising attention to luxury and detail.",
-            image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=2070",
+            image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=70&w=1280",
             cta: "Shop Now",
             link: "/products"
         },
@@ -36,7 +36,7 @@ const HeroSection = () => {
             id: 'fallback-2',
             title: "Modern Minimalist",
             subtitle: "Elevate your daily rotation with pieces designed for versatility and timeless aesthetic.",
-            image: "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=2070",
+            image: "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=70&w=1280",
             cta: "Explore Now",
             link: "/products"
         }

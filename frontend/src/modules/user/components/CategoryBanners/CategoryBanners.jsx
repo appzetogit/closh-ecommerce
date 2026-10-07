@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { bannerCategories, secondaryBannerCategories } from '../../data';
 import { useCategoryStore } from '../../../../shared/store/categoryStore';
 import { useCategory } from '../../context/CategoryContext';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const CategoryBanners = () => {
     const { categories, initialize } = useCategoryStore();
@@ -40,7 +41,7 @@ const CategoryBanners = () => {
                             <div className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-full p-[2px] bg-white shadow-[0_6px_16px_rgba(0,0,0,0.12)] mb-2 md:mb-3">
                                 <div className="w-full h-full rounded-full overflow-hidden bg-gray-100">
                                     <img
-                                        src={category.image || 'https://placehold.co/150?text=' + category.name}
+                                        src={getOptimizedImageUrl(category.image || 'https://placehold.co/150?text=' + category.name, 150)} loading="lazy" decoding="async"
                                         alt={category.name}
                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                         onError={(e) => { e.target.src = 'https://placehold.co/150?text=' + category.name }}

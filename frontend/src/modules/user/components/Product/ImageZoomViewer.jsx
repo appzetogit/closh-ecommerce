@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, Component } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const MAX_SCALE = 4;
 const MIN_SCALE = 1;
@@ -236,7 +237,7 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
                 onDoubleClick={handleDoubleClick}
             >
                 <img
-                    src={images[safeIndex]}
+                    src={getOptimizedImageUrl(images[safeIndex], 1000)} decoding="async"
                     alt={`${productName} ${safeIndex + 1}`}
                     draggable={false}
                     className={`w-full h-full object-contain mix-blend-normal transition-transform duration-100 ${isDragging ? '' : 'ease-out'} ${transform.scale > 1.01 ? 'cursor-grab' : 'cursor-zoom-in'} ${isDragging ? 'cursor-grabbing' : ''}`}
@@ -283,7 +284,7 @@ const ImageZoomViewer = ({ images, startIndex = 0, onClose, productName = 'Produ
                             onClick={() => goTo(idx)}
                             className={`w-12 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-all ${idx === safeIndex ? 'border-white' : 'border-transparent opacity-50'}`}
                         >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
+                            <img src={getOptimizedImageUrl(img, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                         </button>
                     ))}
                 </div>

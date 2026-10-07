@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getCatalogBrands } from '../../data/catalogData';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const BrandLogosScroll = ({ brands = null }) => {
     const navigate = useNavigate();
@@ -29,7 +30,7 @@ const BrandLogosScroll = ({ brands = null }) => {
                                     onClick={() => navigate(`/brand/${brand.id}`)}
                                     className="bg-white rounded-lg p-2 shadow-sm transition-all duration-300 flex items-center justify-center w-16 h-16 group cursor-pointer border border-gray-100 mb-2 hover:shadow-md hover:border-gray-200">
                                     <img
-                                        src={brand.logo}
+                                        src={getOptimizedImageUrl(brand.logo, 120)} loading="lazy" decoding="async"
                                         alt={brand.name}
                                         className="w-full h-full object-contain"
                                         onError={(e) => {
@@ -85,7 +86,7 @@ const BrandLogosScroll = ({ brands = null }) => {
                                     onClick={() => navigate(`/brand/${brand.id}`)}
                                     className="bg-white rounded-lg sm:rounded-xl lg:rounded-lg p-1.5 sm:p-2 md:p-2 lg:p-1.5 xl:p-2 shadow-md transition-all duration-300 flex items-center justify-center w-full aspect-square group cursor-pointer border border-gray-100 mb-1.5 lg:mb-1 hover:shadow-lg">
                                     <img
-                                        src={brand.logo}
+                                        src={getOptimizedImageUrl(brand.logo, 120)} loading="lazy" decoding="async"
                                         alt={brand.name}
                                         className="w-[85%] h-[85%] lg:w-[80%] lg:h-[80%] object-contain"
                                         onError={(e) => {

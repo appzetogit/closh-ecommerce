@@ -1,5 +1,5 @@
 import { FiShoppingBag } from "react-icons/fi";
-import { formatPrice } from "../../../../shared/utils/helpers";
+import { formatPrice, getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 import { formatVariantLabel, getVariantSignature } from "../../../../shared/utils/variant";
 
 const OrderSummary = ({ itemsByVendor, total, discount, shipping, tax, platformFee = 20, finalTotal, distances }) => {
@@ -29,7 +29,7 @@ const OrderSummary = ({ itemsByVendor, total, discount, shipping, tax, platformF
                   key={`${item.id}-${itemIndex}-${getVariantSignature(item?.variant || {})}`}
                   className="flex items-center gap-2 text-xs"
                 >
-                  <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                  <img src={getOptimizedImageUrl(item.image, 48)} loading="lazy" decoding="async" alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800 truncate text-xs">{item.name}</p>
                     <p className="text-gray-600 text-xs">

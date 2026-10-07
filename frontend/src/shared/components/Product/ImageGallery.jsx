@@ -3,6 +3,7 @@ import { FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import LazyImage from "../LazyImage";
 import useSwipeGesture from "../../../modules/user/hooks/useSwipeGesture";
+import { getOptimizedImageUrl } from "../../utils/helpers";
 
 const ImageGallery = ({ images, productName = "Product", children }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -65,7 +66,7 @@ const ImageGallery = ({ images, productName = "Product", children }) => {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}>
             <img
-              src={imageArray[selectedIndex]}
+              src={getOptimizedImageUrl(imageArray[selectedIndex], 600)} decoding="async"
               alt={`${productName} - Image ${selectedIndex + 1}`}
               className="w-full h-full object-contain mix-blend-multiply"
               onError={(e) => {
@@ -148,7 +149,7 @@ const ImageGallery = ({ images, productName = "Product", children }) => {
               onClick={(e) => e.stopPropagation()}
               className="relative max-w-7xl max-h-[90vh] w-full">
               <img
-                src={imageArray[selectedIndex]}
+                src={getOptimizedImageUrl(imageArray[selectedIndex], 1000)} decoding="async"
                 alt={`${productName} - Full view`}
                 className="w-full h-full object-contain max-h-[90vh] rounded-lg"
                 onError={(e) => {

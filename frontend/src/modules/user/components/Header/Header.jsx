@@ -18,6 +18,7 @@ import LoginModal from '../Modals/LoginModal';
 import { categories as localCategories } from '../../data/index';
 import { useSettingsStore } from '../../../../shared/store/settingsStore';
 import logoFallback from '../../../../assets/animations/lottie/logo-removebg.png';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 // Utility for highlighting search query in suggestions
 const HighlightText = ({ text, query }) => {
@@ -505,7 +506,7 @@ const Header = ({ variant = 'default', showCategoryBar = true }) => {
                                                     className="px-5 py-3 hover:bg-gray-50 flex items-center gap-4 cursor-pointer transition-colors border-b border-gray-50 last:border-0 group/item"
                                                 >
                                                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-black/5 shadow-sm">
-                                                        <img src={item.image} alt={item.name || item.categoryName} className="w-full h-full object-cover transition-transform group-hover/item:scale-110" />
+                                                        <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt={item.name || item.categoryName} className="w-full h-full object-cover transition-transform group-hover/item:scale-110" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <h4 className="text-[13px] font-bold text-gray-900 truncate mb-0.5">
@@ -627,7 +628,7 @@ const Header = ({ variant = 'default', showCategoryBar = true }) => {
                                                     className="px-4 py-3 active:bg-gray-50 flex items-center gap-4 cursor-pointer transition-colors border-b border-gray-50 last:border-0 group/mobileItem"
                                                 >
                                                     <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-black/5">
-                                                        <img src={item.image} alt={item.name || item.categoryName} className="w-full h-full object-cover" />
+                                                        <img src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async" alt={item.name || item.categoryName} className="w-full h-full object-cover" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <h4 className="text-[13px] font-bold text-gray-900 truncate">
@@ -787,7 +788,7 @@ const Header = ({ variant = 'default', showCategoryBar = true }) => {
                                     }}
                                 >
                                     <div className="w-14 h-14 rounded-[20px] overflow-hidden bg-black flex-shrink-0 shadow-lg border border-gray-200 transition-transform active:scale-95 group-hover/cat:border-black/50">
-                                        <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/cat:scale-110" />
+                                        <img src={getOptimizedImageUrl(cat.image, 80)} loading="lazy" decoding="async" alt={cat.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/cat:scale-110" />
                                     </div>
                                     <div className="flex-1">
                                         <span className="font-bold text-gray-900 text-[16px]  block leading-none mb-1.5 group-hover/cat:text-black transition-colors">
@@ -845,7 +846,7 @@ const Header = ({ variant = 'default', showCategoryBar = true }) => {
                 <div className="fixed top-24 right-4 z-[5000] bg-white/90 backdrop-blur-2xl text-gray-900 pl-3 pr-6 py-3 rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.4)] animate-fadeInUp flex items-center gap-5 min-w-[320px] border border-gray-200 pointer-events-auto">
                     {/* Image Circle */}
                     <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 border-2 border-black shadow-[0_0_15px_rgba(212,175,55,0.3)]">
-                        <img src={lastAddedItem.image} alt="" className="w-full h-full object-cover" />
+                        <img src={getOptimizedImageUrl(lastAddedItem.image, 64)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 py-1">
                         <p className="text-[9px] font-bold uppercase  text-black mb-1 flex items-center gap-1.5">

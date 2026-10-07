@@ -10,6 +10,7 @@ import {
     Clock, Wallet, Percent, Landmark, ShieldCheck, Plus, MapPin, X, Check, 
     Package, Tag
 } from 'lucide-react';
+import { getOptimizedImageUrl } from "../../../shared/utils/helpers";
 
 const PaymentPage = () => {
     const navigate = useNavigate();
@@ -208,7 +209,7 @@ const PaymentPage = () => {
                                 const imageUrl = Array.isArray(item.images) ? item.images[0] : (item.image || '');
                                 return (
                                     <div key={item.cartLineKey || idx} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0">
-                                        <img src={imageUrl} alt={item.name} className="w-12 h-14 object-cover rounded-lg bg-gray-100" onError={(e) => { e.target.src = 'https://placehold.co/48x56/f3f4f6/9ca3af?text=IMG'; }} />
+                                        <img src={getOptimizedImageUrl(imageUrl, 48)} loading="lazy" decoding="async" alt={item.name} className="w-12 h-14 object-cover rounded-lg bg-gray-100" onError={(e) => { e.target.src = 'https://placehold.co/48x56/f3f4f6/9ca3af?text=IMG'; }} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-0.5">
                                                 <Package size={12} className="text-gray-400 flex-shrink-0" />

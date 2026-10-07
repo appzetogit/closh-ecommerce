@@ -7,6 +7,7 @@ import { FiArrowRight, FiZap, FiTag } from "react-icons/fi";
 import sneakersImg from "../../../../../data/products/sneakers.png";
 import watchImg from "../../../../../data/products/stylish watch.png";
 import sunglassImg from "../../../../../data/products/sunglass.png";
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const defaultBanners = [
   {
@@ -161,7 +162,7 @@ const AnimatedBanner = ({ banners = null }) => {
                     className="absolute right-[-10%] top-[-10%] w-[120%] h-[120%]"
                   >
                     <img
-                      src={banner.heroImage}
+                      src={getOptimizedImageUrl(banner.heroImage, 800)} decoding="async"
                       className="w-full h-full object-contain blur-2xl opacity-40 brightness-150"
                       alt=""
                     />

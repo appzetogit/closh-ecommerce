@@ -6,6 +6,7 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import LocationModal from '../../components/Header/LocationModal';
 import { useUserLocation } from '../../context/LocationContext';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const WishlistPage = () => {
     const { wishlistItems, toggleWishlist } = useWishlist();
@@ -62,7 +63,7 @@ const WishlistPage = () => {
                             <div key={product.id} className="group flex flex-col">
                                 <div className="relative aspect-[3/4.2] rounded-2xl md:rounded-[24px] overflow-hidden mb-2 md:mb-4 bg-white border border-gray-100/50 shadow-sm group-hover:shadow-md transition-all">
                                     <img
-                                        src={product.image}
+                                        src={getOptimizedImageUrl(product.image, 200)} loading="lazy" decoding="async"
                                         alt={product.name}
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                                         onClick={() => navigate(`/product/${product.id}`)}

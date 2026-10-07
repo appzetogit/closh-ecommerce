@@ -4,6 +4,7 @@ import { ShoppingBag, Package, Clock, ChevronRight, RefreshCw, X } from 'lucide-
 import { useNavigate } from 'react-router-dom';
 import { useOrderStore } from '../../../../shared/store/orderStore';
 import toast from 'react-hot-toast';
+import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
 
 const OrdersPage = () => {
     const navigate = useNavigate();
@@ -115,7 +116,7 @@ const OrdersPage = () => {
                                         <div key={idx} className="flex gap-4">
                                             <div className="w-16 h-20 bg-gray-50 rounded-xl overflow-hidden shrink-0 border border-gray-100">
                                                 <img
-                                                    src={item.image}
+                                                    src={getOptimizedImageUrl(item.image, 80)} loading="lazy" decoding="async"
                                                     alt=""
                                                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                                                     onError={(e) => e.target.src = 'https://placehold.co/400x600?text=Premium+Piece'}

@@ -9,6 +9,7 @@ import {
     Filter, X, ChevronDown, Star, Search, ArrowLeft, Heart, ShoppingCart, Check, SlidersHorizontal, ChevronRight
 } from 'lucide-react';
 import { useMemo } from 'react';
+import { getOptimizedImageUrl } from "../../../shared/utils/helpers";
 
 const ProductsPage = () => {
     const { addItem: addToCart } = useCartStore();
@@ -350,7 +351,7 @@ const ProductsPage = () => {
                                             >
                                                 <div className="relative aspect-[3/4] rounded-2xl overflow-hidden mb-3 bg-white border border-gray-100 group-hover:shadow-lg transition-all duration-300">
                                                     <img
-                                                        src={imageUrl}
+                                                        src={getOptimizedImageUrl(imageUrl, 300)} loading="lazy" decoding="async"
                                                         alt={product.name}
                                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                                         onError={(e) => { e.target.src = 'https://placehold.co/300x400/f3f4f6/9ca3af?text=No+Image'; }}
@@ -570,7 +571,7 @@ const ProductsPage = () => {
                                     className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all border ${selectedCategory === (cat.id || cat._id) ? 'bg-black text-white border-black shadow-lg scale-[1.02]' : 'bg-white text-gray-600 border-gray-100'}`}
                                 >
                                     <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100">
-                                        <img src={cat.image} alt="" className="w-full h-full object-cover" />
+                                        <img src={getOptimizedImageUrl(cat.image, 80)} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover" />
                                     </div>
                                     <span className="text-[12px] uppercase">{cat.name}</span>
                                 </button>

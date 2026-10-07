@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getCatalogProducts } from '../../modules/user/data/catalogData';
 import { useCategoryStore } from '../store/categoryStore';
 import api from '../utils/api';
+import { getOptimizedImageUrl } from "../utils/helpers";
 
 const RECENT_SEARCHES_KEY = 'recent-searches';
 const MAX_RECENT_SEARCHES = 5;
@@ -369,7 +370,7 @@ const SearchBar = () => {
                 >
                   <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
                     {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={getOptimizedImageUrl(item.image, 64)} loading="lazy" decoding="async" alt={item.name} className="w-full h-full object-cover" />
                     ) : (
                       <FiSearch className="text-gray-400" />
                     )}
