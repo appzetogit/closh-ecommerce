@@ -82,6 +82,33 @@ export const resolveVariantPrice = (product, selectedVariant) => {
     return { price: basePrice, variantKey: variantKey || null };
 };
 
+/**
+ * Keep per-variant prices in line with the product's base price.
+ *
+ * - force: every variant gets `basePrice`. Used for vendor saves - the vendor screens show
+ *   the size price as "Same as base price" (read-only), so whatever variant prices they post
+ *   back are just the old stored values.
+ * - otherwise: only variants still on one of `previousPrices` (the old base) move to the new
+ *   base; a size the admin priced differently on purpose keeps its own price.
+ *
+ * Without this a base price change left the old figure on every size: the vendor raised a
+ * product from 799 to 999, every screen showed 999, and checkout charged the size's stale 799.
+ */
+export const alignVariantPrices = (prices, basePrice, { force = false, previousPrices = [] } = {}) => {
+    const base = Number(basePrice);
+    if (!Number.isFinite(base) || base <= 0) return prices;
+    const entries = toVariantPriceEntries(prices);
+    if (!entries.length) return prices;
+    const previous = previousPrices.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    const next = {};
+    for (const [key, value] of entries) {
+        const current = Number(value);
+        const followsBase = force || !Number.isFinite(current) || previous.includes(current);
+        next[key] = followsBase ? base : current;
+    }
+    return next;
+};
+
 export const resolveOrderItemVariantKey = (product, orderItem) => {
     const explicitKey = String(orderItem?.variantKey || '').trim();
     if (explicitKey) return explicitKey;

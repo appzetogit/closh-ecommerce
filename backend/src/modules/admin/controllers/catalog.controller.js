@@ -10,6 +10,7 @@ import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
 import { invalidateCategoryFeatureCache } from '../../../utils/categoryFeatures.js';
 import { resolveSecondaryCategoryId, findMirrorSiblingId } from '../../../utils/categoryMirror.js';
+import { alignVariantPrices } from '../../../utils/variantKey.js';
 
 const sanitizeFaqs = (faqs) => {
     if (!Array.isArray(faqs)) return [];
@@ -380,7 +381,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
 
     // Centralized Stock: Admin cannot edit stock for vendor products
-    const existingProduct = await Product.findById(req.params.id).select('vendorId stockQuantity variants.stockMap stock categoryId division').lean();
+    const existingProduct = await Product.findById(req.params.id).select('vendorId stockQuantity variants.stockMap variants.prices stock categoryId division price vendorPrice').lean();
     const isVendorProduct = existingProduct && existingProduct.vendorId;
 
     if (isVendorProduct) {
@@ -424,6 +425,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
         }
 
         payload.variants = normalizeVariantsPayload(payload.variants, fallbackPrice);
+        // A base price change carries the sizes that were on the old base price with it;
+        // a size priced differently on purpose keeps its own price.
+        payload.variants.prices = alignVariantPrices(payload.variants.prices, fallbackPrice, {
+            previousPrices: [existingProduct?.price, existingProduct?.vendorPrice],
+        });
 
         // Only derive total stock if not restricted
         if (!isVendorProduct) {
@@ -443,6 +449,16 @@ export const updateProduct = asyncHandler(async (req, res) => {
             payload.stockQuantity = existingProduct.stockQuantity;
             payload.stock = existingProduct.stock;
         }
+    }
+
+    // Price changed without the variants being sent: move the sizes still on the old price.
+    if (!Object.prototype.hasOwnProperty.call(payload, 'variants')
+        && Object.prototype.hasOwnProperty.call(payload, 'price')
+        && Number(payload.price) !== Number(existingProduct?.price)
+        && existingProduct?.variants?.prices) {
+        payload['variants.prices'] = alignVariantPrices(existingProduct.variants.prices, payload.price, {
+            previousPrices: [existingProduct.price, existingProduct.vendorPrice],
+        });
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'categoryId') || Object.prototype.hasOwnProperty.call(payload, 'division')) {

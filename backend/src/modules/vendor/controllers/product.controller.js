@@ -8,6 +8,7 @@ import { emitEvent } from '../../../services/socket.service.js';
 import { slugify } from '../../../utils/slugify.js';
 import { clearCachePattern, deleteCache } from '../../../utils/cache.js';
 import { resolveSecondaryCategoryId } from '../../../utils/categoryMirror.js';
+import { alignVariantPrices } from '../../../utils/variantKey.js';
 
 const deriveStockStatus = (stockQuantity = 0, lowStockThreshold = 10) => {
     if (stockQuantity <= 0) return 'out_of_stock';
@@ -289,6 +290,8 @@ export const createProduct = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Invalid product price.');
     }
     const normalizedVariants = normalizeVariantsPayload(rest.variants, vendorPrice);
+    // Vendors cannot price sizes separately (the forms show "Same as base price").
+    normalizedVariants.prices = alignVariantPrices(normalizedVariants.prices, vendorPrice, { force: true });
     const variantAggregateStock = calculateVariantAggregateStock(normalizedVariants);
     const finalStockQuantity = Number.isFinite(variantAggregateStock)
         ? variantAggregateStock
@@ -413,7 +416,15 @@ export const updateProduct = asyncHandler(async (req, res) => {
         }
         if (Object.prototype.hasOwnProperty.call(updates, 'variants')) {
             const fallbackPrice = updates.vendorPrice ?? product.vendorPrice;
-            product.variants = normalizeVariantsPayload(updates.variants, fallbackPrice);
+            const variants = normalizeVariantsPayload(updates.variants, fallbackPrice);
+            // Sizes sell at the product's live price. The vendor screens show the size price
+            // as "Same as base price" and post back whatever was stored, so a stale figure
+            // (e.g. 799 after the product went to 999) used to stay on the size and be charged
+            // at checkout. The live price is the admin-approved one; vendor price changes
+            // still wait for approval.
+            const livePrice = Number(product.price) > 0 ? product.price : fallbackPrice;
+            variants.prices = alignVariantPrices(variants.prices, livePrice, { force: true });
+            product.variants = variants;
             const variantAggregateStock = calculateVariantAggregateStock(product.variants);
             if (Number.isFinite(variantAggregateStock)) {
                 product.stockQuantity = variantAggregateStock;
@@ -505,7 +516,10 @@ export const updateProduct = asyncHandler(async (req, res) => {
         product.originalPrice = Number(req.body.originalPrice) || 0;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, 'variants')) {
-        product.variants = normalizeVariantsPayload(req.body.variants, product.vendorPrice);
+        const variants = normalizeVariantsPayload(req.body.variants, product.vendorPrice);
+        const basePrice = Number(product.price) > 0 ? product.price : product.vendorPrice;
+        variants.prices = alignVariantPrices(variants.prices, basePrice, { force: true });
+        product.variants = variants;
         const variantAggregateStock = calculateVariantAggregateStock(product.variants);
         if (Number.isFinite(variantAggregateStock)) {
             product.stockQuantity = variantAggregateStock;
