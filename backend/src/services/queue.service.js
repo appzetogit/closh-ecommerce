@@ -129,6 +129,9 @@ export const QueueService = {
      * @param {Object} payload - { roles, title, message, type, data }
      */
     async scheduleBroadcastNotification(payload) {
+        // Without Redis the dummy queue would drop the job silently while the admin is told it
+        // was queued. Throw so the caller sends the broadcast inline instead.
+        if (!isRedisAvailable) throw new Error('Redis is unavailable');
         const job = await broadcastNotificationQueue.add('send-broadcast', payload);
         console.log(`[Queue] Broadcast notification queued (jobId: ${job?.id ?? 'n/a'}) for roles: ${payload.roles?.join(', ')}`);
         return job;
@@ -391,9 +394,9 @@ if (isRedisAvailable) {
  */
 if (isRedisAvailable) {
     new Worker('broadcast-notification-queue', async job => {
-        const { roles, title, message, type, data } = job.data;
+        const { roles, title, message, type, data, imageUrl, actionLink } = job.data;
         console.log(`[Worker] 📣 Processing broadcast "${title}" for roles: ${roles.join(', ')}`);
-        const result = await broadcastNotifications({ roles, title, message, type, data });
+        const result = await broadcastNotifications({ roles, title, message, type, data, imageUrl, actionLink });
         console.log(`[Worker] ✅ Broadcast "${title}" done — ${result.recipientCount} recipients, ${result.pushSuccessCount} pushes sent, ${result.pushFailureCount} failed.`);
         return result;
     }, { connection: redisConnection, removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } });
