@@ -163,6 +163,8 @@ if (isRedisAvailable) {
             if (updated) {
                 const { releaseCouponForOrder } = await import('./coupon.service.js');
                 await releaseCouponForOrder(updated._id);
+                const { onOrderCancelledRewards } = await import('./orderRewards.service.js');
+                await onOrderCancelledRewards(updated._id);
                 // Notify Customer
                 emitEvent(`user_${order.userId}`, 'order_cancelled', { 
                     orderId: order.orderId, 

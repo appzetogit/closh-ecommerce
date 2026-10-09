@@ -13,7 +13,7 @@ const ServiceAreaBlocker = ({ children }) => {
     const unblockedPaths = [
         '/profile', '/orders', '/addresses', '/login', '/register', 
         '/terms', '/privacy', '/about', '/contact', '/support', '/legal',
-        '/refund', '/return', '/shipping'
+        '/refund', '/return', '/shipping', '/refer', '/wallet', '/r/'
     ];
 
     const isUnblocked = unblockedPaths.some(path => location.pathname.startsWith(path));

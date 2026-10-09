@@ -34,6 +34,8 @@ export const placeOrderSchema = Joi.object({
         'any.only': 'Unsupported payment method. Choose Cash on Delivery or Prepaid.',
     }),
     couponCode: Joi.string().optional().allow(''),
+    // Spend the customer's wallet balance on this order; the server decides how much.
+    useWallet: Joi.boolean().optional().default(false),
     shippingOption: Joi.string().valid('standard', 'express', 'try_and_buy', 'check_and_buy', 'online').default('online'),
     orderType: Joi.string().valid('check_and_buy', 'try_and_buy').required(),
     deliveryType: Joi.string().valid('online').default('online'),

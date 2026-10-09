@@ -7,6 +7,7 @@ import http from 'http';
 import { initSocket } from './services/socket.service.js';
 import { connectRedis } from './config/redis.js';
 import { WalletService } from './services/wallet.service.js';
+import { startRewardJobs } from './services/rewardJobs.service.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -29,6 +30,9 @@ const startServer = async () => {
         console.error('[Wallet] Retry sweep error:', err.message)
       );
     }, 5 * 60 * 1000).unref();
+
+    // Refer & Earn rewards, unpaid wallet orders and wallet expiry (rewardJobs.service.js).
+    startRewardJobs();
 
     server.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);

@@ -140,6 +140,12 @@
     "children": []
   },
   {
+    "title": "Refer & Earn",
+    "route": "/admin/refer-earn",
+    "permission": "marketing_manage",
+    "children": []
+  },
+  {
     "title": "Notifications",
     "route": "/admin/notifications",
     "permission": [

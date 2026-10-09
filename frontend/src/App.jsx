@@ -36,6 +36,7 @@ import Content from "./modules/Admin/pages/Content";
 import Settings from "./modules/Admin/pages/Settings";
 import More from "./modules/Admin/pages/More";
 import PromoCodes from "./modules/Admin/pages/PromoCodes";
+import ReferEarn from "./modules/Admin/pages/ReferEarn";
 import ServiceAreas from "./modules/Admin/pages/ServiceAreas";
 // Orders child pages
 import AllOrders from "./modules/Admin/pages/orders/AllOrders";
@@ -145,6 +146,8 @@ import UserWishlistPage from "./modules/user/pages/Wishlist/WishlistPage";
 import UserOffersPage from "./modules/user/pages/Offers/OffersPage";
 import UserEventsPage from "./modules/user/pages/Events/EventsPage";
 import UserReferPage from "./modules/user/pages/Refer/ReferPage";
+import UserReferralLanding from "./modules/user/pages/Refer/ReferralLanding";
+import UserWalletPage from "./modules/user/pages/Wallet/WalletPage";
 import CampaignSale from "./modules/user/pages/CampaignSale";
 // Delivery Routes
 import DeliveryLogin from "./modules/Delivery/pages/Login";
@@ -269,6 +272,7 @@ const renderAdminRoutes = () => (
     <Route path="offers/festival-offers" element={<FestivalOffers />} />
     <Route path="promo-codes" element={<PromoCodes />} />
     <Route path="promocodes" element={<PromoCodes />} />
+    <Route path="refer-earn" element={<ReferEarn />} />
 
     {/* Support Routes */}
     <Route path="chat-support" element={<LiveChat />} />
@@ -566,6 +570,24 @@ const AppRoutes = () => {
             <RouteWrapper>
               <ProtectedRoute>
                 <UserLayout><UserReferPage /></UserLayout>
+              </ProtectedRoute>
+            </RouteWrapper>
+          }
+        />
+        <Route
+          path="/r/:code"
+          element={
+            <RouteWrapper>
+              <UserReferralLanding />
+            </RouteWrapper>
+          }
+        />
+        <Route
+          path="/wallet"
+          element={
+            <RouteWrapper>
+              <ProtectedRoute>
+                <UserLayout><UserWalletPage /></UserLayout>
               </ProtectedRoute>
             </RouteWrapper>
           }

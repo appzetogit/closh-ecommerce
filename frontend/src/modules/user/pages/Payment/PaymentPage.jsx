@@ -166,6 +166,10 @@ const PaymentPage = () => {
     const [timeRestrictedError, setTimeRestrictedError] = useState(null);
     const [expandedOption, setExpandedOption] = useState('');
     const isNavigatingToSuccess = useRef(false);
+    // CLOSH wallet (docs/REFER_AND_EARN_AND_WALLET.md §7.7). The amount comes from the server
+    // preview; placeOrder recomputes it with the same rules.
+    const [useWallet, setUseWallet] = useState(false);
+    const [walletPreview, setWalletPreview] = useState(null);
 
     // Detect multi-vendor cart to enforce Try & Buy only (mirrors CheckoutPage logic)
     const uniqueVendorIds = [...new Set(cart.map(item => String(item.vendorId || '')))].filter(Boolean);
@@ -271,6 +275,27 @@ const PaymentPage = () => {
     const codFeeAmount = (paymentMethod === 'COD' || paymentMethod === 'cod') ? (baseTotal * codFeePercentage / 100) : 0;
 
     const finalTotal = baseTotal + codFeeAmount;
+
+    useEffect(() => {
+        if (!user) return;
+        let alive = true;
+        const timer = setTimeout(() => {
+            api.post('/user/wallet/preview', {
+                subtotal,
+                couponDiscount: promoDiscount,
+                shipping,
+                platformFee,
+            }, { silent: true })
+                .then((res) => { if (alive) setWalletPreview(res?.data || null); })
+                .catch(() => { if (alive) setWalletPreview(null); });
+        }, 250);
+        return () => { alive = false; clearTimeout(timer); };
+    }, [user, subtotal, promoDiscount, shipping, platformFee]);
+
+    const walletApplied = useWallet && walletPreview?.walletApplied > 0 ? Number(walletPreview.walletApplied) : 0;
+    const payableTotal = Math.max(0, Number((finalTotal - walletApplied).toFixed(2)));
+    // The wallet covers everything: no payment method needed.
+    const walletCoversAll = walletApplied > 0 && payableTotal <= 0;
 
     const handleApplyPromo = (codeToApply) => {
         const finalCode = (typeof codeToApply === 'string' ? codeToApply : promoCode).trim();
@@ -398,7 +423,7 @@ const PaymentPage = () => {
         });
 
     const handlePlaceOrder = async () => {
-        if (!paymentMethod) {
+        if (!paymentMethod && !walletCoversAll) {
             toast.error('Please select a payment method');
             return;
         }
@@ -410,7 +435,7 @@ const PaymentPage = () => {
         setIsProcessing(true);
         try {
             let normalizedPaymentMethod = 'cod';
-            const lowerPm = paymentMethod.toLowerCase();
+            const lowerPm = (walletCoversAll ? 'cod' : paymentMethod).toLowerCase();
             
             // Comprehensive mapping for common payment identifiers
             if (lowerPm.includes('cod') || lowerPm.includes('cash')) {
@@ -471,10 +496,18 @@ const PaymentPage = () => {
                 tax: tax,
                 shipping: shipping,
                 platformFee: platformFee,
-                total: finalTotal
+                total: payableTotal,
+                useWallet: walletApplied > 0,
             };
 
             const response = await createOrder(orderPayload);
+            if (response && response.id && response.serverPaymentMethod === 'wallet') {
+                toast.success('Order placed and paid with your CLOSH wallet!');
+                isNavigatingToSuccess.current = true;
+                clearCart();
+                navigate(`/order-success/${response.id}`, { replace: true });
+                return;
+            }
             if (response && response.id) {
                 // Check if it's prepaid but missing Razorpay ID
                 if (normalizedPaymentMethod === 'prepaid' && !response.razorpayOrderId) {
@@ -685,6 +718,41 @@ const PaymentPage = () => {
 
 
 
+                {/* CLOSH wallet */}
+                {walletPreview && walletPreview.enabled && walletPreview.balance > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+                        <label className={`flex items-center justify-between gap-4 ${walletPreview.walletApplied > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                                    <Wallet size={18} className="text-emerald-600" />
+                                </div>
+                                <div>
+                                    <p className="text-[14px] font-bold text-gray-900">Use CLOSH wallet</p>
+                                    <p className="text-[12px] text-gray-500 font-medium">
+                                        {walletPreview.walletApplied > 0
+                                            ? `₹${Number(walletPreview.balance.toFixed(2))} available · ₹${Number(walletPreview.walletApplied.toFixed(2))} will be used`
+                                            : walletPreview.reason === 'below_min_order'
+                                                ? `Available on orders above ₹${walletPreview.minOrderValueForWallet}`
+                                                : walletPreview.reason === 'not_with_coupon'
+                                                    ? 'Cannot be combined with a coupon'
+                                                    : `₹${Number(walletPreview.balance.toFixed(2))} available`}
+                                    </p>
+                                </div>
+                            </div>
+                            <input
+                                type="checkbox"
+                                className="w-5 h-5 accent-black"
+                                checked={useWallet && walletPreview.walletApplied > 0}
+                                disabled={!(walletPreview.walletApplied > 0)}
+                                onChange={(e) => setUseWallet(e.target.checked)}
+                            />
+                        </label>
+                        {walletCoversAll && (
+                            <p className="mt-3 text-[12px] font-bold text-emerald-700">Your wallet covers this whole order. No payment needed.</p>
+                        )}
+                    </div>
+                )}
+
                 {/* Payment Options Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
                     <div className="p-6 border-b border-gray-100 flex items-center gap-2">
@@ -771,6 +839,12 @@ const PaymentPage = () => {
                             <span className="text-gray-500 font-medium">Shipping Fee</span>
                             <span className="text-emerald-600 font-bold">{shipping === 0 ? 'FREE' : `₹${shipping}`}</span>
                         </div>
+                        {walletApplied > 0 && (
+                            <div className="flex justify-between text-[13px] animate-fadeInUp">
+                                <span className="text-gray-500 font-medium">CLOSH Wallet</span>
+                                <span className="text-emerald-600 font-bold">-₹{Number(walletApplied.toFixed(2))}</span>
+                            </div>
+                        )}
                         {(paymentMethod === 'COD' || paymentMethod === 'cod') && codFeeAmount > 0 && (
                             <div className="flex justify-between text-[13px] animate-fadeInUp">
                                 <span className="text-gray-500 font-medium">COD Fee ({codFeePercentage}%)</span>
@@ -780,7 +854,7 @@ const PaymentPage = () => {
                     </div>
                     <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
                         <span className="text-[14px] font-bold text-gray-900 uppercase ">Total Amount</span>
-                        <span className="text-[17px] font-bold text-gray-900">₹{Number(finalTotal.toFixed(2))}</span>
+                        <span className="text-[17px] font-bold text-gray-900">₹{Number(payableTotal.toFixed(2))}</span>
                     </div>
                 </div>
 
@@ -790,13 +864,13 @@ const PaymentPage = () => {
                          <div className="flex flex-col min-w-0 pr-2">
                              <div className="flex items-center gap-1.5 flex-wrap">
                                  <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 line-through">₹{Number((totalMRP + platformFee + shipping).toFixed(2))}</span>
-                                 <span className="text-[9px] sm:text-[10px] bg-emerald-100 text-emerald-700 px-1 sm:px-1.5 py-0.5 rounded font-black uppercase tracking-tighter whitespace-nowrap">Save ₹{Number((totalMRP + platformFee + shipping - finalTotal).toFixed(2))}</span>
+                                 <span className="text-[9px] sm:text-[10px] bg-emerald-100 text-emerald-700 px-1 sm:px-1.5 py-0.5 rounded font-black uppercase tracking-tighter whitespace-nowrap">Save ₹{Number((totalMRP + platformFee + shipping - payableTotal - walletApplied).toFixed(2))}</span>
                              </div>
-                             <span className="text-[18px] sm:text-[20px] font-black text-gray-900 leading-tight mt-0.5">₹{Number(finalTotal.toFixed(2))}</span>
+                             <span className="text-[18px] sm:text-[20px] font-black text-gray-900 leading-tight mt-0.5">₹{Number(payableTotal.toFixed(2))}</span>
                          </div>
                          <button
                              onClick={handlePlaceOrder}
-                             disabled={isProcessing || !currentAddress || !paymentMethod}
+                             disabled={isProcessing || !currentAddress || (!paymentMethod && !walletCoversAll)}
                              className="bg-black text-white px-5 sm:px-8 py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase hover:bg-gray-800 active:scale-95 transition-all shadow-xl sm:shadow-2xl shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 whitespace-nowrap"
                          >
                              {isProcessing ? (

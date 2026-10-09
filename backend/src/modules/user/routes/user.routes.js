@@ -7,6 +7,7 @@ import * as reviewController from '../controllers/review.controller.js';
 import * as orderController from '../controllers/order.controller.js';
 import * as notificationController from '../controllers/notification.controller.js';
 import * as supportController from '../controllers/support.controller.js';
+import * as rewardsController from '../controllers/rewards.controller.js';
 import { authenticate } from '../../../middlewares/authenticate.js';
 import { authorize, enforceAccountStatus } from '../../../middlewares/authorize.js';
 import { authLimiter, otpLimiter, otpVerifyLimiter } from '../../../middlewares/rateLimiter.js';
@@ -27,6 +28,7 @@ import {
     resetPasswordSchema,
     updateProfileSchema,
     changePasswordSchema,
+    referralCodeSchema,
 } from '../validators/auth.validator.js';
 import {
     createAddressSchema,
@@ -36,6 +38,14 @@ import { placeOrderSchema, createReturnRequestSchema } from '../validators/order
 
 const router = Router();
 const customerAuth = [authenticate, authorize('customer'), enforceAccountStatus];
+
+// Refer & Earn + wallet (docs/REFER_AND_EARN_AND_WALLET.md)
+router.post('/referral/validate-code', authLimiter, validate(referralCodeSchema), rewardsController.checkReferralCode);
+router.get('/referral', ...customerAuth, rewardsController.getMyReferral);
+router.get('/referral/history', ...customerAuth, rewardsController.getMyReferralHistory);
+router.get('/wallet', ...customerAuth, rewardsController.getMyWallet);
+router.get('/wallet/transactions', ...customerAuth, rewardsController.getMyWalletTransactions);
+router.post('/wallet/preview', ...customerAuth, rewardsController.previewWalletUse);
 
 // Auth routes
 router.post('/auth/check-phone', authLimiter, validate(checkPhoneSchema), authController.checkPhone);

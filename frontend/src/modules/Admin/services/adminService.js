@@ -391,3 +391,31 @@ export const updateAdminSetting = (key, value) =>
 export const getAdminNotifications = (params) => api.get('/admin/notifications', { params });
 export const markNotificationAsRead = (id) => api.put(`/admin/notifications/${id}/read`);
 export const markAllNotificationsAsRead = () => api.put('/admin/notifications/read-all');
+
+// ─── Refer & Earn / Customer Wallet ───────────────────────────────────────────
+export const getReferralProgramSettings = () =>
+    api.get('/admin/referral-program/settings');
+
+export const updateReferralProgramSettings = (data) =>
+    api.put('/admin/referral-program/settings', data);
+
+export const getReferrals = (params = {}) =>
+    api.get('/admin/referrals', { params });
+
+export const getReferralDetail = (id) =>
+    api.get(`/admin/referrals/${id}`);
+
+export const voidReferral = (id, reason) =>
+    api.post(`/admin/referrals/${id}/void`, { reason });
+
+export const rewardReferralNow = (id) =>
+    api.post(`/admin/referrals/${id}/reward-now`);
+
+export const getReferralReport = () =>
+    api.get('/admin/reports/referral');
+
+export const getCustomerWallet = (id, params = {}) =>
+    api.get(`/admin/customers/${id}/wallet`, { params });
+
+export const adjustCustomerWallet = (id, data) =>
+    api.post(`/admin/customers/${id}/wallet/adjust`, data);

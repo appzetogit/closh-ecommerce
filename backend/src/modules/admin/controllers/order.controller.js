@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
@@ -17,6 +18,7 @@ import { refundPayment } from '../../../services/razorpay.service.js';
 import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
 import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
 import { releaseCouponForOrder } from '../../../services/coupon.service.js';
+import { onOrderCancelledRewards, onOrderCompletedRewards } from '../../../services/orderRewards.service.js';
 
 // GET /api/admin/orders
 export const getAllOrders = asyncHandler(async (req, res) => {
@@ -247,8 +249,13 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
     await order.save();
 
+    if (nextStatus === 'delivered' && previousStatus !== 'delivered') {
+        await onOrderCompletedRewards(order._id);
+    }
+
     if (nextStatus === 'cancelled') {
         await releaseCouponForOrder(order._id);
+        await onOrderCancelledRewards(order._id);
         // Free the delivery boy if assigned and credit them for the cancellation trip if they accepted it
         if (order.deliveryBoyId) {
             const DeliveryBoy = mongoose.model('DeliveryBoy');

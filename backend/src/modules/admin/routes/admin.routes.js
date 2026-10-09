@@ -20,6 +20,7 @@ import * as attributeController from '../controllers/attribute.controller.js';
 import * as adminWithdrawalController from '../controllers/adminWithdrawal.controller.js';
 import * as serviceAreaController from '../controllers/serviceArea.controller.js';
 import * as riderSettlementController from '../controllers/riderSettlement.controller.js';
+import * as rewardsController from '../controllers/rewards.controller.js';
 
 import cancellationReasonRoutes from './cancellationReason.routes.js';
 import enquiryRoutes from './enquiry.routes.js';
@@ -273,6 +274,17 @@ router.post('/notifications/push-to-user', ...adminAuth, checkPermission('notifi
 router.post('/notifications/broadcast', ...adminAuth, checkPermission('notifications_manage'), notificationController.globalBroadcast);
 
 // ─── Settings & Policies ──────────────────────────────────────────────────────
+// Refer & Earn + customer wallet (docs/REFER_AND_EARN_AND_WALLET.md)
+router.get('/referral-program/settings', ...adminAuth, checkPermission('marketing_manage'), rewardsController.getReferralProgramSettings);
+router.put('/referral-program/settings', ...adminAuth, checkPermission('marketing_manage'), rewardsController.updateReferralProgramSettings);
+router.get('/referrals', ...adminAuth, checkPermission('marketing_manage'), rewardsController.listReferrals);
+router.get('/referrals/:id', ...adminAuth, checkPermission('marketing_manage'), rewardsController.getReferralDetail);
+router.post('/referrals/:id/void', ...adminAuth, checkPermission('marketing_manage'), rewardsController.voidReferral);
+router.post('/referrals/:id/reward-now', ...adminAuth, checkPermission('marketing_manage'), rewardsController.rewardReferralNow);
+router.get('/customers/:id/wallet', ...adminAuth, checkPermission('customers_manage'), rewardsController.getCustomerWallet);
+router.post('/customers/:id/wallet/adjust', ...adminAuth, checkPermission('finance_view'), rewardsController.adjustCustomerWallet);
+router.get('/reports/referral', ...adminAuth, checkPermission('marketing_manage'), rewardsController.getReferralReport);
+
 import * as settingsController from '../controllers/settings.controller.js';
 router.get('/settings/all', ...adminAuth, settingsController.getAllSettings);
 router.get('/settings/:key', ...adminAuth, settingsController.getSetting);

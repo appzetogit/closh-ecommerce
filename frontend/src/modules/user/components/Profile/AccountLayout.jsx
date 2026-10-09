@@ -36,6 +36,8 @@ const AccountLayout = ({ children, isMenuPage = false, hideHeader = false }) => 
         if (path.includes('orders')) return 'My Orders';
         if (path.includes('addresses')) return 'My Addresses';
         if (path.includes('offers')) return 'My Offers';
+        if (path.includes('wallet')) return 'CLOSH Wallet';
+        if (path.includes('refer')) return 'Refer & Earn';
         return 'Account';
     };
 

@@ -79,6 +79,9 @@ const returnRequestSchema = new mongoose.Schema(
             index: true,
         },
         refundAmount: Number,
+        // Part of the refund that goes back to the customer's CLOSH wallet (orders paid partly
+        // from the wallet). refundAmount is the rest, refunded as before.
+        walletRefundAmount: { type: Number, default: 0 },
         refundStatus: { type: String, enum: ['pending', 'processed', 'failed'] },
         refundId: String,
         refundNotes: String,

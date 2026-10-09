@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../../../shared/store/authStore';
-import { Phone, ArrowRight, ShieldCheck, ChevronLeft, Timer, X, User as UserIcon, Mail } from 'lucide-react';
+import { Phone, ArrowRight, ShieldCheck, ChevronLeft, Timer, X, User as UserIcon, Mail, Gift } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { isValidEmail } from '../../../../shared/utils/helpers';
+import { getStoredReferralCode, normalizeReferralCode, referralResultMessage } from '../../../../shared/utils/referral';
 
 import logo from '../../../../assets/animations/lottie/logo-removebg.png';
 
@@ -11,6 +13,8 @@ const LoginPage = () => {
     const [mobileNumber, setMobileNumber] = useState('');
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
+    // Prefilled from a referral link (/r/CODE); optional.
+    const [referralCode, setReferralCode] = useState(() => getStoredReferralCode());
     const [otp, setOtp] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +92,7 @@ const LoginPage = () => {
         setIsLoading(true);
 
         try {
-            await registerOtp(name, email, mobileNumber);
+            await registerOtp(name, email, mobileNumber, referralCode);
             setStep(3);
             setResendTimer(30);
         } catch (err) {
@@ -134,6 +138,8 @@ const LoginPage = () => {
             const userEmail = email || useAuthStore.getState().pendingEmail || mobileNumber;
             const res = await verifyOTP(userEmail, otp);
             if (res.success) {
+                const referralNote = referralResultMessage(res.referral);
+                if (referralNote) (referralNote.type === 'success' ? toast.success : toast)(referralNote.text, { duration: 5000 });
                 const from = location.state?.from?.pathname || '/';
                 navigate(from, { replace: true });
             } else {
@@ -244,6 +250,22 @@ const LoginPage = () => {
                                             }}
                                             className="w-full pl-12 pr-4 py-4 bg-white border-2 rounded-2xl focus:bg-white outline-none font-medium text-gray-900 transition-all placeholder:text-gray-400 border-gray-100 focus:border-black"
                                             placeholder="john@example.com"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="relative group">
+                                    <label className="absolute -top-2.5 left-4 bg-white px-2 text-[12px] font-semibold text-gray-500 group-focus-within:text-black transition-colors z-10">
+                                        Referral Code (optional)
+                                    </label>
+                                    <div className="flex items-center relative">
+                                        <Gift className="absolute left-4 text-[#ffcc00]" size={20} />
+                                        <input
+                                            type="text"
+                                            value={referralCode}
+                                            onChange={(e) => setReferralCode(normalizeReferralCode(e.target.value))}
+                                            className="w-full pl-12 pr-4 py-4 bg-white border-2 rounded-2xl focus:bg-white outline-none font-medium text-gray-900 uppercase tracking-wider transition-all placeholder:text-gray-400 placeholder:normal-case placeholder:tracking-normal border-gray-100 focus:border-black"
+                                            placeholder="Have a friend's code?"
+                                            maxLength={12}
                                         />
                                     </div>
                                 </div>

@@ -131,7 +131,9 @@ export const useOrderStore = create(
             tax: orderData.tax,
             shipping: orderData.shipping,
             platformFee: orderData.platformFee,
-            total: orderData.total
+            total: orderData.total,
+            // Spend CLOSH wallet balance; the server decides how much.
+            useWallet: Boolean(orderData.useWallet),
           };
           const idempotencyKey = buildIdempotencyKey(payload, orderData.userId);
 
@@ -153,6 +155,11 @@ export const useOrderStore = create(
           if (!createdOrder) {
             throw new Error('Order created but could not be fetched. Please check your orders.');
           }
+
+          // What the server actually charged: 'wallet' when the wallet covered everything.
+          createdOrder.serverPaymentMethod = payloadData?.paymentMethod;
+          createdOrder.walletApplied = Number(payloadData?.walletApplied || 0);
+          createdOrder.payableTotal = Number(payloadData?.total ?? createdOrder.total);
 
           // Attach payment metadata if present in original POST response
           if (payloadData?.razorpayOrderId) {

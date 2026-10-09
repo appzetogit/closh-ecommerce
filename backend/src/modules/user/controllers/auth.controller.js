@@ -8,6 +8,8 @@ import { generateTokens } from '../../../utils/generateToken.js';
 import { sendOTP } from '../../../services/otp.service.js';
 import { sendSmsOtp } from '../../../services/sms.service.js';
 import { sendEmail } from '../../../services/email.service.js';
+import { activatePendingReferral } from '../../../services/referral.service.js';
+import { normalizeReferralCode } from '../../../utils/referralCode.js';
 import {
     uploadLocalFileToCloudinaryAndCleanup,
     deleteFromCloudinary,
@@ -40,7 +42,7 @@ const extractCloudinaryPublicId = (url = '') => {
 
 // POST /api/user/auth/register
 export const register = asyncHandler(async (req, res) => {
-    const { name, email, password, phone, address: addressData, fcmToken, platform = 'app' } = req.body;
+    const { name, email, password, phone, address: addressData, fcmToken, platform = 'app', referralCode, deviceId } = req.body;
     const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
     const normalizedPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : undefined;
 
@@ -63,6 +65,8 @@ export const register = asyncHandler(async (req, res) => {
         email: normalizedEmail,
         ...(password ? { password } : {}), // Password is optional now
         ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+        ...(referralCode ? { pendingReferralCode: normalizeReferralCode(referralCode) } : {}),
+        ...(deviceId ? { signupDeviceId: String(deviceId).slice(0, 100) } : {}),
     });
 
     if (addressData) {
@@ -136,6 +140,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
     await user.save();
 
+    // A referral code entered at sign-up only counts once the account is verified.
+    const referral = await activatePendingReferral(user._id);
+
     const { accessToken, refreshToken } = generateTokens({ id: user._id, role: 'customer', email: user.email });
     await persistRefreshSession(user, refreshToken);
 
@@ -147,13 +154,16 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     delete userToReturn.refreshTokenHash;
     delete userToReturn.refreshTokenExpiresAt;
 
+    delete userToReturn.pendingReferralCode;
+
     res.status(200).json(new ApiResponse(200, {
         accessToken,
         refreshToken,
         user: {
             id: user._id,
             ...userToReturn
-        }
+        },
+        ...(referral.applied || referral.reason ? { referral } : {}),
     }, 'Email verified successfully.'));
 });
 
@@ -230,7 +240,7 @@ export const loginOtp = asyncHandler(async (req, res) => {
 
 // POST /api/user/auth/register-otp
 export const registerOtp = asyncHandler(async (req, res) => {
-    const { name, email, phone } = req.body;
+    const { name, email, phone, referralCode, deviceId } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
     const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
 
@@ -244,6 +254,9 @@ export const registerOtp = asyncHandler(async (req, res) => {
         name: String(name || '').trim(),
         email: normalizedEmail,
         phone: normalizedPhone,
+        // Kept until the account is verified; activatePendingReferral turns it into a Referral.
+        ...(referralCode ? { pendingReferralCode: normalizeReferralCode(referralCode) } : {}),
+        ...(deviceId ? { signupDeviceId: String(deviceId).slice(0, 100) } : {}),
     });
 
     await sendOTP(user, 'email_verification');

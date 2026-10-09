@@ -23,6 +23,7 @@ import {
   FiX,
   FiUser,
   FiSend,
+  FiGift,
 } from "react-icons/fi";
 import { useAdminAuthStore } from "../../store/adminStore";
 import { useNotificationStore } from "../../store/notificationStore";
@@ -42,6 +43,7 @@ const iconMap = {
   "Offers & Sliders": FiImage,
   Banners: FiImage,
   "Promo Codes": FiPercent,
+  "Refer & Earn": FiGift,
   Notifications: FiBell,
   "Customer Support": FiMessageCircle,
   "Vendor Support": FiMessageCircle,

@@ -12,7 +12,7 @@ import { OrderNotificationService } from '../../../services/orderNotification.se
 import { calculateDistance } from '../../../utils/geo.js';
 import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
 import { releaseCouponForOrder } from '../../../services/coupon.service.js';
-
+import { onOrderCancelledRewards } from '../../../services/orderRewards.service.js';
 const deriveTopLevelOrderStatus = (vendorItems = [], fallback = 'pending') => {
     const statuses = (vendorItems || [])
         .map((item) => String(item?.status || '').toLowerCase())
@@ -220,7 +220,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     order.status = deriveTopLevelOrderStatus(order.vendorItems, order.status);
     console.log(`[VendorUpdate] New Group Status: ${status}, Overall Order Status: ${oldStatus} -> ${order.status}`);
     await order.save();
-    if (order.status === 'cancelled') await releaseCouponForOrder(order._id);
+    if (order.status === 'cancelled') {
+        await releaseCouponForOrder(order._id);
+        await onOrderCancelledRewards(order._id);
+    }
 
     // ── Sync Vendor Status to active DeliveryBatch ──
     try {

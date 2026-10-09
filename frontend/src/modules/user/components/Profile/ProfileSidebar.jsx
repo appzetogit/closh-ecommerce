@@ -11,7 +11,9 @@ import {
     LogOut,
     ChevronRight,
     MessageSquare,
-    Trash2
+    Trash2,
+    Wallet,
+    Gift
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -41,6 +43,8 @@ const ProfileSidebar = () => {
         { id: 'profile', label: 'Profile', path: '/profile', icon: <User size={18} /> },
         { id: 'addresses', label: 'Addresses', path: '/addresses', icon: <MapPin size={18} /> },
         { id: 'orders', label: 'My Orders', path: '/orders', icon: <ShoppingBag size={18} /> },
+        { id: 'wallet', label: 'CLOSH Wallet', path: '/wallet', icon: <Wallet size={18} /> },
+        { id: 'refer', label: 'Refer & Earn', path: '/refer', icon: <Gift size={18} /> },
         { id: 'support', label: 'Live Support', path: '/support', icon: <MessageSquare size={18} /> },
         { id: 'offers', label: 'My Offers', path: '/offers', icon: <Tag size={18} /> },
         { id: 'contact', label: 'Contact Us', path: '/contact', type: 'link' },

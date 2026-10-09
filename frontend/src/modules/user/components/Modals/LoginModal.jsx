@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { X, Phone, ArrowRight, ShieldCheck, Timer, ChevronLeft, User as UserIcon, Mail } from 'lucide-react';
+import { X, Phone, ArrowRight, ShieldCheck, Timer, ChevronLeft, User as UserIcon, Mail, Gift } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../../../../shared/store/authStore';
 import { isValidEmail } from '../../../../shared/utils/helpers';
+import { getStoredReferralCode, normalizeReferralCode, referralResultMessage } from '../../../../shared/utils/referral';
 
 const LoginModal = ({ isOpen, onClose, onSuccess }) => {
     const { checkPhone, loginOtp, registerOtp, verifyOTP } = useAuthStore();
@@ -14,6 +16,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
     const [mobileNumber, setMobileNumber] = useState('');
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
+    const [referralCode, setReferralCode] = useState(() => getStoredReferralCode());
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -97,7 +100,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
         setLoading(true);
 
         try {
-            await registerOtp(name, email, mobileNumber);
+            await registerOtp(name, email, mobileNumber, referralCode);
             setStep(3);
             setResendTimer(30);
         } catch (err) {
@@ -125,6 +128,8 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
             const result = await verifyOTP(userEmail, otp);
 
             if (result.success) {
+                const referralNote = referralResultMessage(result.referral);
+                if (referralNote) (referralNote.type === 'success' ? toast.success : toast)(referralNote.text, { duration: 5000 });
                 if (onSuccess) onSuccess();
                 onClose();
             } else {
@@ -272,6 +277,24 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
                                             }}
                                             className="w-full py-4 px-3 bg-transparent border-none outline-none text-[16px] font-bold text-black placeholder:text-gray-200"
                                             placeholder="john@example.com"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="relative text-left group">
+                                    <label className="absolute -top-2.5 left-4 bg-[#FAFAFA] px-2 text-[10px] font-bold text-[#878787] uppercase  z-10 transition-colors group-focus-within:text-black">
+                                        Referral Code (optional)
+                                    </label>
+                                    <div className="flex items-center relative bg-white border border-gray-200 rounded-[20px] focus-within:border-black focus-within:ring-4 focus-within:ring-black/10 transition-all duration-300 shadow-sm hover:shadow-md overflow-hidden">
+                                        <div className="pl-5 py-4 text-[#878787] group-focus-within:text-black transition-colors">
+                                            <Gift size={20} strokeWidth={2} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={referralCode}
+                                            onChange={(e) => setReferralCode(normalizeReferralCode(e.target.value))}
+                                            className="w-full py-4 px-3 bg-transparent border-none outline-none text-[16px] font-bold text-black uppercase tracking-wider placeholder:text-gray-200 placeholder:normal-case placeholder:tracking-normal"
+                                            placeholder="Have a friend's code?"
+                                            maxLength={12}
                                         />
                                     </div>
                                 </div>

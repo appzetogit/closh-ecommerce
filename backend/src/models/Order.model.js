@@ -318,6 +318,13 @@ const orderSchema = new mongoose.Schema(
         // that existed are never "released" (decremented) by mistake.
         couponUsageConsumed: { type: Boolean, default: false },
         couponUsageReleased: { type: Boolean, default: false },
+        // Customer wallet (docs/REFER_AND_EARN_AND_WALLET.md §5.4). `total` is what is left to
+        // pay after the wallet; walletApplied is what the wallet covered.
+        walletApplied: { type: Number, default: 0 },
+        walletDebitId: { type: mongoose.Schema.Types.ObjectId, ref: 'WalletTransaction', default: null },
+        walletRefunded: { type: Number, default: 0 },
+        // Set when this order is the referred customer's tracked first order.
+        referral: { type: mongoose.Schema.Types.ObjectId, ref: 'Referral', default: null },
         // Snapshot of the price the customer was originally quoted. Try & Buy rewrites
         // subtotal/discount/tax/total in place once items are accepted or rejected at the
         // door, which used to leave no trace of the original amount or coupon discount.
@@ -325,6 +332,7 @@ const orderSchema = new mongoose.Schema(
             subtotal: Number,
             discount: Number,
             couponDiscount: Number,
+            walletApplied: Number,
             tax: Number,
             shipping: Number,
             platformFee: Number,

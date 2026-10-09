@@ -36,6 +36,14 @@ import {
     resolveVariantPrice,
 } from '../../../utils/variantKey.js';
 import { restockItems } from '../../../utils/stockRestore.js';
+import { getWalletSettings } from '../../../services/rewardSettings.service.js';
+import {
+    computeWalletApplied,
+    getBalance as getWalletBalance,
+    debit as walletDebitForOrder,
+} from '../../../services/customerWallet.service.js';
+import { onOrderPlaced as trackReferralOrder } from '../../../services/referral.service.js';
+import { onOrderCancelledRewards } from '../../../services/orderRewards.service.js';
 
 const getRazorpayInstance = () => {
     const key_id = process.env.RAZORPAY_KEY_ID;
@@ -68,7 +76,7 @@ const resolveVariantSelection = (product, selectedVariant) => {
 
 // POST /api/user/orders
 export const placeOrder = asyncHandler(async (req, res) => {
-    const { items, shippingAddress, paymentMethod, couponCode, shippingOption, orderType, deliveryType, deviceToken, dropoffLocation } = req.body;
+    const { items, shippingAddress, paymentMethod, couponCode, shippingOption, orderType, deliveryType, deviceToken, dropoffLocation, useWallet } = req.body;
 
     const userId = req.user?._id || req.user?.id;
 
@@ -478,6 +486,25 @@ export const placeOrder = asyncHandler(async (req, res) => {
 
     console.log(`💰 [TOTALS] Subtotal: ₹${subtotal}, Shipping: ₹${shipping}, Discount: ₹${couponDiscount}, Tax: ₹${tax}, Platform Fee: ₹${platformFee}, Grand Total: ₹${total}`);
 
+    // Customer wallet (docs/REFER_AND_EARN_AND_WALLET.md §6). Same calculation as the
+    // checkout preview; the actual debit happens inside the order transaction below and
+    // fails with 409 if the balance changed in the meantime.
+    let walletApplied = 0;
+    if (useWallet && userId) {
+        const [walletSettings, walletBalance] = await Promise.all([getWalletSettings(), getWalletBalance(userId)]);
+        walletApplied = computeWalletApplied({
+            useWallet: true,
+            balance: walletBalance,
+            settings: walletSettings,
+            eligibleBase: subtotal - couponDiscount,
+            payableBeforeWallet: total,
+            couponApplied: couponDiscount > 0,
+        });
+    }
+    const payableTotal = Math.max(0, parseFloat((total - walletApplied).toFixed(2)));
+    // Fully covered by the wallet: nothing left to collect online or at the door.
+    const finalPaymentMethod = walletApplied > 0 && payableTotal === 0 ? 'wallet' : normalizedPaymentMethod;
+
 
     // 5. Build vendor item groups
     const vendorItems = Object.values(vendorMap).map((v) => {
@@ -536,9 +563,10 @@ export const placeOrder = asyncHandler(async (req, res) => {
                 items: enrichedItems,
                 vendorItems,
                 shippingAddress,
-                paymentMethod: normalizedPaymentMethod,
+                paymentMethod: finalPaymentMethod,
                 // Keep every new order pending until gateway/webhook confirmation is implemented.
-                paymentStatus: 'pending',
+                // A wallet-only order is already paid.
+                paymentStatus: finalPaymentMethod === 'wallet' ? 'paid' : 'pending',
                 subtotal,
                 shipping,
                 // tax is set correctly below via vendorItems.reduce (line 616 overrides this key).
@@ -549,7 +577,9 @@ export const placeOrder = asyncHandler(async (req, res) => {
                 totalCustomerSgst: vendorItems.reduce((sum, v) => sum + (v.totalCustomerSgst || 0), 0),
                 tax: vendorItems.reduce((sum, v) => sum + (v.tax || 0), 0),
                 platformFee,
-                total,
+                // What is left to pay after the wallet.
+                total: payableTotal,
+                walletApplied,
                 couponCode: couponCode?.toUpperCase(),
                 couponUsageConsumed: !!appliedCoupon,
                 couponDiscount,
@@ -571,6 +601,22 @@ export const placeOrder = asyncHandler(async (req, res) => {
             // Spend one use of the coupon in the same transaction as the order; throws (and
             // rolls everything back) if the usage limit was reached since validation.
             if (appliedCoupon) await consumeCoupon(appliedCoupon, { session });
+
+            // Spend the wallet in the same transaction: if anything below fails, the money
+            // is never taken. Throws 409 when the balance is no longer enough.
+            if (walletApplied > 0) {
+                const walletDebit = await walletDebitForOrder(userId, walletApplied, {
+                    source: 'order_payment',
+                    order: order._id,
+                    idempotencyKey: `order_payment:${order._id}`,
+                    note: `Paid for order ${order.orderId}`,
+                }, { session });
+                order.walletDebitId = walletDebit._id;
+            }
+
+            // Refer & Earn: start tracking this order if it is a referred customer's first order.
+            await trackReferralOrder(order, { session });
+            if (order.isModified()) await order.save({ session });
             console.log("STEP 4 - Saved order.customerLocation:", order.dropoffLocation);
 
             // Step 4.5: Decrement stock and update stock status
@@ -616,14 +662,14 @@ export const placeOrder = asyncHandler(async (req, res) => {
                 }
             }
 
-            // If payment method is prepaid, create Razorpay order
-            if (normalizedPaymentMethod === 'prepaid') {
+            // If payment method is prepaid, create Razorpay order (for what the wallet did not cover)
+            if (finalPaymentMethod === 'prepaid') {
                 try {
                     const razorpay = getRazorpayInstance();
                     if (!razorpay) throw new ApiError(500, "Payment gateway not configured.");
 
                     const razorpayOrder = await razorpay.orders.create({
-                        amount: Math.round(total * 100), // Razorpay expects amount in paise
+                        amount: Math.round(payableTotal * 100), // Razorpay expects amount in paise
                         currency: 'INR',
                         receipt: order.orderId,
                     });
@@ -690,6 +736,8 @@ export const placeOrder = asyncHandler(async (req, res) => {
             {
                 orderId: order.orderId,
                 total: order.total,
+                walletApplied: order.walletApplied || 0,
+                paymentMethod: order.paymentMethod,
                 trackingNumber: order.trackingNumber,
                 razorpayOrderId: order.razorpayOrderId,
                 razorpayKeyId: process.env.RAZORPAY_KEY_ID,
@@ -1014,6 +1062,7 @@ export const cancelOrderInternal = async (orderId, userId, reason) => {
         // Unified Notification to all parties
         if (cancelledOrder) {
             await releaseCouponForOrder(cancelledOrder._id);
+            await onOrderCancelledRewards(cancelledOrder._id);
             await OrderNotificationService.notifyOrderUpdate(cancelledOrder._id, 'cancelled', {
                 reason: reason || 'Cancelled by customer',
                 isSystemCancel: false
@@ -1163,6 +1212,15 @@ export const createReturnRequest = asyncHandler(async (req, res) => {
 
     const isMultiVendor = vendorIdsInvolved.size > 1;
 
+    // Order paid partly from the wallet: that share of the refund goes back to the wallet.
+    let walletRefundAmount = 0;
+    if (Number(order.walletApplied) > 0) {
+        const paidBeforeWallet = Number(order.total || 0) + Number(order.walletApplied);
+        const share = paidBeforeWallet > 0 ? (totalRefundAmount * Number(order.walletApplied)) / paidBeforeWallet : 0;
+        const stillRefundable = Number(order.walletApplied) - Number(order.walletRefunded || 0);
+        walletRefundAmount = Math.max(0, Math.min(Number(share.toFixed(2)), Number(stillRefundable.toFixed(2))));
+    }
+
     const request = await ReturnRequest.create({
         orderId: order._id,
         returnId: generateReturnId(),
@@ -1173,7 +1231,8 @@ export const createReturnRequest = asyncHandler(async (req, res) => {
         items: normalizedItems,
         reason: String(req.body.reason || '').trim(),
         status: 'pending',
-        refundAmount: Number(totalRefundAmount.toFixed(2)),
+        refundAmount: Number((totalRefundAmount - walletRefundAmount).toFixed(2)),
+        walletRefundAmount,
         refundStatus: 'pending',
         images: Array.isArray(req.body.images) ? req.body.images : [],
     });

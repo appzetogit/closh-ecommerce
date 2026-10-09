@@ -298,6 +298,15 @@ export const WalletService = {
             }
 
             await session.commitTransaction();
+
+            // Customer paid part of this order from their CLOSH wallet: that share of the
+            // return goes back to the wallet (the rest is refunded as before). Idempotent per
+            // return request.
+            if (Number(returnRequest.walletRefundAmount) > 0) {
+                const { refundOrder } = await import('./customerWallet.service.js');
+                await refundOrder(orderId, Number(returnRequest.walletRefundAmount), `return:${returnRequest._id}`)
+                    .catch((err) => console.error(`[Wallet] Return wallet refund failed for ${returnRequest._id}:`, err.message));
+            }
             return true;
         } catch (error) {
             await session.abortTransaction();

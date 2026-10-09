@@ -3,7 +3,7 @@ import { Order } from '../../../models/Order.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { releaseCouponForOrder } from '../../../services/coupon.service.js';
-
+import { onOrderCancelledRewards } from '../../../services/orderRewards.service.js';
 // Helper function to calculate distance between two coordinates in km (Haversine formula)
 const calculateDistance = (coord1, coord2) => {
     const [lon1, lat1] = coord1;
@@ -153,6 +153,8 @@ export const handleEnquiry = async (req, res) => {
 
             await order.save();
             if (order.status === 'cancelled') await releaseCouponForOrder(order._id);
+            // Cancelled, or refused at the door and going back to the vendor: wallet money back, referral reset.
+            await onOrderCancelledRewards(order._id, order.status === 'cancelled' ? 'order_cancelled' : 'fully_returned');
             
             if (order.deliveryBoyId) {
                 const DeliveryBoy = (await import('../../../models/DeliveryBoy.model.js')).default;

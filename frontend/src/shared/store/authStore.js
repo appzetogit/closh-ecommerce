@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, subscribeWithSelector } from 'zustand/middleware';
 import api from '../utils/api';
+import { normalizeReferralCode, getDeviceId, clearStoredReferralCode } from '../utils/referral';
 
 export const useAuthStore = create(
   subscribeWithSelector(
@@ -41,12 +42,15 @@ export const useAuthStore = create(
         }
       },
 
-      registerOtp: async (name, email, phone) => {
+      registerOtp: async (name, email, phone, referralCode = '') => {
         set({ isLoading: true });
         try {
           const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+          const code = normalizeReferralCode(referralCode);
           const response = await api.post('/user/auth/register-otp', {
-            name, email, phone: normalizedPhone
+            name, email, phone: normalizedPhone,
+            ...(code ? { referralCode: code } : {}),
+            deviceId: getDeviceId(),
           });
           const payload = response?.data ?? response;
           set({ pendingPhone: normalizedPhone, pendingEmail: email, isLoading: false });
@@ -175,7 +179,9 @@ export const useAuthStore = create(
           import('./wishlistStore').then(m => m.useWishlistStore.getState().fetchWishlist());
           import('./addressStore').then(m => m.useAddressStore.getState().fetchAddresses());
 
-          return { success: true, user };
+          // The sign-up referral code is used up once the server has looked at it.
+          if (payload?.referral) clearStoredReferralCode();
+          return { success: true, user, referral: payload?.referral || null };
         } catch (error) {
           set({ isLoading: false });
           throw error;

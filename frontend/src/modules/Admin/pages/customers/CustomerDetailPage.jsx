@@ -18,6 +18,7 @@ import DataTable from '../../components/DataTable';
 import { formatPrice } from '../../../../shared/utils/helpers';
 import { formatDateTime } from '../../utils/adminHelpers';
 import { getCustomerOrders } from '../../services/adminService';
+import CustomerWalletPanel from '../../components/Customers/CustomerWalletPanel';
 
 import toast from 'react-hot-toast';
 
@@ -121,7 +122,7 @@ const CustomerDetailPage = () => {
   // Set active tab from URL query parameter
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['overview', 'orders', 'transactions', 'addresses'].includes(tab)) {
+    if (tab && ['overview', 'orders', 'transactions', 'addresses', 'wallet'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -467,6 +468,18 @@ const CustomerDetailPage = () => {
             >
               Addresses ({customer.addresses?.length || 0})
             </button>
+            <button
+              onClick={() => {
+                setActiveTab('wallet');
+                navigate(`/admin/customers/${id}?tab=wallet`);
+              }}
+              className={`px-6 py-4 font-semibold text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'wallet'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
+            >
+              Wallet
+            </button>
           </div>
         </div>
 
@@ -600,6 +613,9 @@ const CustomerDetailPage = () => {
               )}
             </div>
           )}
+
+          {/* Wallet Tab */}
+          {activeTab === 'wallet' && <CustomerWalletPanel customerId={customer.id || id} />}
 
           {/* Addresses Tab */}
           {activeTab === 'addresses' && (

@@ -69,10 +69,19 @@ const OrderDetailsPage = () => {
         'Other (Please specify)'
     ];
 
-    const CANCELLABLE_STATUSES = ['pending', 'accepted', 'processing', 'ready_for_pickup', 'all_vendors_ready', 'ready_for_delivery', 'searching', 'assigned'];
-    const SUPPORT_CANCELLABLE_STATUSES = ['picked_up', 'out_for_delivery', 'arrived', 'shipped'];
+    // Must match cancelOrderInternal on the server. Once a rider is assigned the customer
+    // can only ask support to cancel.
+    const CANCELLABLE_STATUSES = ['pending', 'accepted', 'processing', 'ready_for_pickup', 'all_vendors_ready', 'ready_for_delivery', 'searching'];
+    const SUPPORT_CANCELLABLE_STATUSES = ['assigned', 'picked_up', 'out_for_delivery', 'arrived', 'shipped'];
     const canCancelOrder = order && CANCELLABLE_STATUSES.includes(order.status?.toLowerCase()) && order.status?.toLowerCase() !== 'cancelled';
     const needsSupportToCancel = order && SUPPORT_CANCELLABLE_STATUSES.includes(order.status?.toLowerCase());
+    // What a cancellation gives back: wallet money always returns to the wallet; the rest is
+    // refunded only if it was actually paid online (COD has not been collected yet).
+    const cancelRefundToWallet = Math.max(0, Number(order?.walletApplied || 0) - Number(order?.walletRefunded || 0));
+    const cancelRefundToPayment = order && String(order.paymentStatus).toLowerCase() === 'paid'
+        && !['cod', 'wallet'].includes(String(order.paymentMethod).toLowerCase())
+        ? Number(order.total || 0)
+        : 0;
 
     // Try & Buy: the customer can keep some items and return the rest at the door. The order
     // then ends as 'try_buy_completed' - it is a delivered order, not a returned one.
@@ -980,10 +989,19 @@ const OrderDetailsPage = () => {
                                         <span>₹{order.platformFee}</span>
                                     </div>
                                 )}
+                                {Number(order.walletApplied) - Number(order.walletRefunded || 0) > 0 && (
+                                    <div className="flex justify-between text-[10px] font-bold text-emerald-600">
+                                        <span>CLOSH Wallet</span>
+                                        <span>-₹{Number((Number(order.walletApplied) - Number(order.walletRefunded || 0)).toFixed(2))}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between text-[10px] font-black text-black pt-1.5 border-t border-gray-50">
-                                    <span>Paid via {order.paymentMethod?.toUpperCase() || 'COD'}</span>
+                                    <span>{order.paymentMethod === 'wallet' ? 'Paid from CLOSH Wallet' : `Paid via ${order.paymentMethod?.toUpperCase() || 'COD'}`}</span>
                                     <span>₹{order.total}</span>
                                 </div>
+                                {Number(order.walletRefunded) > 0 && (
+                                    <p className="text-[10px] font-bold text-emerald-600 pt-1">₹{order.walletRefunded} returned to your CLOSH wallet</p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2152,10 +2170,24 @@ const OrderDetailsPage = () => {
                                                 <span className="font-bold text-gray-500">Order ID</span>
                                                 <span className="font-black text-gray-900">#{order?.orderId || order?.id}</span>
                                             </div>
-                                            <div className="flex justify-between text-xs">
-                                                <span className="font-bold text-gray-500">Refund Amount</span>
-                                                <span className="font-black text-emerald-600">₹{order?.total}</span>
-                                            </div>
+                                            {cancelRefundToWallet > 0 && (
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="font-bold text-gray-500">Back to CLOSH wallet</span>
+                                                    <span className="font-black text-emerald-600">₹{cancelRefundToWallet}</span>
+                                                </div>
+                                            )}
+                                            {cancelRefundToPayment > 0 && (
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="font-bold text-gray-500">Refund to your payment method</span>
+                                                    <span className="font-black text-emerald-600">₹{cancelRefundToPayment}</span>
+                                                </div>
+                                            )}
+                                            {cancelRefundToWallet <= 0 && cancelRefundToPayment <= 0 && (
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="font-bold text-gray-500">Refund</span>
+                                                    <span className="font-bold text-gray-700">Nothing to refund, you have not paid yet</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between text-xs">
                                                 <span className="font-bold text-gray-500">Reason</span>
                                                 <span className="font-bold text-gray-700 text-right max-w-[200px] truncate">

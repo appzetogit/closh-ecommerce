@@ -9,6 +9,7 @@ import { emitEvent } from '../../../services/socket.service.js';
 import { createNotification } from '../../../services/notification.service.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { uploadLocalFileToCloudinaryAndCleanup, cleanupLocalFiles } from '../../../services/upload.service.js';
+import { onOrderCompletedRewards } from '../../../services/orderRewards.service.js';
 
 // ─── Helper: sort vendor stops nearest-first from rider's location ───
 const sortStopsNearestFirst = (stops, riderCoords) => {
@@ -486,6 +487,7 @@ export const completeMultiVendorDelivery = asyncHandler(async (req, res) => {
     // Credit vendor + rider earnings — this path previously skipped wallet settlement entirely.
     const { WalletService } = await import('../../../services/wallet.service.js');
     await WalletService.processOrderCompletionSafe(order);
+    await onOrderCompletedRewards(order._id);
 
     await DeliveryBatch.findOneAndUpdate(
         { deliveryBoyId, isMultiVendor: true },

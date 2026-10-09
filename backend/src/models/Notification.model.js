@@ -6,7 +6,7 @@ const notificationSchema = new mongoose.Schema(
         recipientType: { type: String, enum: ['user', 'customer', 'vendor', 'delivery', 'admin'], required: true },
         title: { type: String, required: true },
         message: { type: String, required: true },
-        type: { type: String, enum: ['order', 'payment', 'payout', 'system', 'promotion', 'broadcast', 'alert', 'chat', 'store_online', 'return', 'new_assignment_broadcast', 'return_pickup_broadcast', 'daily_deal', 'flash_sale', 'special_offer', 'promotional'], default: 'system' },
+        type: { type: String, enum: ['order', 'payment', 'payout', 'system', 'promotion', 'broadcast', 'alert', 'chat', 'store_online', 'return', 'new_assignment_broadcast', 'return_pickup_broadcast', 'daily_deal', 'flash_sale', 'special_offer', 'promotional', 'referral', 'wallet'], default: 'system' },
         isRead: { type: Boolean, default: false, index: true },
         imageUrl: { type: String, default: null },
         actionLink: { type: String, default: null }, // deep link/URL opened on tap

@@ -8,6 +8,7 @@ import DeliveryBatch from '../../../models/DeliveryBatch.model.js';
 import { emitEvent } from '../../../services/socket.service.js';
 import { createNotification } from '../../../services/notification.service.js';
 import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
+import { onOrderCompletedRewards } from '../../../services/orderRewards.service.js';
 
 // Internal helper for state checking
 const checkState = (current, expected) => {
@@ -320,6 +321,7 @@ export const completeBatchDelivery = asyncHandler(async (req, res) => {
          
          // Credit earnings
          await WalletService.processOrderCompletionSafe(order);
+         await onOrderCompletedRewards(order._id);
          
          emitEvent(`user_${batch.customerId}`, 'order_delivered', { orderId: order._id });
      }

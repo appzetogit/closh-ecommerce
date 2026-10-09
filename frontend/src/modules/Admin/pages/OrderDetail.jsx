@@ -912,6 +912,18 @@ const OrderDetail = () => {
                   <span className="font-semibold">{formatCurrency(platformFee)}</span>
                 </div>
               )}
+              {Number(order.walletApplied) > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>CLOSH Wallet</span>
+                  <span className="font-semibold">-{formatCurrency(order.walletApplied)}</span>
+                </div>
+              )}
+              {Number(order.walletRefunded) > 0 && (
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Returned to customer's wallet</span>
+                  <span className="font-semibold">{formatCurrency(order.walletRefunded)}</span>
+                </div>
+              )}
               <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between">
                 <span className="font-bold text-gray-800">Total</span>
                 <span className="font-bold text-lg text-gray-800">{formatCurrency(order.total)}</span>

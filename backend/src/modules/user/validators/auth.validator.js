@@ -5,6 +5,9 @@ export const registerSchema = Joi.object({
     email: Joi.string().email().lowercase().required(),
     password: Joi.string().min(6).optional(), // optional now
     phone: Joi.string().pattern(/^[0-9]{10}$/).optional(),
+    referralCode: Joi.string().trim().uppercase().pattern(/^[A-Z0-9]{4,12}$/).allow('', null).optional()
+        .messages({ 'string.pattern.base': 'Invalid referral code.' }),
+    deviceId: Joi.string().trim().max(100).allow('', null).optional(),
 });
 
 export const loginOtpSchema = Joi.object({
@@ -19,6 +22,14 @@ export const registerOtpSchema = Joi.object({
     email: Joi.string().email().lowercase().required().messages({
         'string.email': 'Invalid email address.',
     }),
+    referralCode: Joi.string().trim().uppercase().pattern(/^[A-Z0-9]{4,12}$/).allow('', null).optional()
+        .messages({ 'string.pattern.base': 'Invalid referral code.' }),
+    deviceId: Joi.string().trim().max(100).allow('', null).optional(),
+});
+
+export const referralCodeSchema = Joi.object({
+    code: Joi.string().trim().uppercase().pattern(/^[A-Z0-9]{4,12}$/).required()
+        .messages({ 'string.pattern.base': 'Invalid referral code.' }),
 });
 
 export const checkPhoneSchema = Joi.object({

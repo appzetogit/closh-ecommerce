@@ -49,6 +49,15 @@ const userSchema = new mongoose.Schema(
                 lastUsed: { type: Date, default: Date.now },
             },
         ],
+        // ─── Refer & Earn + wallet (docs/REFER_AND_EARN_AND_WALLET.md) ───
+        referralCode: { type: String, unique: true, sparse: true, uppercase: true, trim: true },
+        referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        referralAppliedAt: { type: Date, default: null },
+        // Code entered at sign-up; turned into a Referral only once the phone/email is verified.
+        pendingReferralCode: { type: String, uppercase: true, trim: true, select: false },
+        signupDeviceId: { type: String, trim: true, index: true },
+        // Cached sum of open credit lots in WalletTransaction (the ledger is the source of truth).
+        walletBalance: { type: Number, default: 0, min: 0 },
         // Service area preference
         preferredLocation: {
             serviceAreaId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceArea' },
@@ -75,6 +84,21 @@ userSchema.pre('save', function (next) {
         });
     }
     next();
+});
+
+// Every customer gets a referral code when the account is created.
+userSchema.pre('save', async function (next) {
+    if (this.referralCode || (this.role && this.role !== 'customer')) return next();
+    try {
+        const { generateUniqueReferralCode } = await import('../utils/referralCode.js');
+        const Model = this.constructor;
+        this.referralCode = await generateUniqueReferralCode(this.name, async (code) =>
+            Boolean(await Model.exists({ referralCode: code }))
+        );
+        next();
+    } catch (err) {
+        next(err);
+    }
 });
 
 // Hash password before saving

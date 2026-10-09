@@ -29,6 +29,9 @@ import CancellationReason from '../../../models/CancellationReason.model.js';
 import { releaseRiderIfIdle } from '../../../services/deliveryAvailability.service.js';
 import { isTryBuyAutoReturn } from '../../../utils/tryBuyReturn.js';
 import Coupon from '../../../models/Coupon.model.js';
+import { refundOrder as refundWalletForOrder } from '../../../services/customerWallet.service.js';
+import { onOrderCompletedRewards } from '../../../services/orderRewards.service.js';
+import { onOrderCancelled as onReferralOrderCancelled } from '../../../services/referral.service.js';
 
 const DELIVERY_OTP_TTL_MS = 10 * 60 * 1000;
 const DELIVERY_OTP_MAX_ATTEMPTS = 5;
@@ -1666,11 +1669,19 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
 
     // Frontend might have added COD fee or other hidden fees into original order.total
     // Expected original total (without hidden fees)
-    const expectedOriginalTotal = originalSubtotal + shipping + platformFee - (order.discount || 0);
-    const hiddenFees = (order.total || expectedOriginalTotal) - expectedOriginalTotal;
+    // order.total is what was left to pay after the wallet, so the wallet part is added back
+    // here; otherwise it would show up as a negative "hidden fee".
+    const walletAppliedAtCheckout = Number(order.walletApplied || 0);
+    const expectedOriginalTotal = originalSubtotal + shipping + platformFee - (order.discount || 0) - walletAppliedAtCheckout;
+    const hiddenFees = (order.total ?? expectedOriginalTotal) - expectedOriginalTotal;
 
     // finalAmount should NOT add adjustedTax because acceptedSubtotal (i.price) already includes tax!
-    flow.finalAmount = acceptedSubtotal + shipping + platformFee - adjustedDiscount + hiddenFees;
+    const keptPayable = Math.max(0, acceptedSubtotal + shipping + platformFee - adjustedDiscount + hiddenFees);
+    // The wallet pays for what was kept first; anything it paid beyond that goes back to the
+    // wallet after the order is saved (docs/REFER_AND_EARN_AND_WALLET.md §7.9).
+    const walletUsedOnKept = Math.min(walletAppliedAtCheckout, keptPayable);
+    const walletToReturn = Math.round((walletAppliedAtCheckout - walletUsedOnKept) * 100) / 100;
+    flow.finalAmount = Math.round((keptPayable - walletUsedOnKept) * 100) / 100;
     if (flow.finalAmount < 0) flow.finalAmount = 0;
 
     // Keep the quoted price before it is rewritten below. Once items are accepted/rejected
@@ -1682,6 +1693,7 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
             subtotal: order.subtotal,
             discount: order.discount,
             couponDiscount: order.couponDiscount,
+            walletApplied: walletAppliedAtCheckout,
             tax: order.tax,
             shipping: order.shipping,
             platformFee: order.platformFee,
@@ -1750,6 +1762,22 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     // the customer nothing, so give the use back.
     if (acceptedItems.length === 0 || (order.couponCode && adjustedDiscount === 0)) {
         await releaseCouponForOrder(order._id);
+    }
+
+    // Wallet paid for more than the customer kept: return the difference to the wallet.
+    if (walletToReturn > 0) {
+        try {
+            await refundWalletForOrder(order._id, walletToReturn, 'try_buy');
+        } catch (err) {
+            console.error(`[Wallet] Try & Buy refund failed for ${order.orderId}:`, err.message);
+        }
+    }
+    // Nothing kept: the referred customer's first order does not count. (Only the referral -
+    // the wallet part was settled just above; fees still payable keep their wallet share.)
+    if (acceptedItems.length === 0) {
+        onReferralOrderCancelled(order._id, 'fully_returned').catch((err) =>
+            console.error(`[Referral] Try & Buy reset failed for ${order.orderId}:`, err.message)
+        );
     }
 
     // Note: Stock is NO LONGER restored here. It will be restored only after
@@ -2119,6 +2147,7 @@ const finalizeTryBuyOrderAfterAutoReturn = async (orderId, riderId) => {
     await order.save();
 
     await WalletService.processOrderCompletionSafe(order);
+    await onOrderCompletedRewards(order._id);
 
     const updatedRider = await DeliveryBoy.findById(riderId).select('availableBalance totalEarnings totalDeliveries').lean();
     emitEvent(`delivery_${riderId}`, 'earnings_updated', {
@@ -2317,6 +2346,7 @@ export const handleCompleteDelivery = asyncHandler(async (req, res) => {
     // Only process completion if fully delivered. For Try & Buy with rejects, process after return is complete.
     if (!hasRejectedItems) {
         await WalletService.processOrderCompletionSafe(order);
+        await onOrderCompletedRewards(order._id);
     }
 
     let returnReq = null;
@@ -2587,6 +2617,10 @@ export const markTryBuyVendorReturned = asyncHandler(async (req, res) => {
     }
 
     await order.save();
+    // After the save: the referral check reads the order's final status from the database.
+    if (['try_buy_completed', 'returned'].includes(order.status)) {
+        await onOrderCompletedRewards(order._id);
+    }
     await cacheInvalidate(`dash:${req.user.id}`, `profile:${req.user.id}`);
     res.status(200).json(new ApiResponse(200, order, `Returned unselected items to vendor ${vendorId}`));
 });
