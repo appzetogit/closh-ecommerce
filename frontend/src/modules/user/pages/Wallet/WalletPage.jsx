@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet, ArrowDownLeft, ArrowUpRight, Gift, AlertTriangle } from 'lucide-react';
+import { Wallet, ArrowDownLeft, ArrowUpRight, Gift, AlertTriangle, ChevronRight } from 'lucide-react';
 import AccountLayout from '../../components/Profile/AccountLayout';
 import api from '../../../../shared/utils/api';
 import { formatPrice } from '../../../../shared/utils/helpers';
@@ -62,11 +62,20 @@ const WalletPage = () => {
                     </div>
                 )}
 
-                <Link to="/refer" className="flex items-center justify-between rounded-xl border border-gray-100 p-4 hover:bg-gray-50">
-                    <span className="flex items-center gap-3 font-bold text-gray-900">
-                        <Gift className="text-[#ffcc00]" size={20} /> Refer friends and earn wallet money
+                <Link
+                    to="/refer"
+                    className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/60 p-4 hover:bg-amber-50 transition-colors"
+                >
+                    <span className="w-10 h-10 shrink-0 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <Gift className="text-amber-500" size={20} />
                     </span>
-                    <span className="text-gray-400 text-sm font-bold">Invite</span>
+                    <span className="flex-1 min-w-0">
+                        <span className="block font-bold text-gray-900 text-[14px] leading-snug">Refer friends, earn wallet money</span>
+                        <span className="block text-[12px] text-gray-500 leading-snug mt-0.5">Get rewarded when a friend's first order is delivered</span>
+                    </span>
+                    <span className="shrink-0 flex items-center gap-1 rounded-full bg-black text-white text-[12px] font-bold px-3.5 py-2">
+                        Invite <ChevronRight size={14} />
+                    </span>
                 </Link>
 
                 <div className="rounded-2xl border border-gray-100 p-6">
@@ -79,8 +88,8 @@ const WalletPage = () => {
                                 const isCredit = t.type === 'credit';
                                 return (
                                     <li key={t.id} className="py-3 flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`w-9 h-9 rounded-full flex items-center justify-center ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
                                                 {isCredit ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                                             </span>
                                             <div>
@@ -93,7 +102,7 @@ const WalletPage = () => {
                                                 {t.note && <p className="text-[12px] text-gray-500">{t.note}</p>}
                                             </div>
                                         </div>
-                                        <span className={`font-bold text-[15px] ${isCredit ? 'text-emerald-600' : 'text-gray-900'}`}>
+                                        <span className={`shrink-0 whitespace-nowrap font-bold text-[15px] ${isCredit ? 'text-emerald-600' : 'text-gray-900'}`}>
                                             {isCredit ? '+' : '-'}{formatPrice(t.amount)}
                                         </span>
                                     </li>
