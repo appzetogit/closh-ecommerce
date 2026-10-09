@@ -91,7 +91,7 @@ const ReferPage = () => {
         <AccountLayout>
             <div className="bg-white -m-6 md:-m-10 min-h-screen">
                 {/* Stats */}
-                <div className="bg-white p-6 border-b border-gray-100 grid grid-cols-3 gap-4 text-center">
+                <div className="bg-white px-3 py-4 md:p-6 border-b border-gray-100 grid grid-cols-3 gap-2 md:gap-4 text-center">
                     <div>
                         <p className="text-[13px] font-bold text-gray-400 mb-1">Total earned</p>
                         <p className="text-2xl font-bold text-gray-900">{formatPrice(data?.stats?.earned || 0)}</p>
@@ -106,7 +106,7 @@ const ReferPage = () => {
                     </div>
                 </div>
 
-                <div className="p-6 md:p-10 space-y-6">
+                <div className="px-3 py-4 md:p-10 space-y-4 md:space-y-6">
                     {!loading && data && !data.enabled && (
                         <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-[14px] text-amber-800 font-medium">
                             Refer &amp; Earn is paused right now. Friends who already joined with your code still count.
@@ -114,7 +114,7 @@ const ReferPage = () => {
                     )}
 
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-6 md:p-10 space-y-8">
+                        <div className="p-4 md:p-10 space-y-6 md:space-y-8">
                             <div className="flex items-center gap-2">
                                 <Gift className="text-[#ffcc00]" size={22} />
                                 <h2 className="text-[19px] font-bold text-gray-900">
@@ -124,7 +124,7 @@ const ReferPage = () => {
 
                             <div className="space-y-4 text-[15px] leading-relaxed text-gray-600 font-medium">
                                 {data?.terms && <p>{data.terms}</p>}
-                                <div className="flex items-start gap-2 bg-white p-4 rounded-xl border border-gray-100">
+                                <div className="flex items-start gap-2 bg-gray-50 p-3 md:p-4 rounded-xl border border-gray-100">
                                     <span className="mt-0.5">🔒</span>
                                     <div>
                                         <p className="text-gray-900 font-bold mb-1">Only the first order counts</p>
@@ -136,11 +136,11 @@ const ReferPage = () => {
                             </div>
 
                             {/* How it works */}
-                            <div className="space-y-8 pt-4">
+                            <div className="space-y-6 md:space-y-8 pt-2 md:pt-4">
                                 <h3 className="text-[14px] font-bold text-gray-400 uppercase">How it works</h3>
-                                <div className="space-y-10">
+                                <div className="space-y-7 md:space-y-10">
                                     {howItWorks.map((step) => (
-                                        <div key={step.id} className="relative flex gap-6">
+                                        <div key={step.id} className="relative flex gap-4 md:gap-6">
                                             {step.id !== howItWorks.length && (
                                                 <div className="absolute left-[7px] top-5 w-[2px] h-[calc(100%+24px)] bg-gray-100" />
                                             )}
@@ -155,7 +155,7 @@ const ReferPage = () => {
                             </div>
 
                             {/* Code & share */}
-                            <div className="pt-8 space-y-4">
+                            <div className="pt-4 md:pt-8 space-y-3 md:space-y-4">
                                 <div className="flex items-center justify-between bg-white border-2 border-dashed border-gray-200 p-4 rounded-2xl hover:border-[#a03040] transition-all">
                                     <span className="text-xl font-bold text-gray-900 pl-2 uppercase tracking-wider">{code || '--------'}</span>
                                     <button
@@ -184,7 +184,7 @@ const ReferPage = () => {
                     </div>
 
                     {/* Friends */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-8">
                         <h3 className="text-[14px] font-bold text-gray-400 uppercase mb-4">Your referrals</h3>
                         {history.length === 0 ? (
                             <p className="text-[14px] text-gray-500 font-medium">No friends have joined with your code yet.</p>
