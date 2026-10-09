@@ -1,7 +1,37 @@
 import { createNotification } from './notification.service.js';
+import Notification from '../models/Notification.model.js';
 import { emitEvent } from './socket.service.js';
 import Order from '../models/Order.model.js';
 import { autoAssignDeliveryBoy } from './autoAssignment.service.js';
+
+// Notification titles the customer sees (the message carries the order id and details).
+const CUSTOMER_TITLES = {
+    pending: 'Order placed 🎉',
+    accepted: 'Order confirmed',
+    processing: 'Order being prepared',
+    ready_for_pickup: 'Order packed',
+    searching: 'Finding a delivery partner',
+    assigned: 'Delivery partner assigned',
+    arrived_at_store: 'Delivery partner at the store',
+    picked_up: 'Order picked up',
+    out_for_delivery: 'Out for delivery',
+    arrived: 'Delivery partner has arrived',
+    delivered: 'Order delivered',
+    cancelled: 'Order cancelled',
+};
+
+// The same status can be reported twice for one order (e.g. 'assigned' from both the
+// rider's accept and the auto-assignment flow). Skip a notification identical to one sent
+// to the same person in the last two minutes.
+const DUPLICATE_WINDOW_MS = 2 * 60 * 1000;
+const isDuplicate = (recipient, orderId, status) => Notification.exists({
+    recipientId: recipient.id,
+    recipientType: recipient.type,
+    type: 'order',
+    'data.orderId': String(orderId),
+    'data.status': String(status),
+    createdAt: { $gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+}).catch(() => null);
 
 /**
  * Unified service to notify all parties involved in an order (Customer, Vendors, Rider)
@@ -36,11 +66,15 @@ export const OrderNotificationService = {
                     user: {
                         pending: `Your order ${id} has been placed successfully.`,
                         accepted: `Your order ${id} is being prepared.`,
-                        ready_for_pickup: `Order ${id} is ready and we're finding a delivery partner.`,
+                        ready_for_pickup: riderName
+                            ? `Your order ${id} is packed. ${riderName} will pick it up shortly.`
+                            : `Order ${id} is ready and we're finding a delivery partner.`,
                         searching: `Finding a delivery partner for your order ${id}.`,
                         assigned: `${riderName || 'A rider'} is arriving to pick up your order ${id}.`,
+                        arrived_at_store: `${riderName || 'Your delivery partner'} is at the store collecting your order ${id}.`,
                         picked_up: `Your order ${id} is on the way!`,
                         out_for_delivery: `Your order ${id} is out for delivery.`,
+                        arrived: `${riderName || 'Your delivery partner'} has arrived with your order ${id}.`,
                         delivered: `Enjoy your order ${id}! It has been delivered.`,
                         cancelled: `Your order ${id} has been cancelled.`,
                         default: `Your order ${id} status updated to ${s.replace(/_/g, ' ')}.`
@@ -76,7 +110,7 @@ export const OrderNotificationService = {
                 recipients.push({ 
                     id: order.userId, 
                     type: 'user', 
-                    title: 'Order Update', 
+                    title: CUSTOMER_TITLES[String(status).toLowerCase()] || 'Order update', 
                     message: msg,
                     click_action: `/orders/${order.orderId}`
                 });
@@ -185,15 +219,32 @@ export const OrderNotificationService = {
             // Execute notifications (DB persistence + Push via createNotification)
             const tasks = recipients
                 .filter(r => String(r.id) !== String(options.excludeRecipientId))
-                .map(r => createNotification({
+                .map(async (r) => {
+                    if (await isDuplicate(r, order.orderId, status)) {
+                        console.log(`[OrderNotification] Skipping duplicate ${status} for ${r.type}_${r.id} (${order.orderId})`);
+                        return null;
+                    }
+                    return createNotification({
                     recipientId: r.id,
                     recipientType: r.type,
                     title: r.title,
                     message: r.message,
                     type: 'order',
-                    data: { ...notificationData, ...data, click_action: r.click_action },
+                    data: {
+                        orderId: notificationData.orderId,
+                        status,
+                        total: notificationData.total,
+                        customerName: notificationData.customerName,
+                        ...(order.deliveryBoyId ? {
+                            deliveryBoyId: String(order.deliveryBoyId._id || order.deliveryBoyId),
+                            deliveryBoyName: order.deliveryBoyId.name,
+                        } : {}),
+                        ...data,
+                        click_action: r.click_action,
+                    },
                     sound: r.sound || 'default'
-                }));
+                    });
+                });
 
             // Auto-trigger assignment search ONLY if no delivery boy is assigned yet.
             // Re-check from DB because autoAssignDeliveryBoy may have already assigned someone by now.
@@ -206,7 +257,10 @@ export const OrderNotificationService = {
                 }
             }
 
-            await Promise.allSettled(tasks);
+            const results = await Promise.allSettled(tasks);
+            results.forEach((res) => {
+                if (res.status === 'rejected') console.error(`[OrderNotification] ${order.orderId} ${status}: ${res.reason?.message || res.reason}`);
+            });
         } catch (error) {
             console.error('OrderNotificationService Error:', error.message);
         }

@@ -117,17 +117,39 @@ const sendPushToTokens = async (tokens, { title, body, data = {}, sound = 'defau
  * Create a notification for a user/vendor/delivery/admin and trigger Push/Socket
  * @param {Object} options - { recipientId, recipientType, title, message, type, data, token, tokens }
  */
+// Notification.data is a Map of strings (and FCM data must be strings too). Callers sometimes
+// pass nested objects - e.g. order updates carried `deliveryBoy: {id, name, phone}` - which made
+// Notification.create throw, so the customer got no notification, socket event or push at all
+// once a rider was assigned. Flatten everything to strings here; drop null/undefined.
+const toStringMap = (data = {}) => {
+    const out = {};
+    Object.entries(data || {}).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+        out[key] = typeof value === 'object' && !(value instanceof Date) && typeof value.toHexString !== 'function'
+            ? JSON.stringify(value)
+            : String(value);
+    });
+    return out;
+};
+
 export const createNotification = async ({ recipientId, recipientType, title, message, type = 'system', data = {}, token, tokens, imageUrl, actionLink, ring = false }) => {
+    data = toStringMap(data);
+
     // 1. Persist to DB if recipientId is provided
     let notification = null;
     if (recipientId) {
-        notification = await Notification.create({ recipientId, recipientType, title, message, type, data, imageUrl, actionLink });
-        console.log(`💾 [DB NOTIFICATION] ID: ${notification._id}, For: ${recipientType}_${recipientId}`);
+        try {
+            notification = await Notification.create({ recipientId, recipientType, title, message, type, data, imageUrl, actionLink });
+            console.log(`💾 [DB NOTIFICATION] ID: ${notification._id}, For: ${recipientType}_${recipientId}`);
 
-        // 2. Real-time socket updates (for active web clients)
-        const room = recipientType === 'admin' ? `admin_${recipientId}` : `${recipientType}_${recipientId}`;
-        console.log(`📡 [SOCKET NOTIFY] Room: ${room}, Event: new_notification`);
-        emitEvent(room, 'new_notification', notification);
+            // 2. Real-time socket updates (for active web clients)
+            const room = recipientType === 'admin' ? `admin_${recipientId}` : `${recipientType}_${recipientId}`;
+            console.log(`📡 [SOCKET NOTIFY] Room: ${room}, Event: new_notification`);
+            emitEvent(room, 'new_notification', notification);
+        } catch (err) {
+            // Still try the push below - a failed DB write must not silence the notification.
+            console.error(`Failed to save notification for ${recipientType}_${recipientId}:`, err.message);
+        }
     }
 
     // 3. Trigger Push Notification (for mobile/background)

@@ -46,6 +46,11 @@ const normalizeBrand = (raw) => ({
 });
 
 import socketService from "../utils/socket";
+import { getAuthScopeForPath } from "../utils/api";
+import { useUserNotificationStore } from "../../modules/user/store/userNotificationStore";
+
+// Last foreground push toast, so the socket copy of the same notification is not toasted twice.
+let lastPushToast = { title: null, at: 0 };
 
 const AppBootstrap = () => {
   useEffect(() => {
@@ -186,8 +191,12 @@ const AppBootstrap = () => {
           const platform = isApp ? 'app' : 'web'; 
           
           const tokenKey = `${userId}_${token}_${platform}`;
-          
-          if (!registeredTokens.includes(tokenKey)) {
+          // Re-send the token every 12 hours even if cached: the server drops tokens that FCM
+          // reports as stale and on logout, and a cached key would otherwise never be re-sent.
+          const lastSent = Number(localStorage.getItem('fcm_token_sent_at') || 0);
+          const isFresh = Date.now() - lastSent < 12 * 60 * 60 * 1000;
+
+          if (!registeredTokens.includes(tokenKey) || !isFresh) {
             const endpoint = `/notifications/fcm-token`;
             await api.post(`${scopeUrl}${endpoint}`, { token, platform }, { silent: true });
             
@@ -195,6 +204,7 @@ const AppBootstrap = () => {
             const otherTokens = registeredTokens.filter(k => !k.startsWith(`${userId}_`));
             otherTokens.push(tokenKey);
             localStorage.setItem('registered_fcm_tokens', JSON.stringify(otherTokens));
+            localStorage.setItem('fcm_token_sent_at', String(Date.now()));
             console.log(`FCM token registered with backend for ${scopeUrl} (${platform}):`, userId);
           }
         }
@@ -223,6 +233,7 @@ const AppBootstrap = () => {
         
         // Also show regular UI toast and play a sound if it is for a delivery boy or vendor
         toast.success(`${title}: ${body}`, { duration: 5000 });
+        lastPushToast = { title, at: Date.now() };
         
         const deliveryBoy = useDeliveryAuthStore.getState().deliveryBoy;
         const vendor = useVendorAuthStore.getState().vendor;
@@ -241,6 +252,19 @@ const AppBootstrap = () => {
         setupForegroundListener();
       }).catch(err => console.log('failed: ', err));
     };
+
+    // Customer in-app notifications arrive live on the socket (room user_<id>, event
+    // new_notification). Update the bell/list, and toast unless the same push was just shown.
+    const handleUserNotification = (notif) => {
+      if (getAuthScopeForPath(window.location.pathname || '/') !== 'user') return;
+      if (!useAuthStore.getState().isAuthenticated) return;
+      useUserNotificationStore.getState().receiveNotification(notif);
+      const recentlyPushed = lastPushToast.title === notif?.title && Date.now() - lastPushToast.at < 5000;
+      if (notif?.title && !recentlyPushed) {
+        toast(`${notif.title}${notif.message ? `: ${notif.message}` : ''}`, { icon: '🔔', duration: 5000 });
+      }
+    };
+    socketService.on('new_notification', handleUserNotification);
 
     // Subscriptions for all roles
     const unsubs = [
@@ -261,6 +285,7 @@ const AppBootstrap = () => {
     return () => {
       cancelled = true;
       unsubs.forEach(unsub => unsub());
+      socketService.off('new_notification', handleUserNotification);
     };
   }, []);
 

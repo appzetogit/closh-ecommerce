@@ -691,7 +691,6 @@ export const placeOrder = asyncHandler(async (req, res) => {
             // Prepaid orders will trigger this after successful payment verification
             if (order.paymentMethod !== 'prepaid') {
                 OrderNotificationService.notifyOrderUpdate(order._id, 'pending', {
-                    excludeRecipientId: userId,
                     title: 'New Order Received!',
                     message: `You have a new ${orderType?.replace(/_/g, ' ') || 'order'} of Rs.${order.total}.`
                 }).catch(err => console.error('[OrderDebug] Notification failed:', err));
@@ -867,7 +866,6 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     // Trigger notification and auto assignment for prepaid order after payment succeeds
     OrderNotificationService.notifyOrderUpdate(claimed._id, 'pending', {
-        excludeRecipientId: userId,
         title: 'New Order Received!',
         message: `You have a new ${claimed.orderType?.replace(/_/g, ' ') || 'order'} of Rs.${claimed.total}.`
     }).catch(err => console.error('[OrderDebug] Notification failed in verifyPayment:', err));

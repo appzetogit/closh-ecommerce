@@ -83,6 +83,19 @@ export const useUserNotificationStore = create((set, get) => ({
     }
   },
 
+  // A notification pushed live over the socket (event `new_notification`).
+  receiveNotification: (notif) => {
+    if (!notif) return;
+    set((state) => {
+      const exists = notif?._id && state.notifications.some((n) => String(n?._id) === String(notif._id));
+      if (exists) return {};
+      return {
+        notifications: state.hasFetched ? [notif, ...state.notifications] : state.notifications,
+        unreadCount: Number(state.unreadCount || 0) + (notif?.isRead ? 0 : 1),
+      };
+    });
+  },
+
   markAsRead: async (id) => {
     try {
       await api.put(`/user/notifications/${id}/read`);

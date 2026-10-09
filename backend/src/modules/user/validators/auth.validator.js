@@ -1,5 +1,11 @@
 import Joi from 'joi';
 
+// Push token sent by the app at login/sign-up (saved to User.fcmTokens by the auth controller).
+const fcmFields = {
+    fcmToken: Joi.string().trim().max(4096).allow('', null).optional(),
+    platform: Joi.string().valid('web', 'app', 'android', 'ios').optional(),
+};
+
 export const registerSchema = Joi.object({
     name: Joi.string().trim().min(2).max(50).required(),
     email: Joi.string().email().lowercase().required(),
@@ -8,6 +14,7 @@ export const registerSchema = Joi.object({
     referralCode: Joi.string().trim().uppercase().pattern(/^[A-Z0-9]{4,12}$/).allow('', null).optional()
         .messages({ 'string.pattern.base': 'Invalid referral code.' }),
     deviceId: Joi.string().trim().max(100).allow('', null).optional(),
+    ...fcmFields,
 });
 
 export const loginOtpSchema = Joi.object({
@@ -42,11 +49,13 @@ export const checkPhoneSchema = Joi.object({
 export const loginSchema = Joi.object({
     email: Joi.string().required(),
     password: Joi.string().required(),
+    ...fcmFields,
 });
 
 export const otpSchema = Joi.object({
     email: Joi.string().required(),
     otp: Joi.string().length(6).required(),
+    ...fcmFields,
 });
 
 export const resendOtpSchema = Joi.object({
