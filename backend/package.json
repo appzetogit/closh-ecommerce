@@ -7,9 +7,9 @@
   "scripts": {
     "guard": "node -e \"var f='../scripts/check-malware.mjs',fs=require('fs');if(fs.existsSync(f)){try{require('child_process').execFileSync(process.execPath,[f],{stdio:'inherit'})}catch(e){process.exit(1)}}else{console.warn('[guard] ../scripts/check-malware.mjs not found, skipped')}\"",
     "predev": "npm run guard",
-    "dev": "nodemon src/server.js",
+    "dev": "node api.js && nodemon src/server.js",
     "prestart": "npm run guard",
-    "start": "node src/server.js"
+    "start": "node api.js && node src/server.js"
   },
   "author": "furqan",
   "license": "ISC",
