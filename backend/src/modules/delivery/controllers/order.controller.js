@@ -3,6 +3,8 @@ import asyncHandler from '../../../utils/asyncHandler.js';
 import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Order from '../../../models/Order.model.js';
+import Settings from '../../../models/Settings.model.js';
+import { applyLineGst } from '../../../utils/gstUtils.js';
 import Delivery from '../../../models/Delivery.model.js';
 import DeliveryBatch from '../../../models/DeliveryBatch.model.js';
 import mongoose from 'mongoose';
@@ -1661,10 +1663,10 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     const originalSubtotal = order.subtotal || acceptedSubtotal;
     const subtotalRatio = originalSubtotal > 0 ? (acceptedSubtotal / originalSubtotal) : 1;
 
-    // Fixed fees are preserved; tax is scaled by the acceptance ratio
+    // Fixed fees are preserved. Tax is recomputed below from the kept lines and the
+    // re-checked coupon (the slab depends on the price paid per piece).
     const shipping = order.shipping || 0;
     const platformFee = order.platformFee || 0;
-    const adjustedTax = Math.round((order.tax || 0) * subtotalRatio);
     const adjustedDiscount = await recomputeTryBuyCouponDiscount(order, acceptedSubtotal, subtotalRatio);
 
     // Frontend might have added COD fee or other hidden fees into original order.total
@@ -1675,7 +1677,7 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     const expectedOriginalTotal = originalSubtotal + shipping + platformFee - (order.discount || 0) - walletAppliedAtCheckout;
     const hiddenFees = (order.total ?? expectedOriginalTotal) - expectedOriginalTotal;
 
-    // finalAmount should NOT add adjustedTax because acceptedSubtotal (i.price) already includes tax!
+    // finalAmount does not add tax: item prices (i.price) already include GST.
     const keptPayable = Math.max(0, acceptedSubtotal + shipping + platformFee - adjustedDiscount + hiddenFees);
     // The wallet pays for what was kept first; anything it paid beyond that goes back to the
     // wallet after the order is saved (docs/REFER_AND_EARN_AND_WALLET.md §7.9).
@@ -1705,7 +1707,6 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
     // Sync to main order document so all other views (Admin, User, Vendor) see the adjusted price
     order.total = flow.finalAmount;
     order.subtotal = acceptedSubtotal;
-    order.tax = adjustedTax;
     order.discount = adjustedDiscount;
     if (order.couponCode) order.couponDiscount = adjustedDiscount;
 
@@ -1731,6 +1732,21 @@ export const handleTryAndBuy = asyncHandler(async (req, res) => {
         return match?.decision === 'accepted';
     };
     const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+    // Customer GST on what was kept: the re-checked coupon is shared over the kept lines and
+    // each line's slab is picked on the price paid per piece. Same-state vs inter-state is
+    // taken from how the order was taxed at checkout.
+    const keptLines = (order.vendorItems || []).flatMap(group => (group.items || []).filter(keptDecision));
+    const allLines = (order.vendorItems || []).flatMap(group => group.items || []);
+    const taxSettings = await Settings.findOne({ key: 'tax' }).lean();
+    const businessState = taxSettings?.value?.closhBusinessState || 'Rajasthan';
+    const sameState = allLines.some(i => i.customerGstType === 'IGST')
+        ? false
+        : allLines.some(i => i.customerGstType === 'CGST_SGST')
+            || String(order.shippingAddress?.state || '').trim().toLowerCase() === String(businessState).trim().toLowerCase();
+    applyLineGst(keptLines, { couponDiscount: adjustedDiscount, rules: taxSettings?.value?.gstRules, sameState });
+    order.tax = round2(keptLines.reduce((s, i) => s + i.customerIgst + i.customerCgst + i.customerSgst, 0));
+
     (order.vendorItems || []).forEach(group => {
         const kept = (group.items || []).filter(keptDecision);
         const sum = (pick) => kept.reduce((acc, item) => acc + (Number(pick(item)) || 0), 0);

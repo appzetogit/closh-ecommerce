@@ -3,8 +3,13 @@ import {
     getGstRate,
     calculateInclusiveGST,
     calculateExclusiveGST,
-    generateInvoiceBreakdown
+    generateInvoiceBreakdown,
+    pickGstRate,
+    allocateDiscount,
+    computeLineGst
 } from './gstUtils.js';
+
+const roundSum = (a, b) => Math.round((a + b) * 100) / 100;
 
 console.log("🚀 Running GST Utility Tests...");
 
@@ -75,6 +80,33 @@ try {
     console.log("Testing null/undefined validation...");
     assert.throws(() => getGstRate(null), /Price cannot be null or undefined/);
     assert.throws(() => getGstRate(undefined), /Price cannot be null or undefined/);
+
+    // ──────────── Coupon-aware slabs ────────────
+    const RULES = [{ minPrice: 0, maxPrice: 2500, rate: 5 }, { minPrice: 2501, maxPrice: 9999999, rate: 18 }];
+    assert.strictEqual(pickGstRate(2500, RULES), 5, "2500 is in the 5% slab");
+    assert.strictEqual(pickGstRate(2500.5, RULES), 18, "a price between slabs goes to the higher slab, not 0%");
+    assert.strictEqual(pickGstRate(3000, RULES), 18);
+    assert.strictEqual(pickGstRate(100, []), 5, "no rules -> default slabs");
+
+    assert.deepStrictEqual(allocateDiscount([100, 200], 30), [10, 20]);
+    assert.deepStrictEqual(allocateDiscount([1, 1, 1], 1), [0.33, 0.33, 0.34], "shares add up exactly");
+    assert.deepStrictEqual(allocateDiscount([100], 500), [100], "discount never exceeds the amount");
+
+    // Rs.2,699 shoes, Rs.269.90 coupon: Rs.2,429.10 paid -> 5%, not 18%.
+    const [shoes] = computeLineGst([{ price: 2699, quantity: 1 }], { couponDiscount: 269.9, rules: RULES });
+    assert.strictEqual(shoes.gstRate, 5);
+    assert.strictEqual(shoes.netAmount, 2429.1);
+    assert.strictEqual(shoes.taxableValue, 2313.43);
+    assert.strictEqual(roundSum(shoes.cgst, shoes.sgst), 115.67);
+
+    const [noCoupon] = computeLineGst([{ price: 2699, quantity: 1 }], { rules: RULES });
+    assert.strictEqual(noCoupon.gstRate, 18, "without a coupon Rs.2,699 stays 18%");
+
+    // Slab is per piece: 2 x Rs.1,500 with Rs.300 off is Rs.1,350 a piece -> 5%.
+    const [pair] = computeLineGst([{ price: 1500, quantity: 2 }], { couponDiscount: 300, rules: RULES, sameState: false });
+    assert.strictEqual(pair.gstRate, 5);
+    assert.strictEqual(pair.igst, pair.gst);
+    assert.strictEqual(pair.cgst, 0);
 
     console.log("✅ All tests passed successfully!");
 } catch (err) {

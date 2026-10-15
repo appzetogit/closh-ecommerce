@@ -44,6 +44,7 @@ import {
 } from '../../../services/customerWallet.service.js';
 import { onOrderPlaced as trackReferralOrder } from '../../../services/referral.service.js';
 import { onOrderCancelledRewards } from '../../../services/orderRewards.service.js';
+import { applyLineGst } from '../../../utils/gstUtils.js';
 
 const getRazorpayInstance = () => {
     const key_id = process.env.RAZORPAY_KEY_ID;
@@ -290,28 +291,8 @@ export const placeOrder = asyncHandler(async (req, res) => {
         const itemVendorPrice = product.vendorPrice || 0;
         const itemCommissionAmount = (itemVendorPrice * item.quantity * itemCommissionRate) / 100;
         const itemMarginAmount = (itemPrice - itemVendorPrice) * item.quantity;
-        // Find matching GST rule based on itemPrice
-        const gstRule = gstRules.find(rule => itemPrice >= rule.minPrice && itemPrice <= rule.maxPrice) || { rate: 0 };
-        const gstRate = gstRule.rate || 0;
-        
-        // Calculate Inclusive GST
-        const itemBasePrice = parseFloat((itemPrice / (1 + (gstRate / 100))).toFixed(2));
-        const itemCustomerGst = parseFloat((itemPrice - itemBasePrice).toFixed(2));
-        
-        let customerIgst = 0, customerCgst = 0, customerSgst = 0;
-        let customerGstType = 'NONE';
-        
-        if (gstRate > 0) {
-            if (isSameState) {
-                customerGstType = 'CGST_SGST';
-                customerCgst = parseFloat((itemCustomerGst / 2).toFixed(2));
-                customerSgst = parseFloat((itemCustomerGst / 2).toFixed(2));
-            } else {
-                customerGstType = 'IGST';
-                customerIgst = itemCustomerGst;
-            }
-        }
-
+        // Customer GST is worked out after the coupon is known (applyLineGst below): the
+        // slab depends on the price actually paid per piece.
         const itemVendorTax = parseFloat(((itemVendorPrice * item.quantity) * 0.18).toFixed(2));
         const itemCommissionTax = parseFloat((itemCommissionAmount * 0.18).toFixed(2));
 
@@ -333,12 +314,6 @@ export const placeOrder = asyncHandler(async (req, res) => {
             variant: item.variant,
             variantKey: stockKeyInMap || variantKey || undefined,
             hasSpecificVariantStock: hasSpecificVariantStock,
-            basePrice: itemBasePrice,
-            gstRate: gstRate,
-            customerGstType: customerGstType,
-            customerIgst: customerIgst * item.quantity,
-            customerCgst: customerCgst * item.quantity,
-            customerSgst: customerSgst * item.quantity,
         };
         enrichedItems.push(enriched);
 
@@ -360,9 +335,6 @@ export const placeOrder = asyncHandler(async (req, res) => {
         vendorMap[vid].items.push(enriched);
         vendorMap[vid].subtotal += itemSubtotal;
         vendorMap[vid].basePrice += (itemVendorPrice * item.quantity);
-        vendorMap[vid].totalCustomerIgst = (vendorMap[vid].totalCustomerIgst || 0) + (customerIgst * item.quantity);
-        vendorMap[vid].totalCustomerCgst = (vendorMap[vid].totalCustomerCgst || 0) + (customerCgst * item.quantity);
-        vendorMap[vid].totalCustomerSgst = (vendorMap[vid].totalCustomerSgst || 0) + (customerSgst * item.quantity);
         vendorMap[vid].shopLocation = product.vendorId.shopLocation;
     }
     console.log(`[OrderCalc] Subtotal: ₹${subtotal}, Vendors: ${Object.keys(vendorMap).length}`);
@@ -379,6 +351,14 @@ export const placeOrder = asyncHandler(async (req, res) => {
         appliedCoupon = result.coupon;
         couponDiscount = result.discount;
     }
+
+    // Customer GST per line, on the price paid after the coupon (see computeLineGst).
+    applyLineGst(enrichedItems, { couponDiscount, rules: gstRules, sameState: isSameState });
+    Object.values(vendorMap).forEach((v) => {
+        v.totalCustomerIgst = v.items.reduce((s, i) => s + i.customerIgst, 0);
+        v.totalCustomerCgst = v.items.reduce((s, i) => s + i.customerCgst, 0);
+        v.totalCustomerSgst = v.items.reduce((s, i) => s + i.customerSgst, 0);
+    });
 
     // 3. Resolve Dropoff Location & Calculate distance-based shipping
     let dropoffCoords = req.body.dropoffLocation?.coordinates;

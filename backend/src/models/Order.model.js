@@ -12,8 +12,9 @@ const orderItemSchema = new mongoose.Schema({
     price: Number,
     originalPrice: Number,
     quantity: Number,
-    basePrice: { type: Number, default: 0 }, // Selling Price excluding GST
-    gstRate: { type: Number, default: 0 }, // GST Rate applied (e.g. 5, 18)
+    basePrice: { type: Number, default: 0 }, // Selling Price excluding GST (after this line's coupon share)
+    couponDiscount: { type: Number, default: 0 }, // This line's share of the order coupon (whole line)
+    gstRate: { type: Number, default: 0 }, // GST Rate applied (e.g. 5, 18), on the price paid after the coupon
     customerGstType: { type: String, enum: ['IGST', 'CGST_SGST', 'NONE'], default: 'NONE' },
     customerIgst: { type: Number, default: 0 },
     customerCgst: { type: Number, default: 0 },

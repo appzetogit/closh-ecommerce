@@ -126,3 +126,95 @@ export const generateInvoiceBreakdown = (price, isInclusive = true) => {
         return calculateExclusiveGST(price);
     }
 };
+
+/**
+ * GST rate for one piece from the admin's slab rules ({ minPrice, maxPrice, rate }).
+ * Rules are checked by their upper limit, so a price between two slabs (e.g. 2500.50 when
+ * the slabs are 0-2500 and 2501+) lands in the higher slab instead of matching nothing.
+ */
+export const pickGstRate = (unitPrice, rules) => {
+    const price = Number(unitPrice) || 0;
+    const sorted = (Array.isArray(rules) ? rules : [])
+        .filter((r) => r && Number.isFinite(Number(r.rate)))
+        .sort((a, b) => Number(a.maxPrice ?? Infinity) - Number(b.maxPrice ?? Infinity));
+    if (!sorted.length) return getGstRate(price);
+    const match = sorted.find((r) => price <= Number(r.maxPrice ?? Infinity));
+    return Number((match || sorted[sorted.length - 1]).rate) || 0;
+};
+
+/**
+ * Splits an order-level discount (the coupon) across lines in proportion to each line's
+ * amount. Rounded to paise; the last line absorbs the rounding so the shares add up exactly.
+ */
+export const allocateDiscount = (amounts, discount) => {
+    const total = amounts.reduce((s, a) => s + (Number(a) || 0), 0);
+    const d = Math.min(Math.max(Number(discount) || 0, 0), total);
+    if (!total || !d) return amounts.map(() => 0);
+    let left = d;
+    return amounts.map((a, i) => {
+        if (i === amounts.length - 1) return roundTo2(left);
+        const share = roundTo2((d * (Number(a) || 0)) / total);
+        left -= share;
+        return share;
+    });
+};
+
+/**
+ * Customer GST for order lines, prices GST-inclusive.
+ *
+ * A coupon given at checkout and shown on the invoice lowers the value of the supply
+ * (CGST Act s.15(3)(a)), so each line's coupon share is taken off first and the slab is
+ * picked on the price actually paid per piece. Before this the slab used the pre-coupon
+ * price: Rs.2,699 shoes with a Rs.269.90 coupon (Rs.2,429.10 paid) were taxed at 18%
+ * instead of 5%.
+ *
+ * lines: [{ price, quantity }]. Returns one entry per line:
+ *   { couponDiscount, netAmount, unitNetPrice, gstRate, taxableValue, gst, igst, cgst, sgst, gstType, basePrice }
+ */
+export const computeLineGst = (lines, { couponDiscount = 0, rules, sameState = true } = {}) => {
+    const gross = lines.map((l) => (Number(l.price) || 0) * (Number(l.quantity) || 0));
+    const shares = allocateDiscount(gross, couponDiscount);
+    return lines.map((l, i) => {
+        const qty = Number(l.quantity) || 0;
+        const netAmount = roundTo2(gross[i] - shares[i]);
+        const unitNetPrice = qty > 0 ? netAmount / qty : 0;
+        const gstRate = pickGstRate(unitNetPrice, rules);
+        const taxableValue = roundTo2(netAmount / (1 + gstRate / 100));
+        const gst = roundTo2(netAmount - taxableValue);
+        const cgst = sameState ? roundTo2(gst / 2) : 0;
+        const sgst = sameState ? roundTo2(gst - cgst) : 0;
+        const igst = sameState ? 0 : gst;
+        return {
+            couponDiscount: shares[i],
+            netAmount,
+            unitNetPrice: roundTo2(unitNetPrice),
+            gstRate,
+            taxableValue,
+            gst,
+            igst,
+            cgst,
+            sgst,
+            gstType: gstRate > 0 ? (sameState ? 'CGST_SGST' : 'IGST') : 'NONE',
+            basePrice: qty > 0 ? roundTo2(taxableValue / qty) : 0,
+        };
+    });
+};
+
+/**
+ * Writes computeLineGst's result onto order lines (Order item fields): the line's coupon
+ * share, GST rate, per-piece taxable price and line-total customer GST.
+ */
+export const applyLineGst = (items, options) => {
+    const results = computeLineGst(items, options);
+    items.forEach((item, i) => {
+        const r = results[i];
+        item.couponDiscount = r.couponDiscount;
+        item.basePrice = r.basePrice;
+        item.gstRate = r.gstRate;
+        item.customerGstType = r.gstType;
+        item.customerIgst = r.igst;
+        item.customerCgst = r.cgst;
+        item.customerSgst = r.sgst;
+    });
+    return results;
+};

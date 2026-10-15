@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { getOrderById } from "../../services/adminService";
 import toast from "react-hot-toast";
 import html2pdf from "html2pdf.js";
+import { computeLineGst } from "../../../../shared/utils/gst";
 
 const Invoice = () => {
   const navigate = useNavigate();
@@ -64,35 +65,37 @@ const Invoice = () => {
     let totalIgst = 0;
     let totalSellingPriceSum = 0;
 
-    const itemsHtml = items.map(item => {
-      // Exclude units already returned via a completed Return Request so the
-      // invoice always shows the actual amount payable, not the original order value.
-      const originalQty = item.quantity || 1;
-      const returnedQty = Math.min(Number(item.returnedQuantity || 0), originalQty);
-      const qty = originalQty - returnedQty;
-      if (qty <= 0) return null;
+    // Exclude units already returned via a completed Return Request so the
+    // invoice always shows the actual amount payable, not the original order value.
+    const invoiceLines = items
+      .map(item => {
+        const originalQty = item.quantity || 1;
+        const returnedQty = Math.min(Number(item.returnedQuantity || 0), originalQty);
+        return { item, returnedQty, qty: originalQty - returnedQty };
+      })
+      .filter(l => l.qty > 0);
+    const couponCode = order.couponCode || '';
+    const couponDiscount = Number(order.couponDiscount || 0);
+    // GST on the price paid after each line's share of the coupon (shared/utils/gst.js).
+    const lineGst = computeLineGst(
+      invoiceLines.map(l => ({ price: l.item.price || 0, quantity: l.qty })),
+      { couponDiscount, interState: order.totalCustomerIgst > 0 }
+    );
 
+    const itemsHtml = invoiceLines.map(({ item, returnedQty, qty }, idx) => {
       const mrp = item.originalPrice || item.price || 0;
       const sellingPrice = item.price || 0;
-      const totalSellingPrice = sellingPrice * qty;
       const totalMrp = mrp * qty;
+      const g = lineGst[idx];
 
-      const gstRate = sellingPrice <= 2500 ? 5 : 18;
+      const gstRate = g.gstRate;
       const cgstRate = gstRate / 2;
       const sgstRate = gstRate / 2;
-      const taxableValue = totalSellingPrice / (1 + (gstRate / 100));
-      const gstAmount = totalSellingPrice - taxableValue;
-
-      let itemCgst = 0, itemSgst = 0, itemIgst = 0;
-      if (order.totalCustomerIgst > 0) {
-          itemIgst = gstAmount;
-      } else {
-          itemCgst = gstAmount / 2;
-          itemSgst = gstAmount / 2;
-      }
-
-      const calculatedTaxableValue = totalSellingPrice - (itemCgst + itemSgst + itemIgst);
-      const discount = totalMrp - totalSellingPrice;
+      const totalSellingPrice = g.netAmount;
+      const itemCgst = g.cgst, itemSgst = g.sgst, itemIgst = g.igst;
+      const calculatedTaxableValue = g.taxableValue;
+      // Product discount plus this line's share of the coupon.
+      const discount = totalMrp - sellingPrice * qty + g.couponDiscount;
 
       totalGrossAmount += totalMrp;
       totalDiscountAmount += discount;
@@ -117,7 +120,7 @@ const Invoice = () => {
             <td>${totalSellingPrice.toFixed(2)}</td>
         </tr>
       `;
-    }).filter(Boolean).join('');
+    }).join('');
 
     // Platform Services Invoice calculations
     const shipping = order.shipping || 0;
@@ -165,10 +168,7 @@ const Invoice = () => {
       `;
     }
 
-    const couponCode = order.couponCode || '';
-    const couponDiscount = Number(order.couponDiscount || 0);
-
-    const addr = order.shippingAddress || order.address || {};
+    const addr =order.shippingAddress || order.address || {};
     const customerName = order.customer?.name || order.userId?.name || order.guestInfo?.name || '';
     const shippingNameRaw = addr.name || '';
     const displayShippingName = ['home', 'work', 'other'].includes(shippingNameRaw.toLowerCase()) ? customerName : (shippingNameRaw || customerName);
@@ -285,13 +285,13 @@ const Invoice = () => {
                   </tr>
                   ${couponCode && couponDiscount > 0 ? `
                   <tr>
-                      <td colspan="10" class="text-right">Coupon Applied (${couponCode})</td>
-                      <td>-${couponDiscount.toFixed(2)}</td>
+                      <td colspan="10" class="text-right">Coupon Applied (${couponCode}) - included in Discount above</td>
+                      <td>${couponDiscount.toFixed(2)}</td>
                   </tr>
                   ` : ''}
                   <tr class="grand-total-row">
                       <td colspan="10" class="text-right">Grand Total</td>
-                      <td>${(totalSellingPriceSum - couponDiscount).toFixed(2)}</td>
+                      <td>${totalSellingPriceSum.toFixed(2)}</td>
                   </tr>
               </tbody>
           </table>

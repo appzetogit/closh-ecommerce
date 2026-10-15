@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import socketService from '../../../../shared/utils/socket';
 
 import { IMAGE_BASE_URL } from '../../../../shared/utils/constants';
+import { computeLineGst, pickGstRate } from '../../../../shared/utils/gst';
 
 const getFullImageUrl = (image) => {
     if (!image) return null;
@@ -404,6 +405,21 @@ const OrderDetail = () => {
         // Effective (post-return) quantity: excludes units already returned via a completed return request.
         const effectiveQty = (i) => Math.max(0, (i.quantity || 1) - Math.min(Number(i.returnedQuantity || 0), i.quantity || 1));
         const itemsGrandTotal = vendorItems.reduce((s, i) => s + (i.price ?? 0) * effectiveQty(i), 0);
+        // The coupon is on the whole order; this store's share is in proportion to its items.
+        const allOrderItems = Array.isArray(order.items) && order.items.length ? order.items : vendorItems;
+        const orderItemsTotal = allOrderItems.reduce((s, i) => s + (i.price ?? 0) * effectiveQty(i), 0);
+        const vendorCouponDiscount = orderItemsTotal > 0
+            ? Math.round(couponDiscount * Math.min(1, itemsGrandTotal / orderItemsTotal) * 100) / 100
+            : 0;
+        // GST on the price paid after each line's coupon share (shared/utils/gst.js).
+        const vendorLineGst = computeLineGst(
+            vendorItems.map(i => ({ price: i.price ?? 0, quantity: effectiveQty(i) })),
+            { couponDiscount: vendorCouponDiscount, rules: taxSettings?.gstRules, interState: order.totalCustomerIgst > 0 }
+        );
+        const vendorGstTotals = vendorLineGst.reduce(
+            (t, g) => ({ cgst: t.cgst + g.cgst, sgst: t.sgst + g.sgst, igst: t.igst + g.igst, net: t.net + g.netAmount }),
+            { cgst: 0, sgst: 0, igst: 0, net: 0 }
+        );
 
         const invoiceContent = `
             <!DOCTYPE html>
@@ -494,7 +510,7 @@ const OrderDetail = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${vendorItems.map(item => {
+                        ${vendorItems.map((item, idx) => {
                             // Exclude units already returned via a completed return request so
                             // the invoice always shows the actual amount payable.
                             const originalQty = item.quantity || 1;
@@ -504,19 +520,18 @@ const OrderDetail = () => {
 
                             const mrp = item.originalPrice || item.price || 0;
                             const sellingPrice = item.price ?? 0;
-                            const totalSellingPrice = sellingPrice * qty;
                             const totalMrp = mrp * qty;
+                            const g = vendorLineGst[idx];
 
-                            const rules = taxSettings?.gstRules || [];
-                            const applicableRule = rules.find(r => sellingPrice >= r.minPrice && sellingPrice <= r.maxPrice);
-                            const gstRate = applicableRule ? applicableRule.rate : (sellingPrice <= 2500 ? 5 : 18);
-                            const taxableValue = totalSellingPrice / (1 + (gstRate/100));
-                            const gstAmount = totalSellingPrice - taxableValue;
-                            const itemCgst = gstAmount / 2;
-                            const itemSgst = gstAmount / 2;
-                            const itemIgst = 0;
+                            const totalSellingPrice = g.netAmount;
+                            const gstRate = g.gstRate;
+                            const taxableValue = g.taxableValue;
+                            const itemCgst = g.cgst;
+                            const itemSgst = g.sgst;
+                            const itemIgst = g.igst;
 
-                            const discount = totalMrp - totalSellingPrice;
+                            // Product discount plus this line's share of the coupon.
+                            const discount = totalMrp - sellingPrice * qty + g.couponDiscount;
 
                             return `
                                 <tr>
@@ -538,42 +553,20 @@ const OrderDetail = () => {
 
                         <tr class="totals-row">
                             <td colspan="8" class="text-right">Total</td>
-                            <td>${(() => {
-                                const taxAmount = vendorItems ? vendorItems.reduce((sum, item) => {
-            const rules = taxSettings?.gstRules || [];
-            const price = item.price ?? 0;
-            const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
-            const rate = rule ? rule.rate : 5;
-            const q = effectiveQty(item);
-            const taxable = (price * q) / (1 + (rate/100));
-            return sum + ((price * q) - taxable);
-        }, 0) : 0;
-                                return (taxAmount / 2).toFixed(2);
-                            })()}</td>
-                            <td>${(() => {
-                                const taxAmount = vendorItems ? vendorItems.reduce((sum, item) => {
-            const rules = taxSettings?.gstRules || [];
-            const price = item.price ?? 0;
-            const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
-            const rate = rule ? rule.rate : 5;
-            const q = effectiveQty(item);
-            const taxable = (price * q) / (1 + (rate/100));
-            return sum + ((price * q) - taxable);
-        }, 0) : 0;
-                                return (taxAmount / 2).toFixed(2);
-                            })()}</td>
-                            <td>0.00</td>
-                            <td>${itemsGrandTotal.toFixed(2)}</td>
+                            <td>${vendorGstTotals.cgst.toFixed(2)}</td>
+                            <td>${vendorGstTotals.sgst.toFixed(2)}</td>
+                            <td>${vendorGstTotals.igst.toFixed(2)}</td>
+                            <td>${vendorGstTotals.net.toFixed(2)}</td>
                         </tr>
-                        ${couponCode && couponDiscount > 0 ? `
+                        ${couponCode && vendorCouponDiscount > 0 ? `
                         <tr>
-                            <td colspan="11" class="text-right">Coupon Applied (${couponCode})</td>
-                            <td>-${couponDiscount.toFixed(2)}</td>
+                            <td colspan="11" class="text-right">Coupon Applied (${couponCode}) - included in Discount above</td>
+                            <td>${vendorCouponDiscount.toFixed(2)}</td>
                         </tr>
                         ` : ''}
                         <tr class="grand-total-row">
                             <td colspan="11" class="text-right">Grand Total (GST Inclusive)</td>
-                            <td>${(itemsGrandTotal - couponDiscount).toFixed(2)}</td>
+                            <td>${vendorGstTotals.net.toFixed(2)}</td>
                         </tr>
 
                     </tbody>
@@ -611,6 +604,9 @@ const handleViewVendorInvoice = () => {
             toast.error('Please allow popups to view the invoice.');
             return;
         }
+        // Units still with the customer (returned units excluded). Was referenced here but only
+        // defined in handleViewCustomerInvoice, so this invoice threw a ReferenceError.
+        const effectiveQty = (i) => Math.max(0, (i.quantity || 1) - Math.min(Number(i.returnedQuantity || 0), i.quantity || 1));
 
         const invoiceDate = new Date(order.createdAt || order.date || Date.now()).toLocaleDateString('en-IN', {
             year: 'numeric',
@@ -719,9 +715,7 @@ const handleViewVendorInvoice = () => {
                             const totalSellingPrice = sellingPrice * qty;
                             const totalMrp = mrp * qty;
                             
-                            const rules = taxSettings?.gstRules || [];
-                            const applicableRule = rules.find(r => sellingPrice >= r.minPrice && sellingPrice <= r.maxPrice);
-                            const gstRate = applicableRule ? applicableRule.rate : (sellingPrice <= 2500 ? 5 : 18);
+                            const gstRate = pickGstRate(sellingPrice, taxSettings?.gstRules);
                             const taxableValue = totalSellingPrice / (1 + (gstRate/100));
                             const gstAmount = totalSellingPrice - taxableValue;
                             const itemCgst = gstAmount / 2;
@@ -751,10 +745,8 @@ const handleViewVendorInvoice = () => {
                             <td colspan="8" class="text-right">Total Base Price</td>
                             <td>${(() => {
                                 const taxAmount = vendorItems ? vendorItems.reduce((sum, item) => {
-            const rules = taxSettings?.gstRules || [];
             const price = item.vendorPrice ?? item.price ?? 0;
-            const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
-            const rate = rule ? rule.rate : 5;
+            const rate = pickGstRate(price, taxSettings?.gstRules);
             const q = effectiveQty(item);
             const taxable = (price * q) / (1 + (rate/100));
             return sum + ((price * q) - taxable);
@@ -763,10 +755,8 @@ const handleViewVendorInvoice = () => {
                             })()}</td>
                             <td>${(() => {
                                 const taxAmount = vendorItems ? vendorItems.reduce((sum, item) => {
-            const rules = taxSettings?.gstRules || [];
             const price = item.vendorPrice ?? item.price ?? 0;
-            const rule = rules.find(r => price >= r.minPrice && price <= r.maxPrice);
-            const rate = rule ? rule.rate : 5;
+            const rate = pickGstRate(price, taxSettings?.gstRules);
             const q = effectiveQty(item);
             const taxable = (price * q) / (1 + (rate/100));
             return sum + ((price * q) - taxable);
