@@ -5,6 +5,32 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
+  <script>
+    // Same look on every phone. The UI is sized in fixed pixels, so on a 360px-wide phone
+    // everything looked big and wrapped, and on a 430px phone it looked small. On phones in
+    // portrait the page is laid out at one design width and the browser scales it to fill the
+    // screen, so every phone shows the same layout, just bigger or smaller. Tablets, desktops
+    // and landscape keep the normal device-width viewport. Runs before the first paint.
+    (function () {
+      var DESIGN_WIDTH = 390;
+      var meta = document.querySelector('meta[name="viewport"]');
+      var deviceWidthContent = meta && meta.getAttribute('content');
+      function apply() {
+        if (!meta || !window.screen) return;
+        var shortSide = Math.min(screen.width, screen.height);
+        var portrait = !window.matchMedia || window.matchMedia('(orientation: portrait)').matches;
+        if (shortSide > 0 && shortSide < 600 && portrait) {
+          var scale = (shortSide / DESIGN_WIDTH).toFixed(4);
+          meta.setAttribute('content', 'width=' + DESIGN_WIDTH + ', initial-scale=' + scale +
+            ', minimum-scale=' + scale + ', maximum-scale=' + scale + ', user-scalable=no, viewport-fit=cover');
+        } else {
+          meta.setAttribute('content', deviceWidthContent);
+        }
+      }
+      apply();
+      window.addEventListener('orientationchange', function () { setTimeout(apply, 150); });
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="apple-touch-icon" href="/favicon.png">
