@@ -7,6 +7,7 @@ import { useWishlistStore } from "../../store/wishlistStore";
 import { formatPrice, getOptimizedImageUrl } from "../../utils/helpers";
 import { formatVariantLabel } from "../../utils/variant";
 import useSwipeGesture from "../../../modules/user/hooks/useSwipeGesture";
+import { getLineAvailableStock, getLineStockState, stockLimitMessage } from "../../utils/cartStock";
 
 const SwipeableCartItem = ({ item, index }) => {
     const [swipeOffset, setSwipeOffset] = useState(0);
@@ -22,26 +23,26 @@ const SwipeableCartItem = ({ item, index }) => {
         setHasAnimated(true);
     }, []);
 
-    const getProductStock = () => Number(item?.stockQuantity);
+    // The cart API works on the cart line id, not the product id.
+    const lineId = item?.cartItemId || item?.id;
+    // Stock for this size/colour (server-provided availableStock, see shared/utils/cartStock.js).
+    const getProductStock = () => getLineAvailableStock(item);
 
-    const isMaxQuantity = (quantity) => {
-        const availableStock = Number(item?.stockQuantity);
-        return Number.isFinite(availableStock) ? quantity >= availableStock : false;
-    };
+    const isMaxQuantity = (quantity) => quantity >= getProductStock();
 
-    const isLowStock = () => String(item?.stock || "") === "low_stock";
+    const isLowStock = () => getLineStockState(item).lowStock || String(item?.stock || "") === "low_stock";
 
     const handleQuantityChange = (id, currentQuantity, change, variant) => {
         const newQuantity = currentQuantity + change;
-        const availableStock = Number(item?.stockQuantity);
+        const availableStock = getProductStock();
 
         if (newQuantity <= 0) {
             removeItem(id, variant);
             return;
         }
 
-        if (Number.isFinite(availableStock) && newQuantity > availableStock) {
-            toast.error(`Only ${availableStock} items available in stock`);
+        if (change > 0 && newQuantity > availableStock) {
+            toast.error(stockLimitMessage(item.name, availableStock), { id: 'cart-stock' });
             return;
         }
 
@@ -56,14 +57,14 @@ const SwipeableCartItem = ({ item, index }) => {
             image: item.image,
         });
         if (!addedToWishlist) return;
-        removeItem(item.id, item.variant);
+        removeItem(lineId, item.variant);
         toast.success("Saved for later!");
     };
 
     const handleSwipeRight = () => {
         setIsDeleted(true);
         deletedItemRef.current = { ...item };
-        removeItem(item.id, item.variant);
+        removeItem(lineId, item.variant);
         toast.success("Item removed", {
             duration: 3000,
             action: {
@@ -157,7 +158,7 @@ const SwipeableCartItem = ({ item, index }) => {
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleQuantityChange(item.id, item.quantity, -1, item.variant);
+                                handleQuantityChange(lineId, item.quantity, -1, item.variant);
                             }}
                             className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-gray-300 hover:bg-white hover:text-black transition-colors">
                             <FiMinus className="text-xs text-gray-600" />
@@ -176,7 +177,7 @@ const SwipeableCartItem = ({ item, index }) => {
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleQuantityChange(item.id, item.quantity, 1, item.variant);
+                                handleQuantityChange(lineId, item.quantity, 1, item.variant);
                             }}
                             disabled={isMaxQuantity(item.quantity)}
                             className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${isMaxQuantity(item.quantity)
@@ -190,7 +191,7 @@ const SwipeableCartItem = ({ item, index }) => {
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                removeItem(item.id, item.variant);
+                                removeItem(lineId, item.variant);
                             }}
                             className="ml-auto p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                             <FiTrash2 className="text-sm" />

@@ -136,3 +136,30 @@ export const resolveOrderItemVariantKey = (product, orderItem) => {
 
     return resolveVariantKeyFromKeys(existingKeys, orderItem?.variant);
 };
+
+/**
+ * Units of `product` a customer can buy in the selected variant, worked out exactly the
+ * way placeOrder checks stock: 0 when the product is marked out of stock; otherwise the
+ * product's stockQuantity, further limited by the variant's stockMap bucket when the
+ * product has variants (a size missing from a non-empty stockMap has 0). The cart uses
+ * this so the customer is stopped when adding, not only at "Place order".
+ */
+export const getAvailableStock = (product, selectedVariant) => {
+    if (!product || product.stock === 'out_of_stock') return 0;
+    const productQty = Math.max(0, Number(product.stockQuantity) || 0);
+
+    const v = product.variants || {};
+    const hasVariantAxes = [v.sizes, v.colors, v.attributes].some((a) => Array.isArray(a) && a.length > 0);
+    if (!hasVariantAxes) return productQty;
+
+    const variantKey = resolveOrderItemVariantKey(product, { variant: selectedVariant });
+    if (!variantKey) return productQty;
+
+    const stockKeys = toVariantStockEntries(v.stockMap).map(([k]) => String(k).trim());
+    const stockKey = resolveVariantKeyFromKeys(stockKeys, selectedVariant) || variantKey;
+    const raw = v.stockMap?.get?.(stockKey) ?? v.stockMap?.[stockKey];
+    let variantQty;
+    if (raw !== undefined && raw !== null && raw !== '') variantQty = Number(raw) || 0;
+    else variantQty = stockKeys.length > 0 ? 0 : productQty;
+    return Math.max(0, Math.min(productQty, variantQty));
+};
