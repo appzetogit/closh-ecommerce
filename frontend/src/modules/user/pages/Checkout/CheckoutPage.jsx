@@ -29,6 +29,7 @@ import CouponsModal from '../../components/Checkout/CouponsModal';
 import { normalizeProduct } from '../../../../shared/store/productStore';
 import { useSettingsStore } from '../../../../shared/store/settingsStore';
 import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
+import { getLineStockState, stockLimitMessage } from '../../../../shared/utils/cartStock';
 
 
 const CheckoutPage = () => {
@@ -422,13 +423,28 @@ const CheckoutPage = () => {
                                             </button>
                                             <span className="text-[11px] font-bold text-black min-w-[12px] text-center">{item.quantity}</span>
                                             <button
-                                                onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity + 1)}
-                                                className="w-5 h-5 flex items-center justify-center hover:bg-white hover:text-black rounded-md transition-colors"
+                                                onClick={() => {
+                                                    const { atLimit, available } = getLineStockState(item);
+                                                    if (atLimit) {
+                                                        toast.error(stockLimitMessage(item.name, available), { id: 'cart-stock' });
+                                                        return;
+                                                    }
+                                                    updateQuantity(item.cartItemId || item.id, item.quantity + 1);
+                                                }}
+                                                aria-disabled={getLineStockState(item).atLimit}
+                                                className={`w-5 h-5 flex items-center justify-center rounded-md transition-colors ${getLineStockState(item).atLimit ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-white hover:text-black'}`}
                                             >
                                                 <span className="text-xs font-bold">+</span>
                                             </button>
                                         </div>
                                     </div>
+                                    {(() => {
+                                        const st = getLineStockState(item);
+                                        if (st.outOfStock) return <p className="text-[0.625rem] font-bold text-red-600 -mt-1 mb-2">Out of stock - please remove this item</p>;
+                                        if (st.overLimit) return <p className="text-[0.625rem] font-bold text-red-600 -mt-1 mb-2">Only {st.available} available - reduce quantity</p>;
+                                        if (st.lowStock) return <p className="text-[0.625rem] font-bold text-amber-700 -mt-1 mb-2">Only {st.available} left</p>;
+                                        return null;
+                                    })()}
 
                                     {/* Price */}
                                     <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2 mt-auto">
@@ -794,8 +810,20 @@ const CheckoutPage = () => {
                     </div>
 
                     <button
-                        onClick={() => activeAddress ? navigate('/payment', { state: { deliveryType, appliedCode: appliedPromo?.code } }) : setIsLocationModalOpen(true)}
-                        className={`w-full py-4 rounded-[20px] font-bold text-xs uppercase shadow-xl transition-all active:scale-[0.98] ${activeAddress
+                        onClick={() => {
+                            if (!activeAddress) { setIsLocationModalOpen(true); return; }
+                            // Stop here, not at "Place order", if a line is out of stock or above it.
+                            const blocked = cart.find(i => { const st = getLineStockState(i); return st.outOfStock || st.overLimit; });
+                            if (blocked) {
+                                const { available } = getLineStockState(blocked);
+                                toast.error(available <= 0
+                                    ? `"${blocked.name}" is out of stock. Please remove it.`
+                                    : `${stockLimitMessage(blocked.name, available)} Please reduce the quantity.`, { id: 'cart-stock' });
+                                return;
+                            }
+                            navigate('/payment', { state: { deliveryType, appliedCode: appliedPromo?.code } });
+                        }}
+                        className={`w-full py-4 rounded-[1.25rem] font-bold text-xs uppercase shadow-xl transition-all active:scale-[0.98] ${activeAddress
                             ? 'bg-black text-white hover:bg-gray-900'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                             }`}

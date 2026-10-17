@@ -7,6 +7,7 @@ import LocationModal from '../../components/Header/LocationModal';
 import { useUserLocation } from '../../context/LocationContext';
 import toast from 'react-hot-toast';
 import { getOptimizedImageUrl } from "../../../../shared/utils/helpers";
+import { getLineAvailableStock, getLineStockState, stockLimitMessage } from '../../../../shared/utils/cartStock';
 
 const CartPage = () => {
     const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
@@ -16,33 +17,23 @@ const CartPage = () => {
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
     // Helper: get variant-level stock for a cart item
-    const getItemVariantStock = (item) => {
-        const size = item.variant?.size || item.selectedSize;
-        if (size && item.variants?.stockMap) {
-            const keys = [
-                `${String(size).toLowerCase()}|`,
-                `${String(size)}|`,
-                `size=${String(size).toLowerCase()}`,
-                `size=${String(size)}`
-            ];
-            for (const k of keys) {
-                if (item.variants.stockMap[k] !== undefined) {
-                    return Number(item.variants.stockMap[k]);
-                }
-            }
-        }
-        // Fallback to item-level stockQuantity
-        return Number(item.stockQuantity ?? 1);
-    };
+    // Units the customer can buy for this line (server-provided, see shared/utils/cartStock.js).
+    const getItemVariantStock = (item) => getLineAvailableStock(item);
 
     // Check if any item in cart is out of stock
     const hasOutOfStockItems = useMemo(() => {
         return cart.some(item => getItemVariantStock(item) <= 0);
     }, [cart]);
+    // Lines whose quantity is now above the stock (it dropped after they were added).
+    const overStockItem = useMemo(() => cart.find(item => getLineStockState(item).overLimit), [cart]);
 
     const handleCheckout = () => {
         if (hasOutOfStockItems) {
             toast.error('Please remove out-of-stock items before checkout');
+            return;
+        }
+        if (overStockItem) {
+            toast.error(`${stockLimitMessage(overStockItem.name, getItemVariantStock(overStockItem))} Please reduce the quantity.`);
             return;
         }
         navigate('/checkout');
@@ -135,6 +126,7 @@ const CartPage = () => {
                         {cart.map((item) => {
                             const itemVariantStock = getItemVariantStock(item);
                             const isItemOutOfStock = itemVariantStock <= 0;
+                            const { atLimit, overLimit } = getLineStockState(item);
                             return (
                             <div key={item.cartLineKey || `${item.id}-${item.variant?.size || item.selectedSize || 'default'}`} className={`bg-white rounded-[24px] overflow-hidden border shadow-sm flex flex-row p-3 sm:p-4 relative group transition-all duration-300 hover:shadow-md ${isItemOutOfStock ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-black/10'}`}>
                                 {/* Out of Stock Badge */}
@@ -187,8 +179,15 @@ const CartPage = () => {
                                                         </button>
                                                         <span className="text-[11px] font-black min-w-[12px] text-center text-gray-900">{item.quantity}</span>
                                                         <button
-                                                            onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity + 1)}
-                                                            className="text-gray-400 hover:text-black p-0.5"
+                                                            onClick={() => {
+                                                                if (atLimit) {
+                                                                    toast.error(stockLimitMessage(item.name, itemVariantStock), { id: 'cart-stock' });
+                                                                    return;
+                                                                }
+                                                                updateQuantity(item.cartItemId || item.id, item.quantity + 1);
+                                                            }}
+                                                            aria-disabled={atLimit}
+                                                            className={`p-0.5 ${atLimit ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-black'}`}
                                                         >
                                                             <Plus size={12} strokeWidth={3} />
                                                         </button>
@@ -196,8 +195,12 @@ const CartPage = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        {!isItemOutOfStock && itemVariantStock <= 10 && (
-                                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest pl-1">
+                                        {!isItemOutOfStock && overLimit ? (
+                                            <span className="text-[0.5625rem] font-bold text-red-600 uppercase tracking-widest pl-1">
+                                                Only {itemVariantStock} available - reduce quantity
+                                            </span>
+                                        ) : !isItemOutOfStock && itemVariantStock <= 10 && (
+                                            <span className="text-[0.5625rem] font-bold text-red-500 uppercase tracking-widest pl-1">
                                                 Only {itemVariantStock} unit(s) available
                                             </span>
                                         )}

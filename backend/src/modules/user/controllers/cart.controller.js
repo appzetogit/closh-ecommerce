@@ -4,7 +4,7 @@ import ApiError from '../../../utils/ApiError.js';
 import Cart from '../../../models/Cart.model.js';
 import Product from '../../../models/Product.model.js';
 import mongoose from 'mongoose';
-import { resolveVariantPrice } from '../../../utils/variantKey.js';
+import { resolveVariantPrice, getAvailableStock } from '../../../utils/variantKey.js';
 
 // Fields to pull live from Product via populate
 const PRODUCT_SELECT = 'name price originalPrice discount image images stock stockQuantity isActive isVisible variants categoryId brandId vendorId';
@@ -20,6 +20,20 @@ const populateCart = (query) =>
             { path: 'vendorId', select: 'storeName isOnline shopLocation' },
         ],
     });
+
+// The cart is checked against stock when items are added or changed, with the same rule
+// placeOrder uses (getAvailableStock), so the customer is told at once instead of at
+// "Place order".
+const STOCK_FIELDS = '_id name stockQuantity stock variants';
+const stockLimitError = (name, available, inCart = 0) => {
+    const units = `${available} unit${available === 1 ? '' : 's'}`;
+    const message = available <= 0
+        ? `"${name}" is out of stock in this size.`
+        : inCart >= available
+            ? `Only ${units} of "${name}" available, and ${inCart === 1 ? 'it is' : 'they are'} already in your cart.`
+            : `Only ${units} of "${name}" available.`;
+    return new ApiError(400, message, [{ code: 'STOCK_LIMIT', available }]);
+};
 
 // Helper: format cart items for frontend consumption
 const formatItems = (cart) => {
@@ -49,6 +63,8 @@ const formatItems = (cart) => {
                 vendorId: p.vendorId,
                 quantity: item.quantity,
                 variant: item.variant,
+                // Units that can be bought in this size/colour; the cart caps the quantity here.
+                availableStock: getAvailableStock(p, item.variant),
             };
         });
 };
@@ -68,31 +84,35 @@ export const addToCart = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Invalid product id.');
     }
 
-    const product = await Product.findOne({ _id: productId, isActive: true, approvalStatus: 'approved', price: { $gt: 0 } }).select('_id stockQuantity stock');
+    const product = await Product.findOne({ _id: productId, isActive: true, approvalStatus: 'approved', price: { $gt: 0 } }).select(STOCK_FIELDS);
     if (!product) {
         throw new ApiError(404, 'Product not found or not available.');
     }
+    const addQty = Math.max(1, Math.floor(Number(quantity) || 1));
 
     let cart = await Cart.findOne({ userId: req.user.id });
+
+    // Same product + variant already in the cart counts towards the stock limit.
+    const sameLine = (i) => String(i.productId) === String(productId)
+        && (i.variant?.size || '') === (variant?.size || '')
+        && (i.variant?.color || '') === (variant?.color || '');
+    const inCart = cart ? (cart.items.find(sameLine)?.quantity || 0) : 0;
+    const available = getAvailableStock(product, variant);
+    if (inCart + addQty > available) throw stockLimitError(product.name, available, inCart);
 
     if (!cart) {
         cart = await Cart.create({
             userId: req.user.id,
-            items: [{ productId, quantity: Number(quantity), variant }],
+            items: [{ productId, quantity: addQty, variant }],
         });
     } else {
         // Check if same product + variant already in cart
-        const existingIdx = cart.items.findIndex((i) => {
-            if (String(i.productId) !== String(productId)) return false;
-            const sameSize = (i.variant?.size || '') === (variant?.size || '');
-            const sameColor = (i.variant?.color || '') === (variant?.color || '');
-            return sameSize && sameColor;
-        });
+        const existingIdx = cart.items.findIndex(sameLine);
 
         if (existingIdx >= 0) {
-            cart.items[existingIdx].quantity = cart.items[existingIdx].quantity + Number(quantity);
+            cart.items[existingIdx].quantity = cart.items[existingIdx].quantity + addQty;
         } else {
-            cart.items.push({ productId, quantity: Number(quantity), variant });
+            cart.items.push({ productId, quantity: addQty, variant });
         }
         await cart.save();
     }
@@ -113,11 +133,22 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     const item = cart.items.id(itemId);
     if (!item) throw new ApiError(404, 'Cart item not found.');
 
+    // A higher quantity or a different size must still be in stock.
+    const nextQty = quantity !== undefined ? Math.floor(Number(quantity) || 0) : item.quantity;
+    const nextVariant = variant !== undefined ? variant : item.variant;
+    const growing = quantity !== undefined && nextQty > item.quantity;
+    if (nextQty > 0 && (growing || variant !== undefined)) {
+        const product = await Product.findById(item.productId).select(STOCK_FIELDS);
+        if (!product) throw new ApiError(404, 'Product not found or not available.');
+        const available = getAvailableStock(product, nextVariant);
+        if (nextQty > available) throw stockLimitError(product.name, available, growing ? item.quantity : 0);
+    }
+
     if (quantity !== undefined) {
         if (Number(quantity) <= 0) {
             cart.items.pull(itemId);
         } else {
-            item.quantity = Number(quantity);
+            item.quantity = nextQty;
         }
     }
     if (variant !== undefined) {

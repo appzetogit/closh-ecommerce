@@ -222,6 +222,16 @@ const ProductDetailsPage = () => {
         return currentStock <= 0;
     }, [product, currentStock, sizes.length, selectedSize]);
 
+    // How many of this product in the selected size are already in the cart.
+    const inCartQty = useMemo(() => {
+        if (!product) return 0;
+        const pid = String(product._id || product.id);
+        const size = String(selectedSize || '').toLowerCase();
+        return (cart || [])
+            .filter(i => String(i.id || i._id) === pid && String(i.variant?.size || i.selectedSize || '').toLowerCase() === size)
+            .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+    }, [cart, product, selectedSize]);
+
     const isVendorOffline = useMemo(() => {
         return product?.vendorId?.isOnline === false;
     }, [product]);
@@ -241,6 +251,15 @@ const ProductDetailsPage = () => {
 
         if (currentStock <= 0) {
             toast.error(`Only 0 units available for selected variant of ${product.name}`);
+            return;
+        }
+
+        // Every tap adds one more; stop once the cart already holds all the stock for this size.
+        if (inCartQty + 1 > currentStock) {
+            toast.error(
+                `Only ${currentStock} unit${currentStock === 1 ? '' : 's'} of "${product.name}" available, and ${inCartQty === 1 ? 'it is' : 'they are'} already in your cart.`,
+                { id: 'cart-stock' }
+            );
             return;
         }
 
@@ -575,6 +594,11 @@ const ProductDetailsPage = () => {
                                     getSizeStock(selectedSize) <= 0 ? (
                                         <p className="mt-3 text-[11px] md:text-[13px] font-bold text-red-500 flex items-center gap-1.5 animate-fadeIn">
                                             <Info size={14} className="text-red-500" /> Sold Out - Size {selectedSize} is currently unavailable
+                                        </p>
+                                    ) : getSizeStock(selectedSize) <= 5 ? (
+                                        <p className="mt-3 text-[0.6875rem] md:text-[0.8125rem] font-bold text-amber-700 flex items-center gap-1.5 animate-fadeIn">
+                                            <Info size={14} className="text-amber-600" /> Only {getSizeStock(selectedSize)} left in size {selectedSize}
+                                            {inCartQty > 0 ? ` (${inCartQty} in your cart)` : ''}
                                         </p>
                                     ) : (
                                         <p className="mt-3 text-[11px] md:text-[13px] font-bold text-emerald-600 flex items-center gap-1.5 animate-fadeIn">

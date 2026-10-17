@@ -66,7 +66,8 @@ export const useCartStore = create((set, get) => ({
         },
       };
 
-      const res = await api.post('/user/cart', payload);
+      // silent: the message is shown once below (the API client would toast it too).
+      const res = await api.post('/user/cart', payload, { silent: true });
       if (res?.success) {
         set({ items: res.data?.items || [] });
         // Trigger cart animation
@@ -77,7 +78,7 @@ export const useCartStore = create((set, get) => ({
       return false;
     } catch (e) {
       const msg = e?.response?.data?.message || 'Failed to add to cart';
-      toast.error(msg);
+      toast.error(msg, { id: 'cart-stock' });
       return false;
     }
   },
@@ -99,23 +100,24 @@ export const useCartStore = create((set, get) => ({
       return;
     }
     try {
-      const res = await api.put(`/user/cart/${cartItemId}`, { quantity });
+      const res = await api.put(`/user/cart/${cartItemId}`, { quantity }, { silent: true });
       if (res?.success) {
         set({ items: res.data?.items || [] });
       }
     } catch (e) {
-      toast.error('Failed to update quantity');
+      // e.g. "Only 1 unit of ... available" when the stock limit is reached.
+      toast.error(e?.response?.data?.message || 'Failed to update quantity', { id: 'cart-stock' });
     }
   },
 
   updateItemVariant: async (cartItemId, newVariant) => {
     try {
-      const res = await api.put(`/user/cart/${cartItemId}`, { variant: newVariant });
+      const res = await api.put(`/user/cart/${cartItemId}`, { variant: newVariant }, { silent: true });
       if (res?.success) {
         set({ items: res.data?.items || [] });
       }
     } catch (e) {
-      toast.error('Failed to update variant');
+      toast.error(e?.response?.data?.message || 'Failed to update variant', { id: 'cart-stock' });
     }
   },
 
