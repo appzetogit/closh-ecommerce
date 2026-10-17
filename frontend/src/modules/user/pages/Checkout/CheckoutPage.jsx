@@ -54,6 +54,8 @@ const CheckoutPage = () => {
     const [promoError, setPromoError] = useState('');
     const [isApplyingPromo, setIsApplyingPromo] = useState(false);
     const [isCouponsModalOpen, setIsCouponsModalOpen] = useState(false);
+    // Coupons shown right in the promo section (not only behind "View All").
+    const [availableCoupons, setAvailableCoupons] = useState([]);
     const [upsellProducts, setUpsellProducts] = useState([]);
     const [isUpsellLoading, setIsUpsellLoading] = useState(true);
     const [zoomedImage, setZoomedImage] = useState(null);
@@ -227,6 +229,31 @@ const CheckoutPage = () => {
             .catch(() => setPromoError('Failed to validate promo code'))
             .finally(() => setIsApplyingPromo(false));
     };
+
+    useEffect(() => {
+        let alive = true;
+        api.get('/coupons/available', { silent: true })
+            .then((response) => {
+                const list = response?.data?.data || response?.data || [];
+                if (alive) setAvailableCoupons(Array.isArray(list) ? list : []);
+            })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, []);
+
+    // Applicable coupons first, then the ones closest to being unlocked.
+    const couponMin = (c) => Number(c.minOrderValue || c.minPurchase || 0);
+    const visibleCoupons = [...availableCoupons]
+        .filter((c) => {
+            const expiry = c.expiresAt || c.endDate || c.expiryDate;
+            return !expiry || new Date(expiry) >= new Date();
+        })
+        .sort((a, b) => {
+            const aOk = totalPrice >= couponMin(a), bOk = totalPrice >= couponMin(b);
+            if (aOk !== bOk) return aOk ? -1 : 1;
+            return couponMin(a) - couponMin(b);
+        });
+    const couponLabel = (c) => (c.type === 'percentage' ? `${c.value}% OFF` : c.type === 'freeship' ? 'FREE DELIVERY' : `₹${c.value} OFF`);
 
     const handleRemovePromo = () => {
         setAppliedPromo(null);
@@ -611,6 +638,46 @@ const CheckoutPage = () => {
                                     </button>
                                 </div>
                                 {promoError && <p className="text-[9px] font-bold text-red-500 ml-1">{promoError}</p>}
+
+                                {visibleCoupons.length > 0 && (
+                                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-2 pb-1 snap-x">
+                                        {visibleCoupons.map((coupon) => {
+                                            const min = couponMin(coupon);
+                                            const ok = totalPrice >= min;
+                                            return (
+                                                <button
+                                                    key={coupon._id || coupon.code}
+                                                    type="button"
+                                                    disabled={isApplyingPromo}
+                                                    onClick={() => {
+                                                        if (!ok) {
+                                                            toast.error(`Add ₹${Math.ceil(min - totalPrice)} more to use ${coupon.code}`);
+                                                            return;
+                                                        }
+                                                        setPromoCode(coupon.code);
+                                                        handleApplyPromo(coupon.code);
+                                                    }}
+                                                    className={`snap-start shrink-0 w-[9.25rem] text-left rounded-2xl border border-dashed p-3 transition-all active:scale-95 ${ok ? 'border-emerald-300 bg-emerald-50/40 hover:bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="px-2 py-0.5 bg-white text-red-600 text-[0.5625rem] font-black uppercase tracking-widest rounded-md border border-red-100 truncate">
+                                                            {coupon.code}
+                                                        </span>
+                                                        <span className={`text-[0.5625rem] font-bold uppercase shrink-0 ${ok ? 'text-emerald-700' : 'text-gray-400'}`}>
+                                                            {ok ? 'Apply' : 'Locked'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[0.875rem] font-bold text-gray-900 mt-2 leading-tight">{couponLabel(coupon)}</p>
+                                                    <p className={`text-[0.625rem] font-semibold mt-0.5 leading-snug ${ok ? 'text-gray-500' : 'text-amber-700'}`}>
+                                                        {ok
+                                                            ? (coupon.maxDiscount ? `Up to ₹${coupon.maxDiscount}` : min > 0 ? `On orders above ₹${min}` : 'On this order')
+                                                            : `Add ₹${Math.ceil(min - totalPrice)} more`}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 animate-fadeInUp">
