@@ -5,7 +5,7 @@ import ApiError from '../../../utils/ApiError.js';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
 import Admin from '../../../models/Admin.model.js';
 import { generateTokens } from '../../../utils/generateToken.js';
-import { createNotification } from '../../../services/notification.service.js';
+import { createNotification, releaseDeliveryTokenFromOtherRiders } from '../../../services/notification.service.js';
 import { sendEmail } from '../../../services/email.service.js';
 import { cleanupLocalFiles, uploadLocalFileToCloudinaryAndCleanup, deleteFromCloudinary } from '../../../services/upload.service.js';
 import {
@@ -107,6 +107,7 @@ export const register = asyncHandler(async (req, res) => {
             status: 'offline',
             fcmTokens: fcmToken ? [{ token: fcmToken, platform, lastUsed: new Date() }] : []
         });
+        if (fcmToken) await releaseDeliveryTokenFromOtherRiders(fcmToken, deliveryBoy._id);
 
         const admins = await Admin.find({ isActive: true }).select('_id');
         await Promise.all(
@@ -478,6 +479,7 @@ export const verifyOTPAndLogin = asyncHandler(async (req, res) => {
         } else {
             deliveryBoy.fcmTokens.push({ token: fcmToken, platform, lastUsed: new Date() });
         }
+        await releaseDeliveryTokenFromOtherRiders(fcmToken, deliveryBoy._id);
     }
 
     await deliveryBoy.save({ validateBeforeSave: false });
@@ -527,6 +529,7 @@ export const login = asyncHandler(async (req, res) => {
                 } 
             }
         });
+        await releaseDeliveryTokenFromOtherRiders(fcmToken, deliveryBoy._id);
     }
 
     const { accessToken, refreshToken } = generateTokens({ id: deliveryBoy._id, role: 'delivery', email: deliveryBoy.email });

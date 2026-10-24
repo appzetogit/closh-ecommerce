@@ -3,6 +3,7 @@ import ApiResponse from '../../../utils/ApiResponse.js';
 import ApiError from '../../../utils/ApiError.js';
 import Notification from '../../../models/Notification.model.js';
 import DeliveryBoy from '../../../models/DeliveryBoy.model.js';
+import { releaseDeliveryTokenFromOtherRiders } from '../../../services/notification.service.js';
 
 // GET /api/delivery/notifications
 export const getDeliveryNotifications = asyncHandler(async (req, res) => {
@@ -124,6 +125,8 @@ export const registerDeliveryFcmToken = asyncHandler(async (req, res) => {
     }, { new: true });
 
     if (!updated) throw new ApiError(404, 'Delivery Boy not found');
+    // The phone now belongs to this rider; another account logged in on it before must not keep it.
+    await releaseDeliveryTokenFromOtherRiders(token, updated._id);
 
     res.status(200).json(new ApiResponse(200, { token, platform }, 'FCM token registered.'));
 });
