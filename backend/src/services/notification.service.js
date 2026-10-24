@@ -27,6 +27,19 @@ const DELIVERY_RING = {
 };
 
 /**
+ * A phone's FCM token belongs to whoever logged in on it last. When two rider accounts were
+ * used on one phone, both kept the token, so an offer for one rider rang the phone the other
+ * rider now holds. Call whenever a rider registers a token.
+ */
+export const releaseDeliveryTokenFromOtherRiders = (token, riderId) => {
+    if (!token) return Promise.resolve();
+    return DeliveryBoy.updateMany(
+        { _id: { $ne: riderId }, 'fcmTokens.token': token },
+        { $pull: { fcmTokens: { token } } }
+    ).catch((err) => console.error('[FCM] Could not release rider token from other accounts:', err.message));
+};
+
+/**
  * Send a push notification using Firebase Messaging
  * @param {Array} tokens - Array of FCM registration tokens
  * @param {Object} payload - { title, body, data, sound, imageUrl, actionLink, androidChannelId, androidSound, apnsSound }
@@ -171,8 +184,11 @@ export const createNotification = async ({ recipientId, recipientType, title, me
             }
 
             if (recipient && recipient.fcmTokens && recipient.fcmTokens.length > 0) {
-                // 3a. Suppression check: If delivery partner is offline, skip push notification
-                if (recipientType === 'delivery' && (recipient.status === 'offline' || recipient.isAvailable === false)) {
+                // 3a. Suppression check: If delivery partner is offline, skip push notification.
+                // A ringing push is a job given to this rider by name (auto-assignment only picks
+                // riders who are on duty; an admin can assign anyone), so it always goes out -
+                // otherwise an admin-assigned rider who was off duty never heard about the order.
+                if (recipientType === 'delivery' && !ring && (recipient.status === 'offline' || recipient.isAvailable === false)) {
                     console.log(`🔕 [PUSH SUPPRESSED] Partner ${recipientId} is offline. Skipping push.`);
                     return null;
                 }
@@ -191,7 +207,13 @@ export const createNotification = async ({ recipientId, recipientType, title, me
             // `ring` marks a new-order offer for a delivery partner: use the app's ringing channel.
             const ringPayload = (recipientType === 'delivery' && ring) ? DELIVERY_RING : {};
 
-            await sendPushToTokens(pushTokens, { title, body: message, data: { ...data, type }, sound, imageUrl, actionLink, ...ringPayload });
+            // The partner app rings for any push whose data.type contains "order". Only the new-order
+            // offer (ring) should ring; status updates ("Mission Update") used to ring on every step and,
+            // without ring, named a channel/sound the app does not have. Send them as plain updates.
+            const riderUpdate = recipientType === 'delivery' && !ring && type === 'order';
+            if (riderUpdate) sound = 'default';
+            const pushData = { ...data, type: riderUpdate ? 'mission_update' : type };
+            await sendPushToTokens(pushTokens, { title, body: message, data: pushData, sound, imageUrl, actionLink, ...ringPayload });
         }
     } catch (err) {
         console.error('Failed to trigger push notification:', err.message);

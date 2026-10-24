@@ -3,6 +3,10 @@ import Joi from 'joi';
 export const loginSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required(),
+    // Push token from the partner app; validate() strips unknown fields, so without these
+    // an email/password login never saved the phone's token and the rider got no ring.
+    fcmToken: Joi.string().trim().allow('').optional(),
+    platform: Joi.string().trim().allow('').optional(),
 });
 
 export const registerSchema = Joi.object({
