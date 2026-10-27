@@ -20,6 +20,11 @@ const CUSTOMER_TITLES = {
     cancelled: 'Order cancelled',
 };
 
+// Statuses the delivery partner causes (or already hears about through the ringing offer).
+const RIDER_OWN_ACTION_STATUSES = new Set([
+    'assigned', 'arrived_at_store', 'picked_up', 'out_for_delivery', 'arrived', 'delivered',
+]);
+
 // The same status can be reported twice for one order (e.g. 'assigned' from both the
 // rider's accept and the auto-assignment flow). Skip a notification identical to one sent
 // to the same person in the last two minutes.
@@ -90,14 +95,16 @@ export const OrderNotificationService = {
                         cancelled: `Order ${id} was cancelled.`,
                         default: `Order ${id} is now ${s.replace(/_/g, ' ')}.`
                     },
+                    // Rider wording avoids the word "order": the partner app rings in the foreground for
+                    // any push whose text contains it, so these status messages must not match.
                     delivery: {
-                        ready_for_pickup: `New job available: Order ${id} is ready for pickup.`,
-                        searching: `New job available nearby: Order ${id}.`,
-                        assigned: `You have been assigned to Order ${id}.`,
-                        picked_up: `Order ${id} picked up. Head to customer location.`,
-                        delivered: `Mission complete! Order ${id} delivered.`,
-                        cancelled: `Order ${id} mission was cancelled.`,
-                        default: `Order ${id} status: ${s.replace(/_/g, ' ')}.`
+                        ready_for_pickup: `Pickup ready: delivery ${id} is packed and waiting for you.`,
+                        searching: `New job available nearby: delivery ${id}.`,
+                        assigned: `You have been assigned to delivery ${id}.`,
+                        picked_up: `Delivery ${id} picked up. Head to customer location.`,
+                        delivered: `Mission complete! Delivery ${id} done.`,
+                        cancelled: `Delivery ${id} mission was cancelled.`,
+                        default: `Delivery ${id} status: ${s.replace(/_/g, ' ')}.`
                     }
                 };
 
@@ -150,7 +157,11 @@ export const OrderNotificationService = {
             });
 
             // 3. Delivery Partner
-            if (order.deliveryBoyId) {
+            // Not told about steps they took themselves: the partner app's own screens already
+            // show those, and each push made the phone sound again ("Mission Update ... picked
+            // up", "... delivered" on every step). 'assigned' is covered by the ringing offer
+            // sent by auto/admin assignment, so a second push a second later is only noise.
+            if (order.deliveryBoyId && !RIDER_OWN_ACTION_STATUSES.has(String(status).toLowerCase())) {
                 const msg = getMessageForRole('delivery', status, order.orderId);
                 recipients.push({ 
                     id: order.deliveryBoyId, 

@@ -40,6 +40,27 @@ export const releaseDeliveryTokenFromOtherRiders = (token, riderId) => {
 };
 
 /**
+ * The one phone a rider's push should go to: the token used most recently. A rider can have
+ * several tokens (old phone, a browser, a second login); a ringing offer went to all of them,
+ * so two phones rang at once. A token that another rider account registered after this one
+ * belongs to that rider's phone now, so it is skipped too. Returns [] when nothing qualifies.
+ */
+export const pickRiderPushTokens = async (riderId, fcmTokens = []) => {
+    const entries = fcmTokens
+        .map((t) => (typeof t === 'string' ? { token: t, lastUsed: 0 } : { token: t.token, lastUsed: t.lastUsed ? new Date(t.lastUsed).getTime() : 0 }))
+        .filter((t) => t.token)
+        .sort((a, b) => b.lastUsed - a.lastUsed);
+    for (const candidate of entries) {
+        const takenByOther = await DeliveryBoy.exists({
+            _id: { $ne: riderId },
+            fcmTokens: { $elemMatch: { token: candidate.token, lastUsed: { $gt: new Date(candidate.lastUsed) } } },
+        }).catch(() => null);
+        if (!takenByOther) return [candidate.token];
+    }
+    return [];
+};
+
+/**
  * Send a push notification using Firebase Messaging
  * @param {Array} tokens - Array of FCM registration tokens
  * @param {Object} payload - { title, body, data, sound, imageUrl, actionLink, androidChannelId, androidSound, apnsSound }
@@ -193,7 +214,9 @@ export const createNotification = async ({ recipientId, recipientType, title, me
                     return null;
                 }
 
-                pushTokens = recipient.fcmTokens.map(t => typeof t === 'string' ? t : t.token);
+                pushTokens = recipientType === 'delivery'
+                    ? await pickRiderPushTokens(recipientId, recipient.fcmTokens)
+                    : recipient.fcmTokens.map(t => typeof t === 'string' ? t : t.token);
             }
         }
 
