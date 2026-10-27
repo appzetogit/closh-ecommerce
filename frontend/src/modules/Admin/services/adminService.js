@@ -419,3 +419,8 @@ export const getCustomerWallet = (id, params = {}) =>
 
 export const adjustCustomerWallet = (id, data) =>
     api.post(`/admin/customers/${id}/wallet/adjust`, data);
+
+// ─── Home page banner slots (top / bottom) ───────────────────────────────────
+export const getHomeBanners = () => api.get('/admin/home-banners');
+export const saveHomeBanner = (slot, data) => api.put(`/admin/home-banners/${slot}`, data);
+export const deleteHomeBanner = (slot) => api.delete(`/admin/home-banners/${slot}`);

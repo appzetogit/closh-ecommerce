@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiEyeOff, FiArrowUp, FiArrowDown } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { useBannerStore } from '../../../shared/store/bannerStore';
+import HomeBannerSlots from '../components/Banners/HomeBannerSlots';
 import BannerForm from '../components/Banners/BannerForm';
 import ExportButton from '../components/ExportButton';
 import Pagination from '../components/Pagination';
@@ -148,6 +149,8 @@ const Banners = () => {
           Add Banner
         </button>
       </div>
+
+      <HomeBannerSlots />
 
       {/* Filters */}
       <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
