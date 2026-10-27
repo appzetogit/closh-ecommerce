@@ -8,6 +8,7 @@ import Brand from '../models/Brand.model.js';
 import Vendor from '../models/Vendor.model.js';
 import Coupon from '../models/Coupon.model.js';
 import Banner from '../models/Banner.model.js';
+import HomeBanner from '../models/HomeBanner.model.js';
 import Campaign from '../models/Campaign.model.js';
 import { applyActiveCampaigns } from '../utils/productUtils.js';
 import { calculateVendorShippingForGroups } from '../services/vendorShipping.service.js';
@@ -832,6 +833,18 @@ router.post('/shipping/estimate', asyncHandler(async (req, res) => {
             distances: distanceByVendor
         }, 'Shipping estimate calculated.')
     );
+}));
+
+// GET /api/home-banners -> { bottom }: the active banner, null when empty
+router.get('/home-banners', asyncHandler(async (req, res) => {
+    const cacheKey = 'home-banners:all';
+    let data = await getCache(cacheKey);
+    if (!data) {
+        const rows = await HomeBanner.find({ isActive: true }).lean();
+        data = { bottom: rows.find((r) => r.slot === 'bottom') || null };
+        await setCache(cacheKey, data, 1800);
+    }
+    res.status(200).json(new ApiResponse(200, data, 'Home banners fetched.'));
 }));
 
 // GET /api/banners

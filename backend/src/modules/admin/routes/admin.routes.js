@@ -12,6 +12,7 @@ import * as reviewController from '../controllers/review.controller.js';
 import * as suggestionController from '../controllers/suggestion.controller.js';
 import * as uploadController from '../controllers/upload.controller.js';
 import * as marketingController from '../controllers/marketing.controller.js';
+import * as homeBannerController from '../controllers/homeBanner.controller.js';
 import * as reportController from '../controllers/report.controller.js';
 import * as notificationController from '../controllers/notification.controller.js';
 import * as employeeController from '../controllers/employee.controller.js';
@@ -246,6 +247,11 @@ router.get('/marketing/coupons', ...adminAuth, checkPermission('marketing_manage
 router.post('/marketing/coupons', ...adminAuth, checkPermission('marketing_manage'), marketingController.createCoupon);
 router.put('/marketing/coupons/:id', ...adminAuth, checkPermission('marketing_manage'), validate(marketingIdParamSchema, 'params'), marketingController.updateCoupon);
 router.delete('/marketing/coupons/:id', ...adminAuth, checkPermission('marketing_manage'), validate(marketingIdParamSchema, 'params'), marketingController.deleteCoupon);
+
+// Home page banner slots (top / bottom)
+router.get('/home-banners', ...adminAuth, checkPermission('marketing_manage'), homeBannerController.getHomeBanners);
+router.put('/home-banners/:slot', ...adminAuth, checkPermission('marketing_manage'), homeBannerController.upsertHomeBanner);
+router.delete('/home-banners/:slot', ...adminAuth, checkPermission('marketing_manage'), homeBannerController.deleteHomeBanner);
 
 // Banners
 router.get('/marketing/banners', ...adminAuth, checkPermission('marketing_manage'), marketingController.getAllBanners);

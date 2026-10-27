@@ -16,6 +16,8 @@ import PriceAnchoredGrid from '../../components/Home/PriceAnchoredGrid';
 import UspStrip from '../../components/Home/UspStrip';
 import TryAndBuyExplainer from '../../components/Home/TryAndBuyExplainer';
 import BrandMarquee from '../../components/Home/BrandMarquee';
+import HomeBannerSlot from '../../components/Home/HomeBannerSlot';
+import CouponsStrip from '../../components/Home/CouponsStrip';
 import ServiceAreasStrip from '../../components/Home/ServiceAreasStrip';
 import TrustBadges from '../../components/TrustBadges/TrustBadges';
 import HomeSection from '../../components/Home/HomeSection';
@@ -25,9 +27,11 @@ export const homeSectionRegistry = {
     offerTiles: { render: () => <HomeSection><OfferTiles /></HomeSection> },
     curatedCollage: { render: () => <CuratedCollage /> },
     dealsStrip: { render: () => <DealsStrip /> },
+    couponsStrip: { render: () => <CouponsStrip /> },
     tryAndBuyExplainer: { render: () => <TryAndBuyExplainer /> },
     categoryScroller: { render: () => <CategoryScroller /> },
     brandBestsellers: { render: () => <BrandBestsellers /> },
+    bannerBottom: { render: () => <HomeBannerSlot slot="bottom" /> },
     forHim: { render: () => <PriceAnchoredGrid title="For him" match={/\bmen\b|\bmens\b|\bmen's\b/i} /> },
     forHer: { render: () => <PriceAnchoredGrid title="For her" match={/\bwomen\b|\bwomens\b|\bwomen's\b|\bladies\b/i} /> },
     brandMarquee: { render: () => <BrandMarquee /> },
