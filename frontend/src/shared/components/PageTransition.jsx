@@ -48,10 +48,8 @@ const PageTransition = ({ children }) => {
     setPrevPath(location.pathname);
   }, [location.pathname, prevPath]);
 
-  // Scroll to top on route change
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [location.pathname]);
+  // Scrolling on route change (top for new pages, restore on back) lives in
+  // ScrollToTop; resetting it here as well would undo the restore.
 
   // Memoize the unique key to ensure it updates when location changes
   const uniqueKey = useMemo(() => location.pathname + location.search, [location.pathname, location.search]);
