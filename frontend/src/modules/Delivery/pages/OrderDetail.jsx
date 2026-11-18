@@ -222,20 +222,22 @@ const DeliveryOrderDetail = () => {
 
       if (hasArrivedSignal) {
         setHasArrived(true);
-        const accepted = (response.deliveryFlow?.tryAndBuyItems || response.items || [])
-          .map((i, idx) => i.decision !== 'rejected' ? idx : -1)
-          .filter(idx => idx !== -1);
-        setSelectedItemIds(new Set(accepted));
         setPaymentSelection(response.deliveryFlow?.paymentMethod || null);
       }
+      // Every item starts as kept and only a recorded rejection unticks it. This must not depend
+      // on arrival: "I have arrived" does not reload the order when the socket is down (e.g. after
+      // the app restarts), and an empty selection would then reject the whole order on confirm.
+      const decisions = response?.deliveryFlow?.tryAndBuyItems || [];
+      const keptItems = (response?.items || [])
+        .map((_, idx) => decisions[idx]?.decision !== 'rejected' ? idx : -1)
+        .filter(idx => idx !== -1);
+      setSelectedItemIds(new Set(keptItems));
       // Restore pickup photo from backend for check-and-buy / try-and-buy orders
       if (response?.deliveryFlow?.pickupProofPhoto) {
         setPickupPhoto(response.deliveryFlow.pickupProofPhoto.split('|||')[0]);
       }
       if (response?.deliveryFlow?.arrivedAtVendor) {
         setHasArrivedAtVendor(true);
-      } else if (response?.items) {
-        setSelectedItemIds(new Set(response.items.map((_, idx) => idx)));
       }
     } catch (err) {
       // A failed background reload (network blip) must not turn a screen the rider is
