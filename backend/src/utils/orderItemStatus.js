@@ -11,6 +11,14 @@
 // deliveryFlow, so normalise both down to the same id before matching.
 const keyOf = (item) => `${String(item?.productId?._id || item?.productId || '')}|${item?.variantKey || ''}`;
 
+// True once the customer has sent at least one item back at the door. Such an order still
+// has to go through the rider's return to the vendor, which is what restores the stock.
+export const hasRejectedTryBuyItems = (order) => {
+    const flow = order?.deliveryFlow || {};
+    return (flow.rejectedItems || []).length > 0
+        || (flow.tryAndBuyItems || []).some((item) => item.decision === 'rejected');
+};
+
 export const buildItemStatusResolver = (order) => {
     const flow = order?.deliveryFlow || {};
 
