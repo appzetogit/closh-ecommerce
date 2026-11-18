@@ -16,7 +16,7 @@ import Vendor from '../../../models/Vendor.model.js';
 import { calculateDistance } from '../../../utils/geo.js';
 import { refundPayment } from '../../../services/razorpay.service.js';
 import { assertRiderIsFree, markRiderBusy, markRiderAvailable } from '../../../services/deliveryAvailability.service.js';
-import { attachItemStatuses } from '../../../utils/orderItemStatus.js';
+import { attachItemStatuses, hasRejectedTryBuyItems } from '../../../utils/orderItemStatus.js';
 import { releaseCouponForOrder } from '../../../services/coupon.service.js';
 import { onOrderCancelledRewards, onOrderCompletedRewards } from '../../../services/orderRewards.service.js';
 
@@ -156,6 +156,12 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         if (!nextAllowed.includes(nextStatus)) {
             throw new ApiError(409, `Cannot move order from ${previousStatus} to ${nextStatus}.`);
         }
+    }
+
+    // Marking this delivered would skip the return stop, so the rejected items would never be
+    // tracked back to the vendor and their stock would never be restored.
+    if (nextStatus === 'delivered' && previousStatus !== 'delivered' && hasRejectedTryBuyItems(order)) {
+        throw new ApiError(409, 'The customer rejected item(s) in this order, so it cannot be marked delivered. The delivery partner must complete it from the app so the items are returned to the vendor.');
     }
 
     order.status = nextStatus;
