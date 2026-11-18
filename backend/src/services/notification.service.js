@@ -220,6 +220,10 @@ export const createNotification = async ({ recipientId, recipientType, title, me
             }
         }
 
+        if (ring && pushTokens.length === 0) {
+            console.warn(`🔕 [RING SKIPPED] ${recipientType}_${recipientId} has no usable FCM token (never logged in on the app, or the token now belongs to another rider).`);
+        }
+
         if (pushTokens.length > 0) {
             // Custom sound logic (buzzer)
             let sound = 'default';
